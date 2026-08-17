@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Catalog Navigator</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============ TOP NAV + MEGA MENU ============ -->
+  <header class="topnav">
+    <div class="topnav-inner">
+      <div class="wordmark">SHOP</div>
+
+      <ul class="l1-list" id="l1List"><!-- filled by JS --></ul>
+
+      <div class="nav-actions">
+        <button class="icon-btn" aria-label="Search">
+          <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"></circle><line x1="14" y1="14" x2="18" y2="18"></line></svg>
+        </button>
+        <button class="icon-btn" aria-label="Account">
+          <svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.5"></circle><path d="M3.5 17c1.2-3.5 4-5 6.5-5s5.3 1.5 6.5 5"></path></svg>
+        </button>
+        <button class="icon-btn" aria-label="Cart">
+          <svg viewBox="0 0 20 20"><path d="M4 6h13l-1.4 8H6.2z"></path><circle cx="8" cy="17" r="1.2"></circle><circle cx="14" cy="17" r="1.2"></circle></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="megamenu" id="megamenu">
+      <div class="mm-inner">
+        <div class="mm-col mm-col-l2" id="mmCol1"></div>
+        <div class="mm-col mm-col-mid" id="mmCol2"></div>
+        <div class="mm-col mm-col-right" id="mmCol3"></div>
+      </div>
+    </div>
+  </header>
+  <div class="megamenu-backdrop" id="megamenuBackdrop"></div>
+
+  <main class="page">
+
+    <!-- ============ INTRO ============ -->
+    <section class="intro">
+      <p class="eyebrow">Catalog navigation system</p>
+      <h1>Menu &amp; category filters</h1>
+      <p class="lede">One data model drives both surfaces below: the mega menu (level 2 → level 3, click to open) and the category + filter page. Click any top-level item, then any category in the sidebar, to see it in action.</p>
+    </section>
+
+    <!-- ============ CATEGORY + FILTER PAGE ============ -->
+    <section class="plp" id="plp">
+      <aside class="sidebar">
+        <div class="sidebar-block">
+          <h2 class="sidebar-title">Categories</h2>
+          <div class="cat-tree" id="catTree"><!-- filled by JS --></div>
+        </div>
+
+        <div class="sidebar-block">
+          <h2 class="sidebar-title">Filters</h2>
+          <div class="filter-list" id="filterList"><!-- filled by JS --></div>
+        </div>
+      </aside>
+
+      <div class="content">
+        <nav class="breadcrumb" id="breadcrumb"></nav>
+
+        <div class="content-toolbar">
+          <h2 class="content-title" id="contentTitle">Newest Arrivals</h2>
+          <div class="toolbar-row">
+            <div class="search-box">
+              <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"></circle><line x1="14" y1="14" x2="18" y2="18"></line></svg>
+              <input type="text" placeholder="Search" id="searchInput" />
+            </div>
+            <label class="sort-box">
+              Sort by:
+              <select id="sortSelect">
+                <option>Default</option>
+                <option>Price: Low to High</option>
+                <option>Price: High to Low</option>
+                <option>Name: A–Z</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="product-grid" id="productGrid"><!-- filled by JS --></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
