@@ -1663,7 +1663,10 @@ function initAccordionSelector() {
       </div>
       <div class="accordion-body">
         ${cat.options.map(opt => `
-          <span class="accordion-flavor ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">${opt.value}</span>
+          <label class="accordion-flavor ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">
+            <input type="checkbox" class="accordion-flavor-checkbox" ${!opt.available ? 'disabled' : ''} />
+            <span>${opt.value}</span>
+          </label>
         `).join('')}
       </div>
     </div>
@@ -1676,9 +1679,9 @@ function initAccordionSelector() {
   });
 
   accordion.querySelectorAll('.accordion-flavor:not(.unavailable)').forEach(f => {
-    f.addEventListener('click', function() {
-      accordion.querySelectorAll('.accordion-flavor').forEach(x => x.classList.remove('selected'));
-      this.classList.add('selected');
+    const checkbox = f.querySelector('.accordion-flavor-checkbox');
+    checkbox.addEventListener('change', function() {
+      f.classList.toggle('selected', this.checked);
     });
   });
 }
@@ -1795,6 +1798,77 @@ function initPillCloud() {
   });
 }
 
+/* ===================== PATTERN 13: SQUARE CHECKBOX CLOUD ===================== */
+function initSquareCloud() {
+  const cloud = document.getElementById('squareCloud');
+  if (!cloud) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+  const popular = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Mint', 'Blue Razz'];
+  const selected = new Set();
+
+  cloud.innerHTML = allFlavors.map(f => `
+    <div class="b2b-flavor-item ${popular.includes(f.value) ? 'popular' : ''} ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">
+      <span class="flavor-text">${f.value}</span>
+      <span class="flavor-check">
+        <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+      </span>
+    </div>
+  `).join('');
+
+  cloud.querySelectorAll('.b2b-flavor-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      const value = this.dataset.value;
+      if (selected.has(value)) {
+        selected.delete(value);
+        this.classList.remove('selected');
+      } else {
+        selected.add(value);
+        this.classList.add('selected');
+      }
+    });
+  });
+
+  // Filter buttons (scoped to this pattern via .sq-filter, avoids clashing with Pattern 10's .pill-filter listeners)
+  document.querySelectorAll('.sq-filter').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.sq-filter').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const filter = this.dataset.filter;
+      cloud.querySelectorAll('.b2b-flavor-item').forEach(p => {
+        if (filter === 'all') p.style.display = '';
+        else if (filter === 'available') p.style.display = p.classList.contains('unavailable') ? 'none' : '';
+      });
+    });
+  });
+
+  // Search functionality for Pattern 13
+  const searchInput = document.getElementById('sq13Search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      cloud.querySelectorAll('.b2b-flavor-item').forEach(item => {
+        const name = item.querySelector('.flavor-text').textContent.toLowerCase();
+        item.style.display = name.includes(query) ? '' : 'none';
+      });
+    });
+  }
+
+  // Update selected count for Pattern 13
+  cloud.querySelectorAll('.b2b-flavor-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      setTimeout(() => {
+        const count = cloud.querySelectorAll('.b2b-flavor-item.selected').length;
+        const countEl = document.getElementById('sq13Selected');
+        if (countEl) countEl.textContent = count;
+      }, 10);
+    });
+  });
+}
+
 /* ===================== PATTERN 11: CAROUSEL ===================== */
 const categoryIcons = { 'Fruit': '🍎', 'Berry': '🫐', 'Citrus': '🍋', 'Menthol & Mint': '🌿', 'Candy & Sweet': '🍬', 'Beverage': '☕', 'Tobacco': '🍂', 'Dessert': '🍰' };
 let carouselActiveCategory = null;
@@ -1902,3 +1976,437 @@ initMegaGrid();
 initPillCloud();
 initCarouselSelector();
 initSplitSelector();
+initSquareCloud();
+initPattern14();
+initPattern15();
+initPattern16();
+initPattern17();
+
+/* ===================== PATTERNS 14-17: ADDITIONAL HEADER STYLES ===================== */
+
+function initPattern14() {
+  const cloud = document.getElementById('animCloud');
+  if (!cloud) return;
+  renderSquareGrid(cloud);
+}
+
+function initPattern15() {
+  const cloud = document.getElementById('progressCloud');
+  if (!cloud) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+  const totalCount = allFlavors.length;
+  const selected = new Set();
+
+  cloud.innerHTML = allFlavors.map(f => `
+    <div class="b2b-flavor-item ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">
+      <span class="flavor-text">${f.value}</span>
+      <span class="flavor-check">
+        <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+      </span>
+    </div>
+  `).join('');
+
+  cloud.querySelectorAll('.b2b-flavor-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      const value = this.dataset.value;
+      if (selected.has(value)) {
+        selected.delete(value);
+        this.classList.remove('selected');
+      } else {
+        selected.add(value);
+        this.classList.add('selected');
+      }
+      // Update progress bar
+      const pct = (selected.size / totalCount) * 100;
+      document.getElementById('p15ProgressBar').style.width = pct + '%';
+      document.getElementById('p15SelectedCount').textContent = selected.size + ' of ' + totalCount;
+    });
+  });
+}
+
+function initPattern16() {
+  const cloud = document.getElementById('tickerCloud');
+  if (!cloud) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+  const popular = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Mint', 'Blue Razz', 'Grape', 'Strawberry Banana'];
+  const selected = new Set();
+
+  // Render as pill-style like Pattern 10, with a checkbox inside each tag
+  cloud.innerHTML = allFlavors.map(f => `
+    <label class="pill-item ${popular.includes(f.value) ? 'popular' : ''} ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">
+      <input type="checkbox" class="pill-item-checkbox" ${!f.available ? 'disabled' : ''} />
+      <span>${f.value}</span>
+    </label>
+  `).join('');
+
+  // Checkbox change handler
+  cloud.querySelectorAll('.pill-item:not(.unavailable)').forEach(pill => {
+    const checkbox = pill.querySelector('.pill-item-checkbox');
+    checkbox.addEventListener('change', function() {
+      const value = pill.dataset.value;
+      if (this.checked) {
+        selected.add(value);
+      } else {
+        selected.delete(value);
+      }
+      pill.classList.toggle('selected', this.checked);
+      document.getElementById('ticker16Selected').textContent = selected.size;
+    });
+  });
+
+  // Filter buttons
+  document.querySelectorAll('.ticker-filter').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.ticker-filter').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const filter = this.dataset.filter;
+      cloud.querySelectorAll('.pill-item').forEach(p => {
+        if (filter === 'all') p.style.display = '';
+        else if (filter === 'available') p.style.display = p.classList.contains('unavailable') ? 'none' : '';
+      });
+    });
+  });
+}
+
+function initPattern17() {
+  const cloud = document.getElementById('luxuryCloud');
+  if (!cloud) return;
+  renderSquareGrid(cloud);
+}
+
+function renderSquareGrid(container) {
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+
+  container.innerHTML = allFlavors.map(f => `
+    <div class="b2b-flavor-item ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">
+      <span class="flavor-text">${f.value}</span>
+      <span class="flavor-check">
+        <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+      </span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.b2b-flavor-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      this.classList.toggle('selected');
+    });
+  });
+}
+
+/* ===================== CHECKBOX VARIANTS COMPARISON ===================== */
+
+function initCheckboxVariants() {
+  const sampleFlavors = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Blue Razz', 'Cool Mint', 'Grape', 'Strawberry', 'Tropical Punch', 'Lemon Ice', 'Cotton Candy', 'Vanilla', 'Pineapple'];
+
+  // Variant 1: Square Checkbox Left
+  const var1 = document.getElementById('variantSquareLeft');
+  if (var1) {
+    var1.innerHTML = sampleFlavors.map(f => `
+      <div class="var1-item" data-value="${f}">
+        <span class="var1-checkbox">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var1-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var1, '.var1-item');
+  }
+
+  // Variant 2: Circle Checkbox Left
+  const var2 = document.getElementById('variantCircleLeft');
+  if (var2) {
+    var2.innerHTML = sampleFlavors.map(f => `
+      <div class="var2-item" data-value="${f}">
+        <span class="var2-checkbox">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var2-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var2, '.var2-item');
+  }
+
+  // Variant 3: Checkmark Icon Right
+  const var3 = document.getElementById('variantCheckRight');
+  if (var3) {
+    var3.innerHTML = sampleFlavors.map(f => `
+      <div class="var3-item" data-value="${f}">
+        <span class="var3-text">${f}</span>
+        <span class="var3-check">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+      </div>
+    `).join('');
+    attachClickHandler(var3, '.var3-item');
+  }
+
+  // Variant 4: Corner Badge
+  const var4 = document.getElementById('variantCornerBadge');
+  if (var4) {
+    var4.innerHTML = sampleFlavors.map(f => `
+      <div class="var4-item" data-value="${f}">
+        <span class="var4-text">${f}</span>
+        <span class="var4-badge">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+      </div>
+    `).join('');
+    attachClickHandler(var4, '.var4-item');
+  }
+
+  // Variant 5: Border Glow
+  const var5 = document.getElementById('variantBorderGlow');
+  if (var5) {
+    var5.innerHTML = sampleFlavors.map(f => `
+      <div class="var5-item" data-value="${f}">
+        <span class="var5-text">${f}</span>
+        <span class="var5-check">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+      </div>
+    `).join('');
+    attachClickHandler(var5, '.var5-item');
+  }
+
+  // Variant 6: Dot Indicator
+  const var6 = document.getElementById('variantDotIndicator');
+  if (var6) {
+    var6.innerHTML = sampleFlavors.map(f => `
+      <div class="var6-item" data-value="${f}">
+        <span class="var6-dot"></span>
+        <span class="var6-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var6, '.var6-item');
+  }
+}
+
+function attachClickHandler(container, selector) {
+  container.querySelectorAll(selector).forEach(item => {
+    item.addEventListener('click', function() {
+      this.classList.toggle('selected');
+    });
+  });
+}
+
+/* ===================== CHECKBOX VARIANTS 7-12 ===================== */
+
+function initCheckboxVariants2() {
+  const sampleFlavors = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Blue Razz', 'Cool Mint', 'Grape', 'Strawberry', 'Tropical Punch', 'Lemon Ice', 'Cotton Candy', 'Vanilla', 'Pineapple'];
+  const flavorIcons = ['🥭', '🫐', '🍉', '💙', '🌿', '🍇', '🍓', '🌴', '🍋', '🍬', '🍦', '🍍'];
+
+  // Variant 7: Toggle Switch
+  const var7 = document.getElementById('variantToggle');
+  if (var7) {
+    var7.innerHTML = sampleFlavors.map(f => `
+      <div class="var7-item" data-value="${f}">
+        <span class="var7-text">${f}</span>
+        <span class="var7-toggle"></span>
+      </div>
+    `).join('');
+    attachClickHandler(var7, '.var7-item');
+  }
+
+  // Variant 8: Slide-in Checkmark
+  const var8 = document.getElementById('variantSlideIn');
+  if (var8) {
+    var8.innerHTML = sampleFlavors.map(f => `
+      <div class="var8-item" data-value="${f}">
+        <span class="var8-check">
+          <span class="var8-check-icon">
+            <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+          </span>
+        </span>
+        <span class="var8-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var8, '.var8-item');
+  }
+
+  // Variant 9: Outline to Filled
+  const var9 = document.getElementById('variantOutlineFill');
+  if (var9) {
+    var9.innerHTML = sampleFlavors.map(f => `
+      <div class="var9-item" data-value="${f}">
+        <span class="var9-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var9, '.var9-item');
+  }
+
+  // Variant 10: Icon + Text
+  const var10 = document.getElementById('variantIconText');
+  if (var10) {
+    var10.innerHTML = sampleFlavors.map((f, i) => `
+      <div class="var10-item" data-value="${f}">
+        <span class="var10-icon">${flavorIcons[i]}</span>
+        <div class="var10-content">
+          <span class="var10-text">${f}</span>
+        </div>
+        <span class="var10-check">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+      </div>
+    `).join('');
+    attachClickHandler(var10, '.var10-item');
+  }
+
+  // Variant 11: Strikethrough
+  const var11 = document.getElementById('variantStrikethrough');
+  if (var11) {
+    var11.innerHTML = sampleFlavors.map(f => `
+      <div class="var11-item" data-value="${f}">
+        <span class="var11-checkbox">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var11-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var11, '.var11-item');
+  }
+
+  // Variant 12: Quantity Counter
+  const var12 = document.getElementById('variantQuantity');
+  if (var12) {
+    var12.innerHTML = sampleFlavors.map(f => `
+      <div class="var12-item" data-value="${f}">
+        <span class="var12-text">${f}</span>
+        <div class="var12-counter">
+          <button class="var12-btn minus">−</button>
+          <span class="var12-count">0</span>
+          <button class="var12-btn plus">+</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Quantity counter logic
+    var12.querySelectorAll('.var12-item').forEach(item => {
+      const countEl = item.querySelector('.var12-count');
+      const minusBtn = item.querySelector('.minus');
+      const plusBtn = item.querySelector('.plus');
+
+      minusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let count = parseInt(countEl.textContent);
+        if (count > 0) {
+          count--;
+          countEl.textContent = count;
+          item.classList.toggle('selected', count > 0);
+        }
+      });
+
+      plusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let count = parseInt(countEl.textContent);
+        count++;
+        countEl.textContent = count;
+        item.classList.add('selected');
+      });
+    });
+  }
+}
+
+/* ===================== ROUND/ECLIPSE VARIANTS 13-18 ===================== */
+
+function initRoundVariants() {
+  const sampleFlavors = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Blue Razz', 'Cool Mint', 'Grape', 'Strawberry', 'Tropical Punch', 'Lemon Ice', 'Cotton Candy', 'Vanilla', 'Pineapple'];
+
+  // Variant 13: Round + Circle Checkbox Outlined
+  const var13 = document.getElementById('variantRound1');
+  if (var13) {
+    var13.innerHTML = sampleFlavors.map(f => `
+      <div class="var13-item" data-value="${f}">
+        <span class="var13-checkbox">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var13-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var13, '.var13-item');
+  }
+
+  // Variant 14: Round + Filled Circle
+  const var14 = document.getElementById('variantRound2');
+  if (var14) {
+    var14.innerHTML = sampleFlavors.map(f => `
+      <div class="var14-item" data-value="${f}">
+        <span class="var14-checkbox"></span>
+        <span class="var14-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var14, '.var14-item');
+  }
+
+  // Variant 15: Round + Square Checkbox
+  const var15 = document.getElementById('variantRound3');
+  if (var15) {
+    var15.innerHTML = sampleFlavors.map(f => `
+      <div class="var15-item" data-value="${f}">
+        <span class="var15-checkbox">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var15-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var15, '.var15-item');
+  }
+
+  // Variant 16: Round + Toggle Dot
+  const var16 = document.getElementById('variantRound4');
+  if (var16) {
+    var16.innerHTML = sampleFlavors.map(f => `
+      <div class="var16-item" data-value="${f}">
+        <span class="var16-toggle"></span>
+        <span class="var16-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var16, '.var16-item');
+  }
+
+  // Variant 17: Round + Plus to Check
+  const var17 = document.getElementById('variantRound5');
+  if (var17) {
+    var17.innerHTML = sampleFlavors.map(f => `
+      <div class="var17-item" data-value="${f}">
+        <span class="var17-icon">
+          <span class="var17-plus">+</span>
+          <span class="var17-check">
+            <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+          </span>
+        </span>
+        <span class="var17-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var17, '.var17-item');
+  }
+
+  // Variant 18: Round + Ring Fill
+  const var18 = document.getElementById('variantRound6');
+  if (var18) {
+    var18.innerHTML = sampleFlavors.map(f => `
+      <div class="var18-item" data-value="${f}">
+        <span class="var18-ring">
+          <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+        </span>
+        <span class="var18-text">${f}</span>
+      </div>
+    `).join('');
+    attachClickHandler(var18, '.var18-item');
+  }
+}
+
+// Initialize checkbox variants
+initCheckboxVariants();
+initCheckboxVariants2();
+initRoundVariants();
