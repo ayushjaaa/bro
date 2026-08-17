@@ -563,3 +563,629 @@ function renderPLP() {
 
 renderCatTree();
 renderPLP();
+
+/* ===================== PRODUCT DETAIL PAGE (PDP) ===================== */
+
+// Sample product with 100+ variant combinations
+const SAMPLE_PRODUCT = {
+  id: "disposable-vape-1",
+  title: "Flavour Beast Disposable Vape",
+  brand: "Flavour Beast",
+  category: ["VAPE", "Disposable Vapes"],
+  basePrice: 24.99,
+
+  variantAttributes: [
+    {
+      name: "Flavor",
+      type: "categorized-dropdown",
+      categories: [
+        {
+          name: "Fruit",
+          options: [
+            { value: "Mango Peach", available: true },
+            { value: "Watermelon Ice", available: true },
+            { value: "Grape", available: true },
+            { value: "Strawberry Banana", available: true },
+            { value: "Pineapple", available: true },
+            { value: "Orange Cream", available: true },
+            { value: "Tropical Punch", available: true },
+            { value: "Apple", available: true },
+            { value: "Peach Ice", available: true },
+            { value: "Mango", available: true },
+            { value: "Kiwi Strawberry", available: true },
+            { value: "Passion Fruit", available: true },
+            { value: "Guava", available: true },
+            { value: "Papaya", available: true },
+            { value: "Dragon Fruit", available: true },
+            { value: "Lychee", available: true },
+            { value: "Coconut", available: true },
+            { value: "Banana Ice", available: true },
+            { value: "Cantaloupe", available: true },
+            { value: "Honeydew", available: true },
+            { value: "Jackfruit", available: false },
+            { value: "Starfruit", available: true },
+            { value: "Pomegranate", available: true },
+            { value: "Fig", available: true },
+            { value: "Apricot", available: true }
+          ]
+        },
+        {
+          name: "Berry",
+          options: [
+            { value: "Berry Blast", available: true },
+            { value: "Blue Razz", available: true },
+            { value: "Mixed Berry", available: true },
+            { value: "Strawberry", available: true },
+            { value: "Blueberry", available: true },
+            { value: "Raspberry", available: true },
+            { value: "Blackberry", available: true },
+            { value: "Cranberry", available: true },
+            { value: "Acai Berry", available: true },
+            { value: "Goji Berry", available: false },
+            { value: "Wild Berry", available: true },
+            { value: "Berry Lemonade", available: true },
+            { value: "Triple Berry", available: true },
+            { value: "Strawberry Kiwi", available: true },
+            { value: "Blueberry Pomegranate", available: true }
+          ]
+        },
+        {
+          name: "Citrus",
+          options: [
+            { value: "Lemon Ice", available: true },
+            { value: "Orange", available: true },
+            { value: "Lime", available: true },
+            { value: "Grapefruit", available: true },
+            { value: "Lemon Lime", available: true },
+            { value: "Tangerine", available: true },
+            { value: "Blood Orange", available: true },
+            { value: "Citrus Burst", available: true },
+            { value: "Yuzu", available: true },
+            { value: "Kumquat", available: false },
+            { value: "Mandarin", available: true },
+            { value: "Key Lime", available: true },
+            { value: "Meyer Lemon", available: true },
+            { value: "Calamansi", available: true },
+            { value: "Citrus Mint", available: true }
+          ]
+        },
+        {
+          name: "Menthol & Mint",
+          options: [
+            { value: "Mint", available: true },
+            { value: "Cool Mint", available: true },
+            { value: "Spearmint", available: true },
+            { value: "Peppermint", available: true },
+            { value: "Menthol", available: true },
+            { value: "Ice Mint", available: true },
+            { value: "Arctic Mint", available: true },
+            { value: "Fresh Mint", available: true },
+            { value: "Double Mint", available: true },
+            { value: "Mint Chocolate", available: false },
+            { value: "Eucalyptus Mint", available: true },
+            { value: "Wintergreen", available: true }
+          ]
+        },
+        {
+          name: "Candy & Sweet",
+          options: [
+            { value: "Cotton Candy", available: true },
+            { value: "Bubblegum", available: true },
+            { value: "Gummy Bear", available: true },
+            { value: "Skittles", available: true },
+            { value: "Sour Candy", available: true },
+            { value: "Jolly Rancher", available: true },
+            { value: "Caramel", available: true },
+            { value: "Vanilla Custard", available: true },
+            { value: "Butterscotch", available: true },
+            { value: "Honey", available: true },
+            { value: "Marshmallow", available: false },
+            { value: "Toffee", available: true },
+            { value: "Licorice", available: true },
+            { value: "Root Beer", available: true },
+            { value: "Cream Soda", available: true }
+          ]
+        },
+        {
+          name: "Beverage",
+          options: [
+            { value: "Cherry Cola", available: false },
+            { value: "Cola", available: true },
+            { value: "Energy Drink", available: true },
+            { value: "Lemonade", available: true },
+            { value: "Iced Tea", available: true },
+            { value: "Coffee", available: true },
+            { value: "Mocha", available: true },
+            { value: "Cappuccino", available: true },
+            { value: "Espresso", available: true },
+            { value: "Green Tea", available: true },
+            { value: "Chai", available: true },
+            { value: "Horchata", available: true },
+            { value: "Mojito", available: true },
+            { value: "Pina Colada", available: true },
+            { value: "Margarita", available: true }
+          ]
+        },
+        {
+          name: "Tobacco",
+          options: [
+            { value: "Tobacco", available: true },
+            { value: "Virginia Tobacco", available: true },
+            { value: "Cuban Tobacco", available: true },
+            { value: "Turkish Tobacco", available: true },
+            { value: "Bold Tobacco", available: true },
+            { value: "Smooth Tobacco", available: true },
+            { value: "Tobacco Vanilla", available: true },
+            { value: "Tobacco Caramel", available: true },
+            { value: "Pipe Tobacco", available: false },
+            { value: "Cigar", available: true }
+          ]
+        },
+        {
+          name: "Dessert",
+          options: [
+            { value: "Vanilla Ice Cream", available: true },
+            { value: "Chocolate", available: true },
+            { value: "Strawberry Cheesecake", available: true },
+            { value: "Cinnamon Roll", available: true },
+            { value: "Apple Pie", available: true },
+            { value: "Banana Pudding", available: true },
+            { value: "Tiramisu", available: true },
+            { value: "Creme Brulee", available: true },
+            { value: "Pumpkin Spice", available: true },
+            { value: "Churro", available: false },
+            { value: "Donut", available: true },
+            { value: "Cookies and Cream", available: true },
+            { value: "Red Velvet", available: true },
+            { value: "Lemon Tart", available: true },
+            { value: "Key Lime Pie", available: true }
+          ]
+        }
+      ]
+    },
+    {
+      name: "Nicotine Strength",
+      type: "buttons",
+      options: [
+        { value: "0mg", available: true, priceModifier: 0 },
+        { value: "3mg", available: true, priceModifier: 0 },
+        { value: "6mg", available: true, priceModifier: 0 },
+        { value: "12mg", available: true, priceModifier: 2 },
+        { value: "20mg", available: true, priceModifier: 3 }
+      ]
+    },
+    {
+      name: "Puff Count",
+      type: "dropdown",
+      options: [
+        { value: "800 Puffs", available: true, priceModifier: 0 },
+        { value: "1500 Puffs", available: true, priceModifier: 3 },
+        { value: "2500 Puffs", available: true, priceModifier: 5 },
+        { value: "3500 Puffs", available: true, priceModifier: 8 },
+        { value: "5000 Puffs", available: true, priceModifier: 12 },
+        { value: "6000 Puffs", available: true, priceModifier: 15 },
+        { value: "8000 Puffs", available: true, priceModifier: 18 },
+        { value: "10000 Puffs", available: true, priceModifier: 22 },
+        { value: "15000 Puffs", available: true, priceModifier: 28 },
+        { value: "20000 Puffs", available: false, priceModifier: 35 }
+      ]
+    },
+    {
+      name: "Nicotine Type",
+      type: "toggle",
+      options: [
+        { value: "Freebase", available: true },
+        { value: "Salt Nic", available: true }
+      ]
+    }
+  ]
+};
+
+let selectedVariants = {};
+let expandedChips = new Set();
+
+function initPDP() {
+  SAMPLE_PRODUCT.variantAttributes.forEach(attr => {
+    let firstAvailable = null;
+
+    // Handle categorized dropdown
+    if (attr.categories) {
+      for (const cat of attr.categories) {
+        firstAvailable = cat.options.find(opt => opt.available);
+        if (firstAvailable) break;
+      }
+    } else if (attr.options) {
+      firstAvailable = attr.options.find(opt => opt.available);
+    }
+
+    if (firstAvailable) {
+      selectedVariants[attr.name] = firstAvailable.value;
+    }
+  });
+
+  renderVariantSelector();
+  updatePDPDisplay();
+  initQtySelector();
+}
+
+function renderVariantSelector() {
+  const container = document.getElementById("variantSelector");
+  if (!container) return;
+
+  container.innerHTML = SAMPLE_PRODUCT.variantAttributes.map(attr => {
+    return `
+      <div class="variant-group" data-attr="${attr.name}">
+        <div class="variant-label">
+          ${attr.name}: <span class="selected-value">${selectedVariants[attr.name] || '--'}</span>
+        </div>
+        ${renderVariantOptions(attr)}
+      </div>
+    `;
+  }).join("");
+
+  attachVariantListeners();
+}
+
+function renderVariantOptions(attr) {
+  // Handle categorized dropdown for 100+ options
+  if (attr.type === "categorized-dropdown" && attr.categories) {
+    return renderCategorizedDropdown(attr);
+  }
+
+  const optionCount = attr.options ? attr.options.length : 0;
+  let type = attr.type;
+  if (!type) {
+    if (optionCount <= 3) type = "toggle";
+    else if (optionCount <= 8) type = "buttons";
+    else if (optionCount <= 15) type = "chips";
+    else type = "dropdown";
+  }
+
+  switch (type) {
+    case "toggle": return renderToggle(attr);
+    case "buttons": return renderButtons(attr);
+    case "chips": return renderChips(attr);
+    case "dropdown": return renderDropdown(attr);
+    case "swatches": return renderSwatches(attr);
+    default: return renderButtons(attr);
+  }
+}
+
+function renderCategorizedDropdown(attr) {
+  const selected = selectedVariants[attr.name];
+  const totalOptions = attr.categories.reduce((sum, cat) => sum + cat.options.length, 0);
+
+  return `
+    <div class="variant-dropdown variant-categorized" data-dropdown="${attr.name}">
+      <button class="variant-dropdown-btn">
+        <span>${selected || 'Select ' + attr.name}</span>
+        <span class="flavor-count">${totalOptions} options</span>
+        <span class="chev"><svg viewBox="0 0 20 20"><polyline points="5 7 10 13 15 7"></polyline></svg></span>
+      </button>
+      <div class="variant-dropdown-menu variant-categorized-menu">
+        <div class="variant-dropdown-search">
+          <input type="text" placeholder="Search ${totalOptions} flavors..." data-search="${attr.name}" />
+        </div>
+        <div class="variant-category-tabs" data-tabs="${attr.name}">
+          <button class="cat-tab active" data-category="all">All</button>
+          ${attr.categories.map(cat => `
+            <button class="cat-tab" data-category="${cat.name}">${cat.name}</button>
+          `).join("")}
+        </div>
+        <div class="variant-dropdown-list variant-categorized-list" data-list="${attr.name}">
+          ${attr.categories.map(cat => `
+            <div class="flavor-category" data-cat="${cat.name}">
+              <div class="flavor-category-header">${cat.name}</div>
+              ${cat.options.map(opt => `
+                <div
+                  class="variant-dropdown-item ${selectedVariants[attr.name] === opt.value ? 'active' : ''} ${!opt.available ? 'disabled' : ''}"
+                  data-attr="${attr.name}"
+                  data-value="${opt.value}"
+                  data-category="${cat.name}">
+                  <span>${opt.value}</span>
+                  ${!opt.available ? '<span class="item-meta">Out of Stock</span>' : ''}
+                </div>
+              `).join("")}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderToggle(attr) {
+  return `
+    <div class="variant-toggle">
+      ${attr.options.map(opt => `
+        <button
+          data-attr="${attr.name}"
+          data-value="${opt.value}"
+          class="${selectedVariants[attr.name] === opt.value ? 'active' : ''}"
+          ${!opt.available ? 'disabled' : ''}>
+          ${opt.value}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderButtons(attr) {
+  return `
+    <div class="variant-buttons">
+      ${attr.options.map(opt => `
+        <button
+          data-attr="${attr.name}"
+          data-value="${opt.value}"
+          class="${selectedVariants[attr.name] === opt.value ? 'active' : ''}"
+          ${!opt.available ? 'disabled' : ''}>
+          ${opt.value}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderChips(attr) {
+  const isExpanded = expandedChips.has(attr.name);
+  const visibleCount = 8;
+  const visibleOptions = isExpanded ? attr.options : attr.options.slice(0, visibleCount);
+  const hasMore = attr.options.length > visibleCount;
+
+  return `
+    <div class="variant-chips">
+      ${visibleOptions.map(opt => `
+        <button
+          data-attr="${attr.name}"
+          data-value="${opt.value}"
+          class="${selectedVariants[attr.name] === opt.value ? 'active' : ''}"
+          ${!opt.available ? 'disabled' : ''}>
+          ${opt.value}
+        </button>
+      `).join("")}
+      ${hasMore ? `
+        <button class="show-more" data-expand="${attr.name}">
+          ${isExpanded ? 'Show Less' : `+${attr.options.length - visibleCount} More`}
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderDropdown(attr) {
+  const selected = selectedVariants[attr.name];
+  return `
+    <div class="variant-dropdown" data-dropdown="${attr.name}">
+      <button class="variant-dropdown-btn">
+        <span>${selected || 'Select ' + attr.name}</span>
+        <span class="chev"><svg viewBox="0 0 20 20"><polyline points="5 7 10 13 15 7"></polyline></svg></span>
+      </button>
+      <div class="variant-dropdown-menu">
+        <div class="variant-dropdown-search">
+          <input type="text" placeholder="Search ${attr.name.toLowerCase()}..." data-search="${attr.name}" />
+        </div>
+        <div class="variant-dropdown-list" data-list="${attr.name}">
+          ${attr.options.map(opt => `
+            <div
+              class="variant-dropdown-item ${selectedVariants[attr.name] === opt.value ? 'active' : ''} ${!opt.available ? 'disabled' : ''}"
+              data-attr="${attr.name}"
+              data-value="${opt.value}">
+              <span>${opt.value}</span>
+              ${opt.priceModifier ? `<span class="item-meta">+$${opt.priceModifier}</span>` : ''}
+              ${!opt.available ? '<span class="item-meta">Out of Stock</span>' : ''}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSwatches(attr) {
+  const colorMap = {
+    "Black": "#1a1a1a", "White": "#ffffff", "Red": "#dc2626",
+    "Blue": "#2563eb", "Green": "#16a34a", "Purple": "#9333ea",
+    "Pink": "#ec4899", "Orange": "#ea580c", "Yellow": "#eab308"
+  };
+
+  return `
+    <div class="variant-swatches">
+      ${attr.options.map(opt => `
+        <button
+          class="color-swatch ${selectedVariants[attr.name] === opt.value ? 'active' : ''}"
+          data-attr="${attr.name}"
+          data-value="${opt.value}"
+          style="background-color: ${colorMap[opt.value] || '#999'}"
+          title="${opt.value}"
+          ${!opt.available ? 'disabled' : ''}>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function attachVariantListeners() {
+  document.querySelectorAll('.variant-toggle button, .variant-buttons button, .variant-chips button:not(.show-more)').forEach(btn => {
+    btn.addEventListener('click', function() {
+      if (this.disabled) return;
+      const attr = this.dataset.attr;
+      const value = this.dataset.value;
+      selectedVariants[attr] = value;
+      renderVariantSelector();
+      updatePDPDisplay();
+    });
+  });
+
+  document.querySelectorAll('.variant-chips .show-more').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const attrName = this.dataset.expand;
+      if (expandedChips.has(attrName)) {
+        expandedChips.delete(attrName);
+      } else {
+        expandedChips.add(attrName);
+      }
+      renderVariantSelector();
+    });
+  });
+
+  document.querySelectorAll('.variant-dropdown-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const menu = this.nextElementSibling;
+      document.querySelectorAll('.variant-dropdown-menu.open').forEach(m => {
+        if (m !== menu) m.classList.remove('open');
+      });
+      menu.classList.toggle('open');
+    });
+  });
+
+  document.querySelectorAll('.variant-dropdown-item').forEach(item => {
+    item.addEventListener('click', function() {
+      if (this.classList.contains('disabled')) return;
+      const attr = this.dataset.attr;
+      const value = this.dataset.value;
+      selectedVariants[attr] = value;
+      this.closest('.variant-dropdown-menu').classList.remove('open');
+      renderVariantSelector();
+      updatePDPDisplay();
+    });
+  });
+
+  document.querySelectorAll('.variant-dropdown-search input').forEach(input => {
+    input.addEventListener('input', function() {
+      const attrName = this.dataset.search;
+      const query = this.value.toLowerCase();
+      const list = document.querySelector(`[data-list="${attrName}"]`);
+
+      // Reset category tabs to "All" when searching
+      const tabs = document.querySelector(`[data-tabs="${attrName}"]`);
+      if (tabs) {
+        tabs.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+        tabs.querySelector('[data-category="all"]')?.classList.add('active');
+      }
+
+      // Show/hide items and category headers
+      list.querySelectorAll('.flavor-category').forEach(cat => {
+        cat.style.display = '';
+        const header = cat.querySelector('.flavor-category-header');
+        if (header) header.style.display = '';
+      });
+
+      list.querySelectorAll('.variant-dropdown-item').forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = text.includes(query) ? '' : 'none';
+      });
+
+      // Hide empty categories
+      list.querySelectorAll('.flavor-category').forEach(cat => {
+        const visibleItems = cat.querySelectorAll('.variant-dropdown-item:not([style*="display: none"])');
+        if (visibleItems.length === 0) {
+          cat.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  // Category tab switching
+  document.querySelectorAll('.cat-tab').forEach(tab => {
+    tab.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const category = this.dataset.category;
+      const tabsContainer = this.parentElement;
+      const attrName = tabsContainer.dataset.tabs;
+      const list = document.querySelector(`[data-list="${attrName}"]`);
+
+      // Update active tab
+      tabsContainer.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+
+      // Clear search
+      const searchInput = tabsContainer.parentElement.querySelector('input');
+      if (searchInput) searchInput.value = '';
+
+      // Show/hide categories
+      if (category === 'all') {
+        list.querySelectorAll('.flavor-category').forEach(cat => {
+          cat.style.display = '';
+        });
+        list.querySelectorAll('.variant-dropdown-item').forEach(item => {
+          item.style.display = '';
+        });
+      } else {
+        list.querySelectorAll('.flavor-category').forEach(cat => {
+          cat.style.display = cat.dataset.cat === category ? '' : 'none';
+        });
+      }
+    });
+  });
+
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.variant-dropdown-menu.open').forEach(m => m.classList.remove('open'));
+  });
+
+  document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', function() {
+      if (this.disabled) return;
+      const attr = this.dataset.attr;
+      const value = this.dataset.value;
+      selectedVariants[attr] = value;
+      renderVariantSelector();
+      updatePDPDisplay();
+    });
+  });
+}
+
+function updatePDPDisplay() {
+  let totalPrice = SAMPLE_PRODUCT.basePrice;
+  SAMPLE_PRODUCT.variantAttributes.forEach(attr => {
+    let selected = null;
+
+    // Handle categorized dropdown
+    if (attr.categories) {
+      for (const cat of attr.categories) {
+        selected = cat.options.find(opt => opt.value === selectedVariants[attr.name]);
+        if (selected) break;
+      }
+    } else if (attr.options) {
+      selected = attr.options.find(opt => opt.value === selectedVariants[attr.name]);
+    }
+
+    if (selected && selected.priceModifier) {
+      totalPrice += selected.priceModifier;
+    }
+  });
+
+  const priceEl = document.getElementById('pdpPrice');
+  if (priceEl) priceEl.textContent = `$${totalPrice.toFixed(2)}`;
+
+  const summaryEl = document.getElementById('summaryValue');
+  if (summaryEl) {
+    const parts = Object.entries(selectedVariants).map(([k, v]) => v);
+    summaryEl.textContent = parts.join(' • ') || '--';
+  }
+
+  const allSelected = SAMPLE_PRODUCT.variantAttributes.every(attr => selectedVariants[attr.name]);
+  const addBtn = document.getElementById('addToCartBtn');
+  if (addBtn) addBtn.disabled = !allSelected;
+}
+
+function initQtySelector() {
+  const qtyInput = document.getElementById('qtyInput');
+  const qtyMinus = document.getElementById('qtyMinus');
+  const qtyPlus = document.getElementById('qtyPlus');
+
+  if (!qtyInput || !qtyMinus || !qtyPlus) return;
+
+  qtyMinus.addEventListener('click', () => {
+    const val = parseInt(qtyInput.value) || 1;
+    if (val > 1) qtyInput.value = val - 1;
+  });
+
+  qtyPlus.addEventListener('click', () => {
+    const val = parseInt(qtyInput.value) || 1;
+    if (val < 99) qtyInput.value = val + 1;
+  });
+}
+
+// Initialize PDP
+initPDP();

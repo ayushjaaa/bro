@@ -47,6 +47,47 @@
       <p class="lede">One data model drives both surfaces below: the mega menu (level 2 → level 3, click to open) and the category + filter page. Click any top-level item, then any category in the sidebar, to see it in action.</p>
     </section>
 
+    <!-- ============ PRODUCT DETAIL PAGE (PDP) ============ -->
+    <section class="pdp" id="pdp">
+      <div class="pdp-container">
+        <div class="pdp-gallery">
+          <div class="pdp-main-image" id="pdpMainImage">
+            <span class="pdp-tag">New</span>
+          </div>
+        </div>
+
+        <div class="pdp-info">
+          <nav class="breadcrumb pdp-breadcrumb" id="pdpBreadcrumb">VAPE / Disposable Vapes</nav>
+          <h1 class="pdp-title" id="pdpTitle">Flavour Beast Disposable Vape</h1>
+          <div class="pdp-brand" id="pdpBrand">Flavour Beast</div>
+
+          <div class="pdp-price-row">
+            <span class="pdp-price" id="pdpPrice">$24.99</span>
+            <span class="pdp-stock in-stock" id="pdpStock">In Stock</span>
+          </div>
+
+          <!-- VARIANT SELECTOR -->
+          <div class="variant-selector" id="variantSelector"></div>
+
+          <!-- Selected Summary -->
+          <div class="variant-summary" id="variantSummary">
+            <span class="summary-label">Selected:</span>
+            <span class="summary-value" id="summaryValue">--</span>
+          </div>
+
+          <!-- Quantity + Add to Cart -->
+          <div class="pdp-actions">
+            <div class="qty-selector">
+              <button class="qty-btn" id="qtyMinus">-</button>
+              <input type="number" value="1" min="1" max="99" id="qtyInput" />
+              <button class="qty-btn" id="qtyPlus">+</button>
+            </div>
+            <button class="add-to-cart-btn" id="addToCartBtn">Add to Cart</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ CATEGORY + FILTER PAGE ============ -->
     <section class="plp" id="plp">
       <aside class="sidebar">
