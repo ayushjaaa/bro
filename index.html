@@ -88,6 +88,241 @@
       </div>
     </section>
 
+    <!-- ============ ALTERNATIVE UX PATTERN ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Alternative UX Pattern: Two-Panel Selector</h2>
+        <p>Better for discovery - users can explore by category first</p>
+      </div>
+      <div class="alt-demo">
+        <div class="two-panel-selector" id="twoPanelSelector">
+          <!-- Left Panel: Categories -->
+          <div class="panel-left">
+            <div class="panel-header">
+              <span class="panel-title">Categories</span>
+              <span class="panel-count">8 types</span>
+            </div>
+            <div class="category-list" id="categoryList"></div>
+          </div>
+          <!-- Right Panel: Flavors -->
+          <div class="panel-right">
+            <div class="panel-header">
+              <input type="text" class="panel-search" placeholder="Search flavors..." id="panelSearch" />
+            </div>
+            <div class="flavor-grid" id="flavorGrid"></div>
+          </div>
+        </div>
+        <div class="alt-selection">
+          <span class="alt-label">Selected:</span>
+          <span class="alt-value" id="altSelectedValue">--</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ B2B PATTERN: ALL VISIBLE ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>B2B Pattern: Everything Visible Immediately</h2>
+        <p>Best for wholesale buyers - see all 122 flavors at once, no clicks needed</p>
+      </div>
+      <div class="alt-demo">
+        <div class="b2b-selector" id="b2bSelector">
+          <!-- Stats Bar -->
+          <div class="b2b-stats">
+            <div class="stat-item">
+              <span class="stat-number" id="b2bTotal">122</span>
+              <span class="stat-label">Total Flavors</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-number" id="b2bAvailable">116</span>
+              <span class="stat-label">In Stock</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-number">8</span>
+              <span class="stat-label">Categories</span>
+            </div>
+            <div class="stat-item highlight">
+              <span class="stat-number" id="b2bSelected">0</span>
+              <span class="stat-label">Selected</span>
+            </div>
+          </div>
+
+          <!-- Filter Bar -->
+          <div class="b2b-filters">
+            <input type="text" class="b2b-search" placeholder="Search 122 flavors..." id="b2bSearch" />
+            <div class="b2b-filter-tags" id="b2bFilterTags"></div>
+          </div>
+
+          <!-- All Flavors Grid - Visible Immediately -->
+          <div class="b2b-grid-container">
+            <div class="b2b-flavor-grid" id="b2bFlavorGrid"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 4: ALPHABET QUICK JUMP ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 4: Alphabet Quick Jump</h2>
+        <p>Like contacts app - instant jump to any letter, see all 122 flavors organized A-Z</p>
+      </div>
+      <div class="alt-demo">
+        <div class="alphabet-selector">
+          <div class="alphabet-bar" id="alphabetBar"></div>
+          <div class="alphabet-list" id="alphabetList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 5: KANBAN COLUMNS ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 5: Kanban Category Columns</h2>
+        <p>All categories visible side-by-side - scroll horizontally to see all 122 flavors</p>
+      </div>
+      <div class="alt-demo">
+        <div class="kanban-selector" id="kanbanSelector"></div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 6: TABLE/SPREADSHEET VIEW ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 6: Spreadsheet Table View</h2>
+        <p>B2B wholesale view - sortable columns, bulk select, export-ready format</p>
+      </div>
+      <div class="alt-demo">
+        <div class="table-selector">
+          <div class="table-toolbar">
+            <input type="text" class="table-search" placeholder="Search flavors..." id="tableSearch" />
+            <div class="table-actions">
+              <button class="table-action-btn" id="selectAllBtn">Select All</button>
+              <button class="table-action-btn" id="clearAllBtn">Clear All</button>
+              <span class="table-selected-count"><span id="tableSelectedCount">0</span> selected</span>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="flavor-table" id="flavorTable">
+              <thead>
+                <tr>
+                  <th class="th-check"><input type="checkbox" id="tableCheckAll" /></th>
+                  <th class="th-flavor">Flavor Name</th>
+                  <th class="th-category">Category</th>
+                  <th class="th-status">Status</th>
+                </tr>
+              </thead>
+              <tbody id="flavorTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 7: ACCORDION EXPANDABLE ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 7: Accordion Categories</h2>
+        <p>Expandable sections - see category counts, expand to see all flavors inside</p>
+      </div>
+      <div class="alt-demo">
+        <div class="accordion-selector" id="accordionSelector"></div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 8: VISUAL COLOR CARDS ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 8: Visual Color-Coded Cards</h2>
+        <p>Each category has unique color - instant visual recognition of 122 flavors</p>
+      </div>
+      <div class="alt-demo">
+        <div class="color-card-selector">
+          <div class="color-legend" id="colorLegend"></div>
+          <div class="color-card-grid" id="colorCardGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 9: MEGA GRID WITH HOVER ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 9: Compact Mega Grid</h2>
+        <p>Maximum density - see ALL 122 flavors in one view, hover for details</p>
+      </div>
+      <div class="alt-demo">
+        <div class="mega-grid-selector">
+          <div class="mega-grid-stats">
+            <span class="mega-stat">122 Flavors</span>
+            <span class="mega-stat">8 Categories</span>
+            <span class="mega-stat highlight" id="megaSelected">0 Selected</span>
+          </div>
+          <div class="mega-grid" id="megaGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 10: PILL CLOUD ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 10: Interactive Pill Cloud</h2>
+        <p>All 122 flavors as clickable pills - popular ones larger, instant multi-select</p>
+      </div>
+      <div class="alt-demo">
+        <div class="pill-cloud-selector">
+          <div class="pill-cloud-header">
+            <span class="pill-count">122 Flavors Available</span>
+            <div class="pill-filters">
+              <button class="pill-filter active" data-filter="all">All</button>
+              <button class="pill-filter" data-filter="available">In Stock</button>
+            </div>
+          </div>
+          <div class="pill-cloud" id="pillCloud"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 11: SLIDER CAROUSEL ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 11: Category Carousel Slider</h2>
+        <p>Swipe through categories - each shows flavor count and preview</p>
+      </div>
+      <div class="alt-demo">
+        <div class="carousel-selector">
+          <button class="carousel-nav prev" id="carouselPrev">‹</button>
+          <div class="carousel-track" id="carouselTrack"></div>
+          <button class="carousel-nav next" id="carouselNext">›</button>
+        </div>
+        <div class="carousel-flavors" id="carouselFlavors"></div>
+      </div>
+    </section>
+
+    <!-- ============ PATTERN 12: SPLIT COMPARISON ============ -->
+    <section class="alt-section">
+      <div class="alt-header">
+        <h2>Pattern 12: Split View Comparison</h2>
+        <p>Compare two categories side-by-side - great for wholesale decisions</p>
+      </div>
+      <div class="alt-demo">
+        <div class="split-selector">
+          <div class="split-panel left">
+            <select class="split-select" id="splitLeft">
+              <option value="">Select Category</option>
+            </select>
+            <div class="split-list" id="splitLeftList"></div>
+          </div>
+          <div class="split-divider">VS</div>
+          <div class="split-panel right">
+            <select class="split-select" id="splitRight">
+              <option value="">Select Category</option>
+            </select>
+            <div class="split-list" id="splitRightList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ CATEGORY + FILTER PAGE ============ -->
     <section class="plp" id="plp">
       <aside class="sidebar">

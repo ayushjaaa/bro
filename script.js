@@ -854,12 +854,53 @@ function renderVariantOptions(attr) {
 function renderCategorizedDropdown(attr) {
   const selected = selectedVariants[attr.name];
   const totalOptions = attr.categories.reduce((sum, cat) => sum + cat.options.length, 0);
+  const previewCount = 8;
+  const allOptions = attr.categories.flatMap(cat => cat.options);
+  const previewFlavors = allOptions.filter(opt => opt.available).slice(0, previewCount);
+  const remainingCount = totalOptions - previewFlavors.length;
 
   return `
     <div class="variant-dropdown variant-categorized" data-dropdown="${attr.name}">
+      <!-- Hero Banner showing 100+ flavors -->
+      <div class="flavor-hero-banner">
+        <div class="flavor-hero-count">
+          <span class="hero-number">${totalOptions}+</span>
+          <span class="hero-label">Flavors</span>
+        </div>
+        <div class="flavor-hero-categories">
+          ${attr.categories.slice(0, 4).map(cat => `<span class="hero-cat-tag">${cat.name}</span>`).join("")}
+          ${attr.categories.length > 4 ? `<span class="hero-cat-more">+${attr.categories.length - 4} more</span>` : ''}
+        </div>
+        <button class="flavor-hero-browse" data-open-dropdown="${attr.name}">
+          Browse All Flavors
+          <svg viewBox="0 0 20 20" width="16" height="16"><polyline points="7 5 13 10 7 15"></polyline></svg>
+        </button>
+      </div>
+
+      <!-- Quick Pick Popular Flavors -->
+      <div class="flavor-quickpick">
+        <div class="quickpick-header">
+          <span class="quickpick-title">Popular Picks</span>
+          <button class="quickpick-see-all" data-open-dropdown="${attr.name}">See all ${totalOptions}</button>
+        </div>
+        <div class="flavor-preview-strip">
+          ${previewFlavors.map(opt => `
+            <button
+              class="flavor-preview-chip ${selectedVariants[attr.name] === opt.value ? 'active' : ''}"
+              data-attr="${attr.name}"
+              data-value="${opt.value}">
+              ${opt.value}
+            </button>
+          `).join("")}
+          <button class="flavor-preview-more" data-open-dropdown="${attr.name}">
+            +${remainingCount} more
+          </button>
+        </div>
+      </div>
+
+      <!-- Current Selection Display -->
       <button class="variant-dropdown-btn">
-        <span>${selected || 'Select ' + attr.name}</span>
-        <span class="flavor-count">${totalOptions} options</span>
+        <span class="selected-flavor">${selected ? `<span class="selected-icon">✓</span> ${selected}` : 'Select a flavor'}</span>
         <span class="chev"><svg viewBox="0 0 20 20"><polyline points="5 7 10 13 15 7"></polyline></svg></span>
       </button>
       <div class="variant-dropdown-menu variant-categorized-menu">
@@ -1039,6 +1080,31 @@ function attachVariantListeners() {
     });
   });
 
+  document.querySelectorAll('.flavor-preview-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const attr = this.dataset.attr;
+      const value = this.dataset.value;
+      selectedVariants[attr] = value;
+      renderVariantSelector();
+      updatePDPDisplay();
+    });
+  });
+
+  // Handle all buttons that open the dropdown (preview-more, hero-browse, quickpick-see-all)
+  document.querySelectorAll('.flavor-preview-more, .flavor-hero-browse, .quickpick-see-all').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const attrName = this.dataset.openDropdown || 'Flavor';
+      const menu = document.querySelector(`[data-dropdown="${attrName}"] .variant-dropdown-menu`);
+      if (!menu) return;
+      document.querySelectorAll('.variant-dropdown-menu.open').forEach(m => {
+        if (m !== menu) m.classList.remove('open');
+      });
+      menu.classList.add('open');
+      menu.querySelector('.variant-dropdown-search input')?.focus();
+    });
+  });
+
   document.querySelectorAll('.variant-dropdown-item').forEach(item => {
     item.addEventListener('click', function() {
       if (this.classList.contains('disabled')) return;
@@ -1189,3 +1255,650 @@ function initQtySelector() {
 
 // Initialize PDP
 initPDP();
+
+/* ===================== ALTERNATIVE UX: TWO-PANEL SELECTOR ===================== */
+
+let activeCategoryAlt = 'Fruit';
+let selectedFlavorAlt = null;
+
+function initTwoPanelSelector() {
+  const categoryList = document.getElementById('categoryList');
+  const flavorGrid = document.getElementById('flavorGrid');
+  const panelSearch = document.getElementById('panelSearch');
+
+  if (!categoryList || !flavorGrid) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr || !flavorAttr.categories) return;
+
+  // Render categories
+  categoryList.innerHTML = flavorAttr.categories.map(cat => `
+    <div class="category-item ${cat.name === activeCategoryAlt ? 'active' : ''}" data-cat="${cat.name}">
+      <span>${cat.name}</span>
+      <span class="cat-count">${cat.options.length}</span>
+    </div>
+  `).join('');
+
+  // Render flavors for active category
+  renderFlavorGrid();
+
+  // Category click
+  categoryList.querySelectorAll('.category-item').forEach(item => {
+    item.addEventListener('click', function() {
+      activeCategoryAlt = this.dataset.cat;
+      categoryList.querySelectorAll('.category-item').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+      renderFlavorGrid();
+    });
+  });
+
+  // Search
+  if (panelSearch) {
+    panelSearch.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      flavorGrid.querySelectorAll('.flavor-card').forEach(card => {
+        const name = card.querySelector('.flavor-name').textContent.toLowerCase();
+        card.style.display = name.includes(query) ? '' : 'none';
+      });
+    });
+  }
+}
+
+function renderFlavorGrid() {
+  const flavorGrid = document.getElementById('flavorGrid');
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  const category = flavorAttr.categories.find(c => c.name === activeCategoryAlt);
+
+  if (!category) return;
+
+  flavorGrid.innerHTML = category.options.map(opt => `
+    <div class="flavor-card ${selectedFlavorAlt === opt.value ? 'active' : ''} ${!opt.available ? 'disabled' : ''}"
+         data-value="${opt.value}" ${!opt.available ? '' : ''}>
+      <div class="flavor-name">${opt.value}</div>
+      ${!opt.available ? '<div class="flavor-status">Out of Stock</div>' : ''}
+    </div>
+  `).join('');
+
+  flavorGrid.querySelectorAll('.flavor-card:not(.disabled)').forEach(card => {
+    card.addEventListener('click', function() {
+      selectedFlavorAlt = this.dataset.value;
+      flavorGrid.querySelectorAll('.flavor-card').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      document.getElementById('altSelectedValue').textContent = selectedFlavorAlt;
+    });
+  });
+}
+
+/* ===================== ALTERNATIVE UX: TASTE PROFILE ===================== */
+
+const tasteProfiles = {
+  sweet: ['Cotton Candy', 'Bubblegum', 'Gummy Bear', 'Caramel', 'Vanilla Custard', 'Marshmallow', 'Honey', 'Butterscotch'],
+  fruity: ['Mango Peach', 'Watermelon Ice', 'Grape', 'Strawberry Banana', 'Tropical Punch', 'Berry Blast', 'Blue Razz', 'Pineapple', 'Apple', 'Kiwi Strawberry'],
+  cool: ['Mint', 'Cool Mint', 'Menthol', 'Ice Mint', 'Spearmint', 'Peppermint', 'Watermelon Ice', 'Lemon Ice', 'Arctic Mint'],
+  rich: ['Tobacco', 'Coffee', 'Mocha', 'Espresso', 'Cappuccino', 'Virginia Tobacco', 'Chocolate', 'Tiramisu']
+};
+
+let selectedTaste = null;
+let selectedTasteFlavor = null;
+
+function initTasteSelector() {
+  const tasteButtons = document.querySelectorAll('.taste-btn');
+  const tasteResults = document.getElementById('tasteResults');
+
+  if (!tasteButtons.length || !tasteResults) return;
+
+  tasteButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      const taste = this.dataset.taste;
+      selectedTaste = taste;
+
+      // Update active state
+      tasteButtons.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+
+      // Show results
+      const flavors = tasteProfiles[taste] || [];
+      tasteResults.innerHTML = flavors.map(f => `
+        <button class="taste-result-chip ${selectedTasteFlavor === f ? 'active' : ''}" data-flavor="${f}">
+          ${f}
+        </button>
+      `).join('');
+      tasteResults.classList.add('show');
+
+      // Flavor selection
+      tasteResults.querySelectorAll('.taste-result-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+          selectedTasteFlavor = this.dataset.flavor;
+          tasteResults.querySelectorAll('.taste-result-chip').forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
+    });
+  });
+}
+
+/* ===================== B2B PATTERN: ALL VISIBLE ===================== */
+
+let b2bSelectedFlavors = new Set();
+let b2bActiveCategory = 'all';
+
+function initB2BSelector() {
+  const flavorGrid = document.getElementById('b2bFlavorGrid');
+  const filterTags = document.getElementById('b2bFilterTags');
+  const searchInput = document.getElementById('b2bSearch');
+
+  if (!flavorGrid) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr || !flavorAttr.categories) return;
+
+  // Render filter tags
+  filterTags.innerHTML = `
+    <button class="b2b-filter-tag active" data-cat="all">All (${flavorAttr.categories.reduce((sum, c) => sum + c.options.length, 0)})</button>
+    ${flavorAttr.categories.map(cat => `
+      <button class="b2b-filter-tag" data-cat="${cat.name}">${cat.name} (${cat.options.length})</button>
+    `).join('')}
+  `;
+
+  // Render all flavors immediately
+  renderB2BGrid();
+
+  // Filter tag clicks
+  filterTags.querySelectorAll('.b2b-filter-tag').forEach(tag => {
+    tag.addEventListener('click', function() {
+      b2bActiveCategory = this.dataset.cat;
+      filterTags.querySelectorAll('.b2b-filter-tag').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      renderB2BGrid();
+    });
+  });
+
+  // Search
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      flavorGrid.querySelectorAll('.b2b-flavor-item').forEach(item => {
+        const name = item.querySelector('.flavor-text').textContent.toLowerCase();
+        item.style.display = name.includes(query) ? '' : 'none';
+      });
+
+      // Hide empty category headers
+      flavorGrid.querySelectorAll('.b2b-category-section').forEach(section => {
+        const visibleItems = section.parentElement.querySelectorAll('.b2b-flavor-item:not([style*="display: none"])');
+        // This is simplified - in production you'd track which items belong to which category
+      });
+    });
+  }
+}
+
+function renderB2BGrid() {
+  const flavorGrid = document.getElementById('b2bFlavorGrid');
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+
+  let html = '';
+  let totalAvailable = 0;
+
+  const categoriesToShow = b2bActiveCategory === 'all'
+    ? flavorAttr.categories
+    : flavorAttr.categories.filter(c => c.name === b2bActiveCategory);
+
+  categoriesToShow.forEach(cat => {
+    // Category header
+    html += `
+      <div class="b2b-category-section">
+        <div class="b2b-category-header">
+          <span class="b2b-category-name">${cat.name}</span>
+          <span class="b2b-category-count">${cat.options.length} flavors</span>
+        </div>
+      </div>
+    `;
+
+    // Flavor items
+    cat.options.forEach(opt => {
+      if (opt.available) totalAvailable++;
+      const isSelected = b2bSelectedFlavors.has(opt.value);
+      html += `
+        <div class="b2b-flavor-item ${isSelected ? 'selected' : ''} ${!opt.available ? 'unavailable' : ''}"
+             data-value="${opt.value}" data-available="${opt.available}">
+          <span class="flavor-text">${opt.value}</span>
+          <span class="flavor-check">
+            <svg viewBox="0 0 20 20"><polyline points="4 10 8 14 16 6"></polyline></svg>
+          </span>
+        </div>
+      `;
+    });
+  });
+
+  flavorGrid.innerHTML = html;
+
+  // Update stats
+  const totalEl = document.getElementById('b2bTotal');
+  const availEl = document.getElementById('b2bAvailable');
+  if (totalEl) totalEl.textContent = flavorAttr.categories.reduce((sum, c) => sum + c.options.length, 0);
+  if (availEl) availEl.textContent = totalAvailable;
+
+  // Click handlers
+  flavorGrid.querySelectorAll('.b2b-flavor-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      const value = this.dataset.value;
+      if (b2bSelectedFlavors.has(value)) {
+        b2bSelectedFlavors.delete(value);
+        this.classList.remove('selected');
+      } else {
+        b2bSelectedFlavors.add(value);
+        this.classList.add('selected');
+      }
+      document.getElementById('b2bSelected').textContent = b2bSelectedFlavors.size;
+    });
+  });
+}
+
+/* ===================== PATTERN 4: ALPHABET QUICK JUMP ===================== */
+function initAlphabetSelector() {
+  const alphabetBar = document.getElementById('alphabetBar');
+  const alphabetList = document.getElementById('alphabetList');
+  if (!alphabetBar || !alphabetList) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  // Get all flavors and group by letter
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+  const grouped = {};
+  allFlavors.forEach(f => {
+    const letter = f.value[0].toUpperCase();
+    if (!grouped[letter]) grouped[letter] = [];
+    grouped[letter].push(f);
+  });
+
+  // Render alphabet bar
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  alphabetBar.innerHTML = letters.map(l => `
+    <button class="alpha-btn ${grouped[l] ? 'has-items' : ''}" data-letter="${l}">${l}</button>
+  `).join('');
+
+  // Render list
+  alphabetList.innerHTML = Object.keys(grouped).sort().map(letter => `
+    <div class="alpha-section" id="alpha-${letter}">
+      <div class="alpha-letter">${letter}</div>
+      <div class="alpha-items">
+        ${grouped[letter].map(f => `
+          <span class="alpha-item ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">${f.value}</span>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  // Click handlers
+  alphabetBar.querySelectorAll('.alpha-btn.has-items').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const letter = this.dataset.letter;
+      document.getElementById(`alpha-${letter}`)?.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  alphabetList.querySelectorAll('.alpha-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      alphabetList.querySelectorAll('.alpha-item').forEach(i => i.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+/* ===================== PATTERN 5: KANBAN COLUMNS ===================== */
+function initKanbanSelector() {
+  const kanban = document.getElementById('kanbanSelector');
+  if (!kanban) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  kanban.innerHTML = flavorAttr.categories.map(cat => `
+    <div class="kanban-column">
+      <div class="kanban-header">
+        <span class="kanban-title">${cat.name}</span>
+        <span class="kanban-count">${cat.options.length}</span>
+      </div>
+      <div class="kanban-items">
+        ${cat.options.map(opt => `
+          <div class="kanban-item ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">
+            ${opt.value}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  kanban.querySelectorAll('.kanban-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      kanban.querySelectorAll('.kanban-item').forEach(i => i.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+/* ===================== PATTERN 6: TABLE VIEW ===================== */
+let tableSelected = new Set();
+
+function initTableSelector() {
+  const tbody = document.getElementById('flavorTableBody');
+  const searchInput = document.getElementById('tableSearch');
+  if (!tbody) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options.map(o => ({ ...o, category: c.name })));
+
+  tbody.innerHTML = allFlavors.map(f => `
+    <tr data-value="${f.value}">
+      <td><input type="checkbox" class="row-check" ${!f.available ? 'disabled' : ''} /></td>
+      <td>${f.value}</td>
+      <td>${f.category}</td>
+      <td><span class="status-badge ${f.available ? 'in-stock' : 'out-of-stock'}">${f.available ? 'In Stock' : 'Out'}</span></td>
+    </tr>
+  `).join('');
+
+  // Row selection
+  tbody.querySelectorAll('.row-check').forEach(check => {
+    check.addEventListener('change', function() {
+      const row = this.closest('tr');
+      const value = row.dataset.value;
+      if (this.checked) {
+        tableSelected.add(value);
+        row.classList.add('selected');
+      } else {
+        tableSelected.delete(value);
+        row.classList.remove('selected');
+      }
+      document.getElementById('tableSelectedCount').textContent = tableSelected.size;
+    });
+  });
+
+  // Select all
+  document.getElementById('selectAllBtn')?.addEventListener('click', () => {
+    tbody.querySelectorAll('.row-check:not(:disabled)').forEach(c => {
+      c.checked = true;
+      c.closest('tr').classList.add('selected');
+      tableSelected.add(c.closest('tr').dataset.value);
+    });
+    document.getElementById('tableSelectedCount').textContent = tableSelected.size;
+  });
+
+  // Clear all
+  document.getElementById('clearAllBtn')?.addEventListener('click', () => {
+    tbody.querySelectorAll('.row-check').forEach(c => {
+      c.checked = false;
+      c.closest('tr').classList.remove('selected');
+    });
+    tableSelected.clear();
+    document.getElementById('tableSelectedCount').textContent = 0;
+  });
+
+  // Search
+  searchInput?.addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    tbody.querySelectorAll('tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+}
+
+/* ===================== PATTERN 7: ACCORDION ===================== */
+function initAccordionSelector() {
+  const accordion = document.getElementById('accordionSelector');
+  if (!accordion) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  accordion.innerHTML = flavorAttr.categories.map((cat, i) => `
+    <div class="accordion-item ${i === 0 ? 'open' : ''}">
+      <div class="accordion-header">
+        <div class="accordion-title">
+          <span class="accordion-name">${cat.name}</span>
+          <span class="accordion-count">${cat.options.length} flavors</span>
+        </div>
+        <span class="accordion-chevron">▼</span>
+      </div>
+      <div class="accordion-body">
+        ${cat.options.map(opt => `
+          <span class="accordion-flavor ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">${opt.value}</span>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  accordion.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', function() {
+      this.closest('.accordion-item').classList.toggle('open');
+    });
+  });
+
+  accordion.querySelectorAll('.accordion-flavor:not(.unavailable)').forEach(f => {
+    f.addEventListener('click', function() {
+      accordion.querySelectorAll('.accordion-flavor').forEach(x => x.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+/* ===================== PATTERN 8: COLOR CARDS ===================== */
+const categoryColors = {
+  'Fruit': { bg: '#fef3c7', text: '#92400e' },
+  'Berry': { bg: '#fce7f3', text: '#9d174d' },
+  'Citrus': { bg: '#fef9c3', text: '#854d0e' },
+  'Menthol & Mint': { bg: '#d1fae5', text: '#065f46' },
+  'Candy & Sweet': { bg: '#ede9fe', text: '#5b21b6' },
+  'Beverage': { bg: '#dbeafe', text: '#1e40af' },
+  'Tobacco': { bg: '#f5f5f4', text: '#57534e' },
+  'Dessert': { bg: '#ffedd5', text: '#c2410c' }
+};
+
+function initColorCardSelector() {
+  const legend = document.getElementById('colorLegend');
+  const grid = document.getElementById('colorCardGrid');
+  if (!legend || !grid) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  legend.innerHTML = flavorAttr.categories.map(cat => {
+    const color = categoryColors[cat.name] || { bg: '#f3f4f6', text: '#374151' };
+    return `<div class="legend-item"><span class="legend-dot" style="background:${color.bg};border:2px solid ${color.text}"></span>${cat.name}</div>`;
+  }).join('');
+
+  grid.innerHTML = flavorAttr.categories.flatMap(cat => {
+    const color = categoryColors[cat.name] || { bg: '#f3f4f6', text: '#374151' };
+    return cat.options.map(opt => `
+      <div class="color-card ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}" style="background:${color.bg};color:${color.text}">
+        <span class="card-name">${opt.value}</span>
+      </div>
+    `);
+  }).join('');
+
+  grid.querySelectorAll('.color-card:not(.unavailable)').forEach(card => {
+    card.addEventListener('click', function() {
+      grid.querySelectorAll('.color-card').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+/* ===================== PATTERN 9: MEGA GRID ===================== */
+let megaSelected = new Set();
+
+function initMegaGrid() {
+  const grid = document.getElementById('megaGrid');
+  if (!grid) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+
+  grid.innerHTML = allFlavors.map(f => `
+    <div class="mega-item ${!f.available ? 'unavailable' : ''}" data-value="${f.value}" title="${f.value}">
+      ${f.value}
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.mega-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      const val = this.dataset.value;
+      if (megaSelected.has(val)) {
+        megaSelected.delete(val);
+        this.classList.remove('selected');
+      } else {
+        megaSelected.add(val);
+        this.classList.add('selected');
+      }
+      document.getElementById('megaSelected').textContent = megaSelected.size + ' Selected';
+    });
+  });
+}
+
+/* ===================== PATTERN 10: PILL CLOUD ===================== */
+function initPillCloud() {
+  const cloud = document.getElementById('pillCloud');
+  if (!cloud) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const allFlavors = flavorAttr.categories.flatMap(c => c.options);
+  const popular = ['Mango Peach', 'Berry Blast', 'Watermelon Ice', 'Mint', 'Blue Razz'];
+
+  cloud.innerHTML = allFlavors.map(f => `
+    <button class="pill-item ${popular.includes(f.value) ? 'popular' : ''} ${!f.available ? 'unavailable' : ''}" data-value="${f.value}">
+      ${f.value}
+    </button>
+  `).join('');
+
+  cloud.querySelectorAll('.pill-item:not(.unavailable)').forEach(pill => {
+    pill.addEventListener('click', function() {
+      this.classList.toggle('selected');
+    });
+  });
+
+  // Filter buttons
+  document.querySelectorAll('.pill-filter').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.pill-filter').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const filter = this.dataset.filter;
+      cloud.querySelectorAll('.pill-item').forEach(p => {
+        if (filter === 'all') p.style.display = '';
+        else if (filter === 'available') p.style.display = p.classList.contains('unavailable') ? 'none' : '';
+      });
+    });
+  });
+}
+
+/* ===================== PATTERN 11: CAROUSEL ===================== */
+const categoryIcons = { 'Fruit': '🍎', 'Berry': '🫐', 'Citrus': '🍋', 'Menthol & Mint': '🌿', 'Candy & Sweet': '🍬', 'Beverage': '☕', 'Tobacco': '🍂', 'Dessert': '🍰' };
+let carouselActiveCategory = null;
+
+function initCarouselSelector() {
+  const track = document.getElementById('carouselTrack');
+  const flavors = document.getElementById('carouselFlavors');
+  if (!track || !flavors) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  track.innerHTML = flavorAttr.categories.map(cat => `
+    <div class="carousel-card" data-cat="${cat.name}">
+      <div class="carousel-card-icon">${categoryIcons[cat.name] || '📦'}</div>
+      <div class="carousel-card-name">${cat.name}</div>
+      <div class="carousel-card-count">${cat.options.length} flavors</div>
+    </div>
+  `).join('');
+
+  track.querySelectorAll('.carousel-card').forEach(card => {
+    card.addEventListener('click', function() {
+      track.querySelectorAll('.carousel-card').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      carouselActiveCategory = this.dataset.cat;
+      renderCarouselFlavors();
+    });
+  });
+
+  // Nav buttons
+  document.getElementById('carouselPrev')?.addEventListener('click', () => track.scrollBy(-200, 0));
+  document.getElementById('carouselNext')?.addEventListener('click', () => track.scrollBy(200, 0));
+
+  // Auto-select first
+  track.querySelector('.carousel-card')?.click();
+}
+
+function renderCarouselFlavors() {
+  const flavors = document.getElementById('carouselFlavors');
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  const cat = flavorAttr.categories.find(c => c.name === carouselActiveCategory);
+  if (!cat) return;
+
+  flavors.innerHTML = cat.options.map(opt => `
+    <button class="carousel-flavor-chip ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">${opt.value}</button>
+  `).join('');
+
+  flavors.querySelectorAll('.carousel-flavor-chip:not(.unavailable)').forEach(chip => {
+    chip.addEventListener('click', function() {
+      flavors.querySelectorAll('.carousel-flavor-chip').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+/* ===================== PATTERN 12: SPLIT VIEW ===================== */
+function initSplitSelector() {
+  const leftSelect = document.getElementById('splitLeft');
+  const rightSelect = document.getElementById('splitRight');
+  if (!leftSelect || !rightSelect) return;
+
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  if (!flavorAttr) return;
+
+  const options = flavorAttr.categories.map(c => `<option value="${c.name}">${c.name} (${c.options.length})</option>`).join('');
+  leftSelect.innerHTML = '<option value="">Select Category</option>' + options;
+  rightSelect.innerHTML = '<option value="">Select Category</option>' + options;
+
+  leftSelect.addEventListener('change', () => renderSplitList('left', leftSelect.value));
+  rightSelect.addEventListener('change', () => renderSplitList('right', rightSelect.value));
+}
+
+function renderSplitList(side, categoryName) {
+  const list = document.getElementById(side === 'left' ? 'splitLeftList' : 'splitRightList');
+  const flavorAttr = SAMPLE_PRODUCT.variantAttributes.find(a => a.name === 'Flavor');
+  const cat = flavorAttr.categories.find(c => c.name === categoryName);
+
+  if (!cat) {
+    list.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center;">Select a category</div>';
+    return;
+  }
+
+  list.innerHTML = cat.options.map(opt => `
+    <div class="split-item ${!opt.available ? 'unavailable' : ''}" data-value="${opt.value}">${opt.value}</div>
+  `).join('');
+
+  list.querySelectorAll('.split-item:not(.unavailable)').forEach(item => {
+    item.addEventListener('click', function() {
+      list.querySelectorAll('.split-item').forEach(i => i.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+}
+
+// Initialize ALL alternative UX patterns
+initTwoPanelSelector();
+initTasteSelector();
+initB2BSelector();
+initAlphabetSelector();
+initKanbanSelector();
+initTableSelector();
+initAccordionSelector();
+initColorCardSelector();
+initMegaGrid();
+initPillCloud();
+initCarouselSelector();
+initSplitSelector();
