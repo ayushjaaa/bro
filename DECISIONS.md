@@ -934,6 +934,79 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
 - **`flavour_description` metafield definition:** one-time setup (developer), alongside item 42's
   `region` definition — Settings → Custom Data → Variants → Add definition, namespace `custom`,
   key `flavour_description`, type Multi-line text.
+- **Gotcha, discovered via live testing (2026-08-22) — Category-linked options break bulk-create:**
+  if a Product Line's **Category** field (Shopify's Standard Product Taxonomy, item 4) is set to
+  something that has a matching standard attribute (e.g. "Vape Pods in Vaping" has a standard
+  "Flavor" attribute), Shopify **automatically links** the custom `Flavor` Option to that standard
+  attribute's metafield. Once linked, `productVariantsBulkCreate` fails on every variant with
+  `"Cannot set name for an option value linked to a metafield"` — custom flavour naming (and the
+  Region-suffix trick) becomes impossible via the API.
+  - **Fix, confirmed working (verified live, 1,200/1,200 variants created after fixing):** in
+    Shopify Admin, open the product → Variants → click the linked-metafield badge next to the
+    option name → **Disconnect**. Per official Shopify Help docs, this moves the option out of
+    Variants into Metafields temporarily — re-add it as a plain (unlinked) Option afterward.
+  - **Process implication:** the admin panel's Product Line creation flow (item 1a/this item)
+    must either (a) avoid Standard Taxonomy categories that have a conflicting attribute name
+    (Flavor, Color, etc.), or (b) programmatically disconnect the option right after creation,
+    before any bulk variant upload runs. Otherwise every new Product Line silently breaks bulk
+    variant creation the same way.
+
+## 44. Admin Panel — Auth, Real-Time/Cache Strategy, and Extended Feature List (DECIDED, 2026-08-22)
+
+### 44a. Admin Panel Login (Security)
+- **Decision:** Reuse **Supabase Auth** (already the storefront's identity layer, item 21) rather
+  than a separate auth system — an `is_admin` flag/table differentiates admin accounts from
+  regular customers, on the same Supabase project.
+- **Login method: Google OAuth**, not email/password — avoids owning password storage/reset flows
+  entirely for a small, trusted user base (owner + maybe 1–2 staff).
+- **No public admin sign-up route** — admin accounts are created manually (developer/owner via
+  Supabase dashboard or a seed script), never a self-serve registration form.
+- **Every Server Action/route re-verifies identity server-side** — same rule as item 12/
+  BUILD_PLAN §4 for the storefront (never trust middleware alone, never trust a client claim).
+- **Shorter session timeout than the storefront** — admin sessions carry more sensitive actions
+  (pricing, customer approval), so inactivity timeout should be stricter (e.g. 30–60 min) than a
+  regular shopper's session.
+
+### 44b. Real-Time + Cache Strategy — Two Different Mechanisms for Two Data Sources
+- **Supabase-native data** (registration requests, cart activity, order status — items 16/21/22)
+  uses **Supabase Realtime** (`postgres_changes` subscriptions) — this is already item 21's V2
+  scope, extended explicitly to power live admin-panel notifications (new registration/order
+  badge) without any page refresh. No caching layer needed here — Realtime reads are live against
+  the database directly.
+- **Shopify-native data** (products, variants, taxonomy, stock) is **not** in Supabase, so
+  Supabase Realtime cannot cover it. Two sub-cases:
+  1. **Change made through our own admin panel** (e.g. item 43's bulk variant upload) — no
+     realtime/webhook needed. The Server Action that made the change calls `revalidateTag()`
+     directly, right after the mutation succeeds — the app already knows what changed.
+  2. **Change made outside our admin panel** (owner edits directly in Shopify's native Admin, or
+     Shopify auto-adjusts inventory after a sale) — our server has no visibility into this unless
+     Shopify tells it. Requires a **Shopify webhook** (product/variant update topics), same
+     pattern already used for Draft Order sync (item 36) — the webhook handler calls
+     `revalidateTag()` for the affected data when it fires.
+- **Cost note (researched 2026-08-22):** Shopify webhooks are a core, free Admin API feature on
+  all plans including Basic — no extra billing, and webhook delivery doesn't count against
+  GraphQL query-cost rate limits (it's push-based, not a query).
+- **Manual "Refresh Data" button** — a safety-valve in the admin panel's top bar, force-calls
+  revalidation directly in case a webhook is ever missed/delayed.
+
+### 44c. Extended Admin Panel Feature List
+Builds on ADMIN_PANEL.md §1–4 and BUILD_PLAN §7's admin steps. New items identified via direct
+planning discussion, not yet assigned to a specific ADMIN_PANEL.md section:
+- **Edit / bulk-edit existing variants** — not just create; e.g. updating price across many
+  variants at once when a provincial tax rate changes.
+- **Low-stock / out-of-stock alert widget** on the dashboard.
+- **Duplicate/clone a Product Line** — fast-start a similar product line (copy name/images/
+  taxonomy, re-enter only what differs).
+- **Bulk-upload table draft/autosave** — item 43's table can hold up to ~1,200 rows (200
+  flavours × 6 regions); losing that to an accidental navigation/tab-close would be costly, so
+  in-progress rows should autosave (localStorage or a Supabase draft table) before final submit.
+- **Row-level validation feedback before submit** — flag bad rows (missing price, invalid region
+  value) inline in the table, not only after a failed API call.
+- **Activity/audit log** — who changed what and when, useful once more than one admin user exists.
+- **"Preview as customer" toggle** — pick a Region and see the storefront rendering immediately,
+  without leaving the admin panel.
+- **Image library / reuse** — avoid re-uploading the same image for multiple variants.
+- **Sequencing:** not yet split into V1/V2 — to be prioritized when ADMIN_PANEL.md is next revised.
 
 ## Next Step
 Sanity's role is now confirmed — produce the full step-by-step build plan (setup order, what gets
