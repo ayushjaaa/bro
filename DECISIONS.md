@@ -1030,6 +1030,34 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
 - **Manual "Refresh Data" button** — a safety-valve in the admin panel's top bar, force-calls
   revalidation directly in case a webhook is ever missed/delayed.
 
+### 44b-i. Admin Panel Backend Architecture — Data Access Layer (researched 2026-08-22, official Next.js docs)
+- **Decision:** Every admin feature follows a 3-layer pattern, per Next.js's own recommended
+  "Data Access Layer" (DAL) guidance for new projects:
+  1. **`src/lib/shopify/admin-client.ts`** (already exists) — raw, `server-only` GraphQL caller.
+  2. **`src/data/*.ts`** (new) — one `server-only` module per feature (e.g. `product-lines.ts`,
+     `variants.ts`), each starting with `await requireAdmin()` (item 44a-i's auth check) before
+     doing anything, then calling `admin-client.ts`, then returning only the minimal safe data
+     the UI needs (never a raw Shopify response).
+  3. **Server Action** (`'use server'`) — kept intentionally thin: extract form data, call the
+     matching `data/*.ts` function, handle the result (redirect/revalidate). No auth logic and no
+     direct Shopify calls live in the action itself.
+- **Why layer 2 exists at all (not just DAL skipped, action → admin-client directly):** centralizes
+  the `requireAdmin()` call in one place per feature instead of copy-pasted into every Server
+  Action — reduces the risk of a future action forgetting the check (the exact class of mistake
+  item 44a-i's CVE-2025-29927 precedent warns against).
+- **Server Actions confirmed valid/recommended** (official docs: *"Next.js handles mutations with
+  Server Actions"*) — the earlier open question in this planning session was whether Server
+  Actions were appropriate for calling a third-party API (Shopify) with a secret token; confirmed
+  yes, provided the DAL pattern above is followed and each Server Function independently
+  re-verifies auth (already item 44a-i's rule).
+- **Route Handlers used only where Server Actions structurally can't work:** Shopify webhooks
+  (item 44b, an external service calling us — Server Actions aren't reachable from outside the
+  app), and search-as-you-type (repeated client-initiated fetches, not a one-time form submit).
+- **Bulk-upload sequencing note:** Server Actions execute requests sequentially, by design
+  (official docs) — this is not a limitation for item 43's batched `productVariantsBulkCreate`
+  calls, since Shopify's own rate limits already require throttled, non-parallel calls; the
+  behaviors align rather than conflict.
+
 ### 44c. Extended Admin Panel Feature List
 Builds on ADMIN_PANEL.md §1–4 and BUILD_PLAN §7's admin steps. New items identified via direct
 planning discussion, not yet assigned to a specific ADMIN_PANEL.md section:

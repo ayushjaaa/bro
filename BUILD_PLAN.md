@@ -348,6 +348,62 @@ approves it (item 22).
 20. **Cart login-prompt UI/UX polish** (item 20) — exact behavior of the "log in to add to cart"
     prompt, refined once the V1 cart page is in use.
 
+## 8. Admin Panel — API Call Reference (added 2026-08-22, per DECISIONS.md item 44)
+
+### 8a. Backend Architecture (per item 44b-i)
+
+```
+Client Component (form/table)
+        │
+        ▼
+Server Action ('use server', thin — extracts input, calls the DAL, handles redirect/revalidate)
+        │
+        ▼
+src/data/*.ts (DAL, server-only — requireAdmin() first, then calls admin-client.ts, returns
+               only safe minimal data)
+        │
+        ▼
+src/lib/shopify/admin-client.ts (raw shopifyAdminRequest(), already exists)
+        │
+        ▼
+Shopify Admin GraphQL API
+```
+
+`requireAdmin()` (in `src/data/admin-auth.ts`): calls Supabase `getClaims()` to get a verified
+`email`, then queries `admin_users` (Service Role client, bypasses RLS) for that email — throws
+if not found. Every `data/*.ts` function calls this first, per item 44a-i.
+
+### 8b. Product Line Create — Exact Mutation Sequence (researched 2026-08-22)
+
+1. **`stagedUploadsCreate`** — get an upload target for the base image (`resource: PRODUCT_IMAGE`).
+2. Upload the file directly to the returned staged `url` (not through our own server — the
+   staged-upload URL accepts the file directly).
+3. **`productCreate`** — single call does most of the work: `title`, `descriptionHtml`,
+   `productOptions: [{ name: "Flavor", values: [] }]` (no `linkedMetafield` set — leaving it
+   unset avoids the Category-auto-link bug found in item 43's gotcha), `metafields: [{ namespace:
+   "taxonomy", key: "brand", ... }]` (Brand reference goes in this same call — no separate
+   `metafieldsSet` call needed), `media: [{ originalSource: <resourceUrl from step 1> }]`.
+4. **`publishablePublish`** — **required, easy to miss**: Shopify creates products **unpublished**
+   by default; without this call the Product Line won't be visible to any sales channel/storefront
+   once one exists. Needs the `write_publications` scope (check it's in the app's 14 configured
+   scopes, BUILD_PLAN §7 step 1 — add it if missing).
+
+### 8c. Bulk Flavour+Region Variant Upload — Exact Sequence + Batch Sizes (researched 2026-08-22)
+
+- **Official general limit (all Admin GraphQL array inputs):** 250 items per call.
+- **Our proven safe batch size: 100/call** — live-tested end-to-end (1,200/1,200 variants created,
+  0 errors, 12 batches, 51.9s total) — used instead of the untested 250 ceiling because per-call
+  **query cost** (not just array length) is what can actually throttle a request; 100 is confirmed
+  to work, 250 is allowed by the docs but unverified for this mutation's cost profile.
+- **Step 1 — Images:** batch rows into groups of 100 → `stagedUploadsCreate` (100 targets/call) →
+  upload each file to its own staged URL.
+- **Step 2 — Variants:** same 100-row batches → `productVariantsBulkCreate` per batch, each
+  variant's `metafields` array setting both `custom.region` and `custom.flavour_description` in
+  the same call (confirmed working live) — no separate follow-up call per variant.
+- **Example scale:** 200 flavours × 6 regions = 1,200 rows → 12 batches for images, 12 batches for
+  variants (can interleave: upload one batch's images, then create that batch's variants
+  referencing them, rather than uploading all 1,200 images before creating any variants).
+
 ## Status
 
 Drafted 2026-08-19, revised 2026-08-20 for the Supabase auth switch (item 21). Revised again
