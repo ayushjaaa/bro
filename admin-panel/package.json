@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "shopify:create-metaobject-definitions": "tsx --env-file=.env.local scripts/shopify/create-metaobject-definitions.ts",
-    "shopify:create-product-line-metafield": "tsx --env-file=.env.local scripts/shopify/create-product-line-metafield.ts"
+    "shopify:create-product-brand-metafield": "tsx --env-file=.env.local scripts/shopify/create-product-brand-metafield.ts",
+    "shopify:create-variant-region-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-region-metafield.ts",
+    "shopify:create-variant-flavour-description-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-flavour-description-metafield.ts"
   },
   "dependencies": {
     "next": "16.3.1",

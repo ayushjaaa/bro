@@ -3,16 +3,41 @@
 Reference: jubileesk.ca (Jubilee Distributors, Saskatchewan-based vape/convenience/dispensary
 wholesale distributor) — Sanity Studio is used there; role to be confirmed (see Open Questions).
 
-## 1. Flavor Model
-- **Decision:** Every flavor = a separate Shopify Product (not a variant).
-- **Why:** Matches how real Canadian competitors (e.g. abcvape.ca) structure their catalog;
-  best for SEO (each flavor gets its own indexable page/URL).
-- **Note:** Custom admin panel will be built to make managing many per-flavor products practical.
+## 1. Flavor Model (SUPERSEDED, 2026-08-22 — see item 1a)
+- ~~**Decision:** Every flavor = a separate Shopify Product (not a variant).~~
+- ~~**Why:** Matches how real Canadian competitors (e.g. abcvape.ca) structure their catalog;
+  best for SEO (each flavor gets its own indexable page/URL).~~
+- ~~**Note:** Custom admin panel will be built to make managing many per-flavor products practical.~~
 
-## 2. Taxonomy Structure (Category → Sub-category → Brand → Product Line)
+### 1a. Flavor Model Switched to Variants (DECIDED, 2026-08-22)
+- **New decision:** Flavor = a **variant** (a `Flavour` Option value) on a Product Line product,
+  not a separate Shopify Product. The Product Line itself is now the Shopify Product.
+- **Why the old 100-variant reasoning no longer holds:** researched Shopify's own changelog — the
+  variant limit was raised from 100 to **2,048 per product**, live for all merchants on all plans
+  (Basic included) since Oct 15, 2025, no extra cost. One option (Flavour) can hold up to 2,048
+  values — the original hard constraint that forced "one product per flavor" is gone.
+- **SEO trade-off, consciously accepted:** separate per-flavor URLs (independently indexable) are
+  given up — native variants canonicalize to one parent URL. Accepted for a simpler build.
+- **API requirement:** bulk variant create/update must use the **GraphQL Admin API**
+  (`productVariantsBulkCreate` / `productVariantsBulkUpdate`), not REST — Shopify's own docs warn
+  REST-based apps "may have a downgraded or broken experience" above 100 variants.
+  [admin-client.core.ts](admin-panel/src/lib/shopify/admin-client.core.ts) already calls GraphQL
+  exclusively, so no rework needed there. Batch size per single `productVariantsBulkCreate` call
+  isn't officially documented — treat ~100/call as the safe practical batch, looped to reach the
+  target variant count.
+- **Image note:** Shopify allows **1 image per variant** natively — this is sufficient, since each
+  flavor only needs one representative image (item 41), not a multi-image gallery. No workaround
+  needed.
+
+## 2. Taxonomy Structure (Category → Sub-category → Brand → Product Line) (UPDATED, 2026-08-22)
 - **Decision:** Built using Shopify **Metaobjects**, as a chain where each level references
   (points to) only the level directly above it — a normalized design, not duplicated data.
-- Flavor (Product) → points to → Product Line → Brand → Sub-category → Category.
+- ~~Flavor (Product) → points to → Product Line → Brand → Sub-category → Category.~~
+- **Updated chain (per item 1a):** Product Line **is** the Shopify Product, carrying the
+  Category/Sub-category/Brand metaobject references directly. Flavor is no longer a
+  metaobject-referencing entity — it's an Option value living inside that Product Line product.
+  Chain is now one level shorter: **Product Line (Product, with Flavour variants + Region
+  metafield, item 42) → Brand → Sub-category → Category.**
 
 ## 3. Adding New Categories/Brands/Entries — Confirmed Workflow
 - **One-time setup (developer):** Create the metaobject *definitions* (types) — e.g. "Brand" with
@@ -43,10 +68,11 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
 - **Why:** Avoid over-categorization; keeps the Category→Sub-category→Brand→Product Line chain
   clean.
 
-## 6. Admin Panel
-- **Decision:** Standalone Next.js app, talks to Shopify Admin API.
-- **Features:** Bulk-add flavors, single form to set 4 images + price + text together, tree editor
-  for the taxonomy chain.
+## 6. Admin Panel (UPDATED, 2026-08-22)
+- **Decision:** Standalone Next.js app, talks to Shopify Admin API (**GraphQL only**, per item 1a).
+- **Features:** Bulk-add flavors, tree editor for the taxonomy chain, ~~single form to set 4
+  images + price + text together~~ — superseded by item 42's bulk variant-upload table (1 image +
+  price + text per flavor/region row, not 4 images, per item 1a's image note).
 
 ## 7. Error Tracking
 - **Decision:** Sentry added to both the storefront and the admin panel.
@@ -79,36 +105,37 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   that check is no longer a blocker. If a Studio review later surfaces extra content types worth
   adopting, add them under this content-only scope without touching taxonomy.
 
-## 10. Storefront Product-Page Navigation (Flavor Switcher) (DECIDED, 2026-08-19)
-- **Decision:** A flavor's page (own URL/SEO, per item 1) includes a flavor-switcher UI (hero
+## 10. Storefront Product-Page Navigation (Flavor Switcher) (SUPERSEDED, 2026-08-22)
+- ~~**Decision:** A flavor's page (own URL/SEO, per item 1) includes a flavor-switcher UI (hero
   banner, quick-pick chips, searchable dropdown — already prototyped in `script.js`/`index.html`
-  from the earlier variant-based work) listing the other flavors in the same Product Line.
-- **Why:** Preserves the SEO benefit of separate products (item 1) while still giving users the
-  same fast, familiar way to jump between flavors that a variant selector would offer.
-- **Mechanism:** Clicking a flavor in the switcher navigates to that flavor's own product page
-  (separate Shopify product) rather than swapping a variant in place client-side.
+  from the earlier variant-based work) listing the other flavors in the same Product Line.~~
+- ~~**Why:** Preserves the SEO benefit of separate products (item 1) while still giving users the
+  same fast, familiar way to jump between flavors that a variant selector would offer.~~
+- ~~**Mechanism:** Clicking a flavor in the switcher navigates to that flavor's own product page
+  (separate Shopify product) rather than swapping a variant in place client-side.~~
+- **Superseded by:** item 1a (flavor = variant, not separate product) + item 41 (multi-select
+  case-builder UI). There is no cross-page navigation for flavors anymore — clicking a flavor tag
+  swaps the in-place image/price (client-side), it never leaves the Product Line's single page.
 
-## 11. Performance Strategy — Fast Navigation Between Flavor Products (DECIDED, 2026-08-19)
-- **Decision:** Speed gap vs. a variant-based approach is closed via Next.js architecture, not by
-  changing the product model:
-  1. **Static pre-rendering + ISR** — flavor product pages pre-rendered at build time
-     (`generateStaticParams`), refreshed on a short interval (10–30s for price/stock) so pages
-     serve from CDN cache, not a live Shopify API call, on normal page loads.
-  2. **Hover-intent prefetching (debounced ~150–200ms)** — the flavor-switcher list does NOT
-     auto-prefetch every visible flavor (would spike server load with 100+ flavors per line).
-     Only the flavor the user's cursor rests on for the debounce window gets prefetched, so
-     casual mouse scanning doesn't fire a wave of requests.
-  3. **One query, not N queries** — the switcher list's flavor names/thumbnails come from a
-     single Shopify Storefront API query scoped to the Product Line (metaobject filter), never
-     one request per flavor. A 200-flavor line is one query, not 200.
-  4. **Large lists paginate/virtualize** — if a single Product Line has 100+ flavors, the
-     switcher list itself loads an initial batch (~20–30) with "load more" / virtualization,
-     not all rows rendered/fetched at once.
-  5. **React Server Components + Next.js Image** — minimizes client JS and optimizes the 4
-     images per flavor (item 6), since images are the largest performance bottleneck.
-- **Net effect:** clicking a prefetched flavor is near-instant (served from client cache, zero
-  network round-trip); clicking a non-prefetched one still avoids hitting Shopify's live API
-  directly, since it resolves from the CDN-cached static page.
+## 11. Performance Strategy — Fast Navigation Between Flavor Products (SUPERSEDED, 2026-08-22)
+- ~~**Decision:** Speed gap vs. a variant-based approach is closed via Next.js architecture, not by
+  changing the product model: (1) Static pre-rendering + ISR per flavor page, (2) Hover-intent
+  prefetching, (3) One switcher query not N, (4) Pagination/virtualization for 100+ flavors,
+  (5) RSC + Next.js Image for the 4-images-per-flavor case.~~
+- **Superseded by:** item 1a. Since flavors are variants on one page (not separate pages), most of
+  this strategy is no longer needed:
+  1. **No per-flavor ISR/pre-rendering** — there's only one Product Line page to pre-render, not
+     one per flavor.
+  2. **No hover-prefetch** — no navigation happens on flavor selection, so nothing to prefetch.
+  3. **Still true, simpler now:** all variants (names, prices, 1 image each, region metafield)
+     come from a **single Storefront API query** for the Product Line page — same "one query, not
+     N" principle, just naturally satisfied by the variant model instead of engineered for it.
+  4. **Grid virtualization still applies** — a 200-flavor grid (item 41) still benefits from
+     virtualization/lazy-render for the tag list itself, independent of navigation concerns.
+  5. **RSC + Next.js Image still applies** — now optimizing 1 image per variant (item 1a), not 4.
+- **Net effect:** flavor selection is a pure client-side state/image swap (near-instant, no
+  network round-trip for cached variant data already fetched with the page) — simpler than the
+  original strategy, not just as fast.
 
 ## 12. Wholesale Pricing Gate (Login + Approval) (DECIDED, 2026-08-19)
 - **Decision:** Price is hidden from guests; shown only to logged-in customers with an approved
@@ -123,9 +150,10 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   4. Storefront checks logged-in + approved status before rendering price; unapproved/guest users
      see product info (name, images, description) but a "Login to see wholesale pricing" prompt
      instead of a price.
-- **Performance note:** price is fetched as a small, separate dynamic fragment only for the
-  flavor currently being viewed by an approved logged-in customer — never pre-fetched in bulk for
-  all flavors in a line, keeping item 11's speed strategy intact even with gated pricing.
+- **Performance note (updated 2026-08-22 for item 1a's variant model):** price is fetched as a
+  small, separate dynamic fragment for the variant(s) currently being viewed/quantity-adjusted by
+  an approved logged-in customer — never pre-fetched in bulk beyond what's needed for the Product
+  Line page already open, keeping item 11's speed strategy intact even with gated pricing.
 - **Revisit if:** the store is later confirmed/upgraded to Shopify Plus, in which case native B2B
   Company Accounts should be reconsidered in place of the custom system.
 
@@ -237,8 +265,9 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   visibility list first makes the V2 email a small addition on top, not a rebuild.
 
 ## 17. Back-in-Stock Notify (Waitlist) (DECIDED, 2026-08-19; email service confirmed 2026-08-20)
-- **Decision:** Out-of-stock flavors show a "Notify me" option; customers who opt in are emailed
-  automatically when that flavor's stock is replenished (driven by Shopify inventory webhooks).
+- **Decision:** Out-of-stock flavors (variants, per item 1a) show a "Notify me" option; customers
+  who opt in are emailed automatically when that variant's stock is replenished (driven by
+  Shopify inventory webhooks).
 - **Email service: Resend** — evaluated against Shopify Email (built for campaign UI, not custom
   server-triggered sends) and Klaviyo (e-commerce-focused but costlier/heavier than needed for
   two simple trigger types). Resend is a developer-focused transactional email API — our server
@@ -610,17 +639,22 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   payment step reached later via the invoice link, to avoid this exact confusion for our own team
   during the build.
 
-## 32. Taxonomy Listing Pages — Every Level Gets Its Own Browsable Page (DECIDED, 2026-08-21 — V1.2 planning)
+## 32. Taxonomy Listing Pages — Every Level Gets Its Own Browsable Page (DECIDED, 2026-08-21 — V1.2 planning; updated 2026-08-22 for item 1a)
 - **Decision:** Category, Sub-category, and Brand each get their own browsable listing page (grid
-  of products), not just Product Line/flavor pages. URL structure mirrors the taxonomy chain
-  (item 2): `/[category-slug]` → `/[category-slug]/[sub-category-slug]` →
-  `/[category-slug]/[sub-category-slug]/[brand-slug]`. Product Line doesn't get a separate listing
-  page of its own beyond the flavor-switcher (item 10) — a Product Line's flavors are already
-  browsable via the switcher on any one of its flavor pages.
+  of **Product Lines**, per item 1a — not individual flavors, since flavors are variants now, not
+  separately listable products). URL structure mirrors the taxonomy chain (item 2):
+  `/[category-slug]` → `/[category-slug]/[sub-category-slug]` →
+  `/[category-slug]/[sub-category-slug]/[brand-slug]`. ~~Product Line doesn't get a separate
+  listing page of its own beyond the flavor-switcher (item 10)~~ — item 10 is superseded; a
+  Product Line's own page **is** its product page (item 41's flavour grid lives there directly,
+  no separate switcher/listing needed).
 - **Why:** Matches the reference site's pattern ("Vapes By Brand," "Shop By Category" menus lead to
   real listing pages, not just in-page filters) — clicking a nav item should land on a real,
-  indexable, shareable URL, which also benefits SEO (each level becomes its own crawlable entry
-  point, consistent with item 1's per-flavor-page SEO reasoning).
+  indexable, shareable URL. **SEO note (updated 2026-08-22):** this level of indexing (Category/
+  Sub-category/Brand/Product-Line) is unaffected by item 1a's switch — only per-flavor pages were
+  given up, not these higher taxonomy levels.
+- **Region filtering (added 2026-08-22, per item 42):** every listing page at every level also
+  filters by the header's globally-selected Region — see item 42 for the full mechanism.
 - **Each listing page shows:** a grid of products belonging to that level (and everything below it
   — e.g. a Category page shows all products across all its Sub-categories/Brands), using the same
   Storefront API query pattern as item 11 (one query per level, not N queries), with pagination
@@ -778,6 +812,128 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   load-bearing — the same principle already applied elsewhere (e.g. item 20's cart-prompt UX was
   deferred until the cart was being built). Function first, visual refinement later, for this
   specific surface.
+
+## 41. Product Page — Multi-Select Flavour Case-Builder UI (DECIDED, 2026-08-22)
+- **Decision:** Product Line page shows a grid of flavour tags (matched to a jubileesk.ca
+  reference screenshot), each with its own **independent quantity stepper** (`- qty +`). Clicking
+  a flavour tag **does** swap the displayed image and price to that flavour's variant (a normal
+  variant-preview interaction) — this corrects an earlier note in this same planning session that
+  assumed a single shared, non-changing hero image; each flavor has its own image (item 1a's "1
+  image per variant" is what's used here, not a multi-image gallery).
+- **Cart behavior:** the `+/-` steppers are independent of the click-to-preview interaction — a
+  user can set quantities on several flavours (without needing to "open" each one) and hit a
+  single **Add to Cart**, which adds every non-zero-quantity flavour as its own cart line item in
+  one action. Matches a wholesale/bulk-order buying pattern (order an assorted case in one pass).
+- **Per-flavour fields, confirmed (2026-08-22):** each flavour (variant) needs its own **Title,
+  Description, Price, and 1 Image** — not shared/inherited from the Product Line. Title/Description
+  differing per flavour is what makes each flavour's preview (image + price swap, above) actually
+  meaningful — a generic shared description wouldn't need a per-flavour swap at all.
+  - **Title:** native — `ProductVariant.title` (auto-derived from the Flavour option value, e.g.
+    "Mango Peach"). No extra work needed.
+  - **Price / Image:** native variant fields (item 1a), no extra work needed.
+  - **Description:** researched (2026-08-22) — Shopify's `ProductVariant` object has **no native
+    description field**; description only exists at the Product level. Per-flavour description
+    therefore needs a **variant metafield** (e.g. `custom.flavour_description`), same pattern as
+    item 42's `region` metafield — not a native field, must be explicitly added to item 43's
+    bulk-upload table and set via `productVariantsBulkCreate`'s `metafields` input.
+  - **Admin choice, not forced (decided 2026-08-22):** the field exists on every row, but the
+    admin decides per-flavour whether to write a unique description or reuse the same one across
+    several rows — see item 43's "same as previous" toggle for how the admin table supports this
+    without retyping.
+  - This is the source of truth item 43's admin bulk-upload table must capture per row: Title
+    (from Flavour name), Description (metafield), Price, Image — not just Price/Image as earlier
+    drafted.
+- **Why:** Reference-site pattern observed directly (jubileesk.ca product page, "122 Flavors
+  Available" grid) — fits this business's B2B wholesale context (item 38/BUILD_PLAN) better than a
+  single-select swatch picker.
+- **Performance:** all variants for the page (name, price, 1 image ref, region metafield) load in
+  the one Product Line query (item 11); the qty-stepper interactions and click-to-preview are
+  pure client-side state, no per-flavour network call.
+
+## 42. Region — Excise-Stamp Compliance Filter (DECIDED, 2026-08-22)
+- **Background (researched, CRA official sources):** Canadian vaping products must carry an
+  excise stamp matching the province they're sold into. "Specified vaping provinces" (Alberta,
+  Manitoba, New Brunswick, NWT, Nova Scotia, Nunavut, Ontario, PEI, Quebec, Yukon) require their
+  own province-specific stamp; all other provinces/territories (e.g. BC, Saskatchewan) use the
+  standard federal (peach-coloured) stamp. A given flavour's physical stock is therefore genuinely
+  different per region — not a cosmetic/marketing distinction.
+- **Decision — Region is a metafield/tag, NOT a Shopify Option:** each variant carries a
+  `custom.region` metafield (single value: `federal`, `ontario`, `quebec`, etc.), rather than
+  Region being a formal second Option. Flavour remains the only formal Option on the product.
+- **Why not a formal Option:** Shopify caps products at **3 Options**. Using a tag/metafield
+  instead of a formal Option for Region reaches the exact same variant count (each real
+  flavour+region combination still needs its own variant — the metafield doesn't reduce that) but
+  **preserves an Option slot** for a possible future third dimension (e.g. Nicotine Strength)
+  without risking the 2,048-variant ceiling (200 flavours × 6 regions × 2 strengths = 2,400 would
+  overflow it; without Region consuming an Option slot, this stays flexible). It also costs
+  nothing here since the storefront UI (item 41) is fully custom already — there's no native
+  Shopify variant-dropdown UX benefit being given up.
+- **Selector placement — header only, not duplicated in the sidebar filter list (item 32):** a
+  single global, cookie-backed Region selector lives in the header. It is read (not re-selected)
+  on every taxonomy level — Category, Sub-category, Brand listing, and Product listing pages —
+  each of those pages' Server Component reads the same cookie and filters its own Shopify query
+  by it. No manual "carry the region forward" logic is needed between pages; it's automatic by
+  virtue of being one shared source of truth. Sidebar filters (Brand, Strength, Price, etc., item
+  32) remain separate, unrelated controls.
+- **Cascading example, full flow (confirmed, expanded 2026-08-22):**
+  1. User enters via the header menu or homepage category tiles (Vapes, Disposable, Cannabis,
+     Smoking Accessories, etc.) → lands on that **Category's Brand-listing page** (all brands
+     under it, per item 32's chain).
+  2. The **Region selector lives in the header** (same header/menu bar on both the Brand-listing
+     and Product-listing pages — not a per-page control) — user selects "Federal" → the Brand
+     list filters to only brands with Federal-tagged stock; if none match, an "not available in
+     this region" message shows instead of an empty grid.
+  3. User clicks a brand (e.g. Mr Fog) → **Product Listing page** for that brand: shows only
+     Mr Fog Product Lines that have Federal-tagged variants.
+  4. **Sidebar filter panel (item 32) shows the current Brand checkbox pre-checked** on arrival —
+     confirms which brand context the user drilled into, and remains changeable/uncheckable like
+     any other filter. Region is *not* duplicated here (still header-only, per this item).
+  5. Region can still be changed from the same header control on this page — list re-filters
+     live to the newly selected region's Federal→Quebec (etc.) availability for the same brand.
+  6. User opens a specific product → **Product page**: only Federal-tagged flavours are
+     available/shown (item 41's grid); non-matching-region flavours are hidden/disabled.
+  - Changing Region anywhere re-applies at every level automatically, since every page reads the
+    same header-set cookie — no manual "carry it forward" logic between pages.
+- **Sequencing (V1 vs V2):** **V1** = listing-page filtering only (Category/Sub-category/Brand/
+  Product-grid pages respect Region). **V2** = product-page-level handling — a lightweight version
+  first (if the whole product has zero matching-region variants, show a "not available in your
+  region" banner), full per-flavour granular grey-out deferred further (V3+ if needed). Matches
+  this doc's established "V1 lean, V2 polish" pattern (items 15, 16, 20–23, 25).
+- **`region` metafield definition:** one-time setup (developer) — Settings → Custom Data →
+  Variants → Add definition, namespace `custom`, key `region`, type Single line text.
+
+## 43. Admin Panel — Bulk Flavour + Region Variant Upload (DECIDED, 2026-08-22)
+- **Decision:** replaces item 6's original "4 images" single-form idea with a spreadsheet-style
+  bulk table, modeled on Shopify's own bulk-editor UX pattern (rows = items, click-to-edit cells):
+  columns are **Flavour Name (→ variant title), Description (→ metafield, item 41), Region (→
+  metafield, item 42), Price, Compare-at Price, SKU, Image** — one row per real flavour+region
+  variant (not a full cartesian matrix; only rows for stock that actually exists).
+- **"Duplicate to other regions" helper:** after filling one flavour's base row, the admin can
+  check off which other regions (Federal/BC/Alberta/Manitoba/Ontario/Quebec) that same flavour
+  should also exist in; the UI auto-generates one row per checked region (copying the base
+  price/image as a starting point — each row stays independently editable afterward, since price
+  can legitimately differ per region due to provincial excise duty).
+- **Description field — admin's choice, not forced (decided 2026-08-22):** the Description column
+  is editable per row like any other, but the admin isn't required to write a unique one for every
+  flavour. A **"Same as previous row" / "Apply to all"** toggle/button lets the admin reuse one
+  description across several rows in one action (e.g. when many flavours genuinely share the same
+  marketing copy) instead of retyping it each time — while still allowing a fully custom
+  description per row when the admin wants one. Ties to item 41's confirmation that per-flavour
+  description is a variant metafield, not a native field.
+- **Why not Shopify's native CSV import:** researched official docs — **variant-level metafields
+  are not supported by Shopify's product CSV import/export**, only product-level metafields are.
+  Since `region` (item 42) is a variant metafield, the native CSV path can't carry it — the custom
+  table above is the only way to bulk-set it, going through the API directly rather than CSV.
+- **Backend mechanism:** on submit, the admin panel batches rows into `productVariantsBulkCreate`
+  calls (GraphQL Admin API, per item 1a), ~100 variants/call, looping until all rows are sent.
+  Each variant input sets `optionValues` (Flavour), `price`, `compareAtPrice`, and two
+  `metafields` entries (`custom.region` and `custom.flavour_description`) — confirmed via
+  Shopify's own mutation schema that metafields can be set at variant-creation time, no separate
+  follow-up call needed. `title` needs no explicit input — Shopify derives it from the Flavour
+  option value automatically.
+- **`flavour_description` metafield definition:** one-time setup (developer), alongside item 42's
+  `region` definition — Settings → Custom Data → Variants → Add definition, namespace `custom`,
+  key `flavour_description`, type Multi-line text.
 
 ## Next Step
 Sanity's role is now confirmed — produce the full step-by-step build plan (setup order, what gets

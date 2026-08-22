@@ -1,19 +1,22 @@
 /**
- * One-time setup script — creates a Product metafield definition ("Product Line") so a Shopify
- * Product (a flavor, DECISIONS.md item 1) can reference a Product Line metaobject entry. Without
- * this, the taxonomy chain (Category -> Sub-category -> Brand -> Product Line, item 2/3) has no
- * connection point on the Product resource itself, and "Product Line" won't appear as a field
- * when adding/editing a product in Shopify Admin.
+ * One-time setup script — creates a Product metafield definition ("Brand") so a Product Line
+ * (DECISIONS.md item 1a/2: Product Line is now a real Shopify Product, not a metaobject) can
+ * reference its Brand metaobject entry directly. Sub-category/Category are derived by walking up
+ * the Brand -> Sub-category -> Category chain from there, not stored redundantly on the Product.
+ *
+ * Replaces the old create-product-line-metafield.ts (superseded 2026-08-22, DECISIONS.md item 2)
+ * — that script linked a flavor-Product to a "Product Line" metaobject, which no longer exists
+ * now that flavors are variants (item 1a) and Product Line is the Product itself.
  *
  * Idempotent: safe to re-run.
  *
- * Run: npm run shopify:create-product-line-metafield
+ * Run: npm run shopify:create-product-brand-metafield
  */
 import { shopifyAdminRequest, assertNoUserErrors } from '../../src/lib/shopify/admin-client.core';
 
-const PRODUCT_LINE_METAOBJECT_TYPE = 'product_line';
+const BRAND_METAOBJECT_TYPE = 'brand';
 const METAFIELD_NAMESPACE = 'taxonomy';
-const METAFIELD_KEY = 'product_line';
+const METAFIELD_KEY = 'brand';
 
 interface MetaobjectDefinitionByTypeResponse {
   metaobjectDefinitionByType: { id: string } | null;
@@ -39,7 +42,7 @@ const GET_DEFINITION_BY_TYPE_QUERY = /* GraphQL */ `
 `;
 
 const FIND_EXISTING_METAFIELD_DEFINITION_QUERY = /* GraphQL */ `
-  query FindProductLineMetafieldDefinition($namespace: String!, $key: String!) {
+  query FindProductBrandMetafieldDefinition($namespace: String!, $key: String!) {
     metafieldDefinitions(ownerType: PRODUCT, namespace: $namespace, key: $key, first: 1) {
       nodes {
         id
@@ -49,7 +52,7 @@ const FIND_EXISTING_METAFIELD_DEFINITION_QUERY = /* GraphQL */ `
 `;
 
 const CREATE_METAFIELD_DEFINITION_MUTATION = /* GraphQL */ `
-  mutation CreateProductLineMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+  mutation CreateProductBrandMetafieldDefinition($definition: MetafieldDefinitionInput!) {
     metafieldDefinitionCreate(definition: $definition) {
       createdDefinition {
         id
@@ -64,16 +67,16 @@ const CREATE_METAFIELD_DEFINITION_MUTATION = /* GraphQL */ `
 `;
 
 async function main() {
-  console.log('Creating Product -> Product Line metafield definition...\n');
+  console.log('Creating Product -> Brand metafield definition...\n');
 
-  const productLineDef = await shopifyAdminRequest<MetaobjectDefinitionByTypeResponse>(
+  const brandDef = await shopifyAdminRequest<MetaobjectDefinitionByTypeResponse>(
     GET_DEFINITION_BY_TYPE_QUERY,
-    { type: PRODUCT_LINE_METAOBJECT_TYPE }
+    { type: BRAND_METAOBJECT_TYPE }
   );
-  const productLineDefinitionId = productLineDef.metaobjectDefinitionByType?.id;
-  if (!productLineDefinitionId) {
+  const brandDefinitionId = brandDef.metaobjectDefinitionByType?.id;
+  if (!brandDefinitionId) {
     throw new Error(
-      `Product Line metaobject definition not found. Run "npm run shopify:create-metaobject-definitions" first.`
+      `Brand metaobject definition not found. Run "npm run shopify:create-metaobject-definitions" first.`
     );
   }
 
@@ -92,12 +95,12 @@ async function main() {
     CREATE_METAFIELD_DEFINITION_MUTATION,
     {
       definition: {
-        name: 'Product Line',
+        name: 'Brand',
         namespace: METAFIELD_NAMESPACE,
         key: METAFIELD_KEY,
         type: 'metaobject_reference',
         ownerType: 'PRODUCT',
-        validations: [{ name: 'metaobject_definition_id', value: productLineDefinitionId }],
+        validations: [{ name: 'metaobject_definition_id', value: brandDefinitionId }],
         pin: true,
       },
     }
@@ -110,7 +113,7 @@ async function main() {
   }
   console.log(`  created: Product.${METAFIELD_NAMESPACE}.${METAFIELD_KEY} -> ${created.id}`);
   console.log(
-    '\nDone. "Product Line" will now appear as a field when adding/editing a Product in Shopify Admin.'
+    '\nDone. "Brand" will now appear as a field when adding/editing a Product Line in Shopify Admin.'
   );
 }
 

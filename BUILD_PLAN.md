@@ -6,7 +6,7 @@ buildable plan, researched against 2026 Shopify + Next.js headless best practice
 
 ---
 
-## 1. Architecture Overview
+## 1. Architecture Overview (UPDATED, 2026-08-22 — per DECISIONS.md items 1a, 41, 42)
 
 ```
 ┌─────────────────────────┐        ┌──────────────────────────┐
@@ -17,71 +17,119 @@ buildable plan, researched against 2026 Shopify + Next.js headless best practice
             ▼                                     ▼
   Next.js SERVER ─── Shopify Storefront API   Next.js SERVER ROUTE (ours)
   (build-time / ISR, direct,                  ── Shopify Admin API
-   public-safe token)                         (secret token, never
-            │                                  reaches the browser)
-            ▼                                     │
-    Static/cached HTML                            ▼
-    (name, images,                       tag check → price fetch
-     description, flavor-                → returned to client
-     switcher list)
+   public-safe token, filtered              (secret token, never
+   by Region cookie — item 42)                reaches the browser)
+            │                                     │
+            ▼                                     ▼
+  Category/Brand/Product-listing:          tag check → price fetch for
+  Static/cached grid of Product Lines,     the variant(s) currently
+  Region-filtered                          being viewed/quantity-
+            │                              adjusted (item 41's grid)
+            ▼                              → returned to client
+  Product Line page: ONE query returns
+  ALL its variants — Flavour title
+  (native), price, compareAtPrice,
+  1 image, region metafield,
+  flavour_description metafield
+  (item 41/43) — not a separate
+  request per flavour
 ```
 
 Two clearly separate data paths, matching [DECISIONS.md item 12](DECISIONS.md):
-- **Public catalog data** (name/images/description/flavor-switcher list) — Storefront API,
-  called server-side at build/ISR-refresh time, never per-request from the browser. Token is
-  public-safe by design but still never shipped to client code needlessly.
+- **Public catalog data** — Storefront API, called server-side at build/ISR-refresh time, never
+  per-request from the browser. Token is public-safe by design but still never shipped to client
+  code needlessly.
+  - **Listing pages** (Category/Sub-category/Brand/Product-listing, item 32) fetch a grid of
+    **Product Lines**, filtered by the header's Region cookie (item 42) — not individual flavours,
+    since flavours are no longer separately listable (item 1a).
+  - **A Product Line's own page** fetches its **entire variant array in one query** — every
+    flavour's title, price, image, and metafields (region, description) together — powering item
+    41's multi-select grid client-side with zero additional network calls per flavour.
+  - This replaces the old "flavor-switcher list" data shape entirely (item 10 is superseded) —
+    there's no separate switcher query anymore, because there's no separate flavor page to switch
+    between.
 - **Price + approval status** — Admin API, called only from our own server route (Route
   Handler / Server Action), token lives in server env vars only, `import 'server-only'` guard at
   the top of that data-layer file so it can never accidentally end up in a Client Component
-  bundle.
+  bundle. Fetched only for the **variant(s) currently being viewed/quantity-adjusted** on the
+  Product Line page (item 41) — never bulk-prefetched for every flavour on the page.
 
 ---
 
-## 2. SEO Strategy
+## 2. SEO Strategy (UPDATED, 2026-08-22 — per DECISIONS.md item 1a)
 
-- Each flavor = its own statically-generated page under `/products/[flavor-slug]` (per
-  [DECISIONS.md item 1](DECISIONS.md)) — own indexable URL, own metadata.
-- **Canonical tags:** Shopify generates both `/products/...` and `/collections/.../products/...`
-  paths for the same product — always set canonical to the `/products/` URL to avoid duplicate
-  content penalties in Google.
-- **Per-page metadata** via Next.js Metadata API — title, description, Open Graph image
-  generated server-side per flavor from its own name/description/image (not shared boilerplate).
-- **JSON-LD structured data** — `Product` schema per flavor page (price, availability, rating if
-  reviews exist), `BreadcrumbList` reflecting the Category → Sub-category → Brand → Product Line
-  chain (ties directly to [DECISIONS.md item 2](DECISIONS.md) taxonomy). Only mark up what's
-  actually visible on the page — mismatched JSON-LD forfeits rich-result eligibility.
-- **Sitemap** — auto-generated, published flavors only, respects `lastmod`, regenerates when
-  products are added/edited via the admin panel.
+- ~~Each flavor = its own statically-generated page under `/products/[flavor-slug]`~~ — superseded.
+  **Now:** one statically-generated page per **Product Line**, `/products/[product-line-slug]`.
+  Individual flavours/regions are **not** separate pages — they're variants in item 41's grid on
+  that one page. The underlying data model (item 1a/42) is unchanged by anything in this
+  section — this is a URL/metadata presentation layer only, not an architecture change.
+- **Flavour/region URL addressability via query params (researched 2026-08-22, official Google
+  Search Central docs):** each Flavour+Region combination gets a distinct, "preselectable" URL —
+  `/products/beast-mode-max-2?flavour=mango-peach&region=federal` — because Google's own
+  `ProductGroup` structured-data guidance *requires* this for variant-level rich-result
+  eligibility: *"the site must have the ability to preselect each variant directly with a
+  distinct URL."* Matches the pattern already observed on jubileesk.ca (`?Flavours=Mad+Mango+Peach`)
+  earlier in this project's research.
+- **JSON-LD — `ProductGroup` schema (replaces the old per-flavor `Product` schema plan):**
+  - Parent `ProductGroup` — `name` (generic, e.g. "Beast Mode Max 2"), `productGroupID`, `brand`,
+    `variesBy` (**caveat:** Google's officially documented `variesBy` values are `color`, `size`,
+    `material`, `pattern`, `suggestedAge`, `suggestedGender` — **"flavor" is not on that list**, so
+    marking flavour this way isn't guaranteed rich-result eligibility; still worth doing for the
+    URL/crawlability benefit, just don't expect the swatch-style rich result Google shows for
+    color/size).
+  - `hasVariant` — one nested `Product` per in-stock flavour+region combination, each with its own
+    `offers.url` (the query-param URL above), `price`, `availability`.
+  - `BreadcrumbList` — unchanged, still reflects Category → Sub-category → Brand → Product Line
+    (item 2).
+  - Only mark up what's actually visible/selectable on the page — mismatched JSON-LD forfeits
+    rich-result eligibility.
+- **Canonical tag:** the Product Line's base URL (`/products/[slug]`, no query params) is
+  canonical — flavour/region query-param URLs point their canonical back to it.
+- **Sitemap** — auto-generated, published **Product Lines** only (not a per-flavour entry each),
+  respects `lastmod`, regenerates when products are added/edited via the admin panel.
+- **Net SEO position vs. the original per-flavor-product plan:** partial recovery, not full parity
+  — flavours get crawlable/shareable URLs and `hasVariant` markup, but don't independently rank as
+  first-class pages the way a fully separate product could. Consistent with item 1a's "consciously
+  accepted" trade-off — this narrows the gap, doesn't erase it.
 - **Age-verification gate (item 8) must not block crawlers** — the gate should be a client-side
   interstitial, not something that prevents Googlebot from seeing page content server-side.
 
-## 3. Speed / Performance
+Source: [Google Search Central — Product variants structured data](https://developers.google.com/search/docs/appearance/structured-data/product-variants).
 
-Full detail already locked in [DECISIONS.md item 11](DECISIONS.md):
-- Static pre-rendering (`generateStaticParams`) + ISR for catalog/listing pages.
+## 3. Speed / Performance (UPDATED, 2026-08-22 — per DECISIONS.md item 11's supersession)
+
+Full detail already locked in [DECISIONS.md item 11](DECISIONS.md) — most of the original 5-part
+strategy here was written for per-flavor page navigation, which no longer exists (item 1a). What
+remains, updated:
+- Static pre-rendering (`generateStaticParams`) + ISR — now **per Product Line**, not per flavor.
+  One page to pre-render per Product Line instead of one per flavor.
 - **ISR interval — corrected (verified 2026-08-20):** official Next.js docs do not endorse a
   short fixed window like 10–30s; the documented guidance is the opposite instinct — "set a high
   revalidation time (e.g. 1 hour instead of 1 second); if you need more precision, use on-demand
-  revalidation; if you need real-time data, use dynamic rendering." So: catalog/listing pages get
-  a long `revalidate` (e.g. 1 hour+), and **price/stock freshness is handled by on-demand
-  revalidation** (`revalidateTag`/`revalidatePath`, triggered right when the owner edits a
-  product or price in the admin panel) rather than a short timed poke. Note the current API
-  requires `revalidateTag(tag, 'max')` — the old single-argument form is deprecated.
+  revalidation; if you need real-time data, use dynamic rendering." So: catalog/listing and
+  Product Line pages get a long `revalidate` (e.g. 1 hour+), and **price/stock freshness is
+  handled by on-demand revalidation** (`revalidateTag`/`revalidatePath`, triggered right when the
+  owner edits a product/variant/price in the admin panel) rather than a short timed poke. Note the
+  current API requires `revalidateTag(tag, 'max')` — the old single-argument form is deprecated.
   **Caveat:** on-demand revalidation only invalidates the instance that receives the call — a
   multi-region/multi-instance deploy needs a shared custom cache handler for this to propagate
   everywhere, otherwise some regions keep serving stale data after a revalidation call.
-- Debounced hover-intent prefetch (~150–200ms) on the flavor-switcher, implemented as
-  `prefetch={false}` on `<Link>` plus a manual `router.prefetch(href)` call (from
-  `next/navigation`) on the debounced hover handler — not blanket viewport-prefetch, to avoid
-  load spikes on 100+-flavor lines.
-- One Storefront API query per Product Line for the switcher list, never one per flavor.
-- Pagination/virtualization once a line exceeds ~30 flavors.
-- React Server Components + `next/image` to minimize client JS and optimize the 4 images/flavor.
-  **Correction (verified 2026-08-20):** the `priority` prop is deprecated as of Next.js 16 in
-  favor of a new `preload` prop (with `loading="eager"`/`fetchPriority="high"`) — use `preload`
-  for above-the-fold flavor images, not `priority`.
-- Price fetch (item 4 below) is a small isolated fragment, fetched only for the flavor currently
-  being viewed by an approved customer — never bulk-fetched.
+- ~~Debounced hover-intent prefetch on the flavor-switcher~~ — **removed, no longer applicable.**
+  There's no cross-page navigation on flavour selection anymore (item 10 superseded) — selecting a
+  flavour swaps state/image in place on the same page, nothing to prefetch.
+- **One Storefront API query per Product Line page, returning every variant** (name, price, 1
+  image, region/description metafields) — same "one query, not N" principle as before, now
+  naturally satisfied by the variant model (item 1a) instead of engineered around per-flavor pages.
+- Pagination/virtualization once a Product Line's flavour **grid** (item 41, on the one page)
+  exceeds ~30 rows — same principle as before, just scoped to one page's grid instead of a
+  cross-page switcher list.
+- React Server Components + `next/image` to minimize client JS — now optimizing **1 image per
+  variant** (item 1a), not 4. **Correction (verified 2026-08-20):** the `priority` prop is
+  deprecated as of Next.js 16 in favor of a new `preload` prop (with `loading="eager"`/
+  `fetchPriority="high"`) — use `preload` for the above-the-fold flavour image, not `priority`.
+- Price fetch (item 4 below) is a small isolated fragment, fetched only for the variant(s)
+  currently being viewed/quantity-adjusted (item 41) by an approved customer — never bulk-fetched
+  for every flavour on the page.
 
 ## 4. Security
 
@@ -191,23 +239,25 @@ approves it (item 22).
    Supabase/Shopify-linked record for the session to resolve against, so the app treats any
    pre-approval auth attempt as the same guest-equivalent state from step 2 (see §4's stale-JWT
    handling — never trust a client-side "I'm approved" claim).
-5. Once logged in and approved, the price fragment (flavor page) calls our server route → route
-   queries Supabase for account_type + approval status → returns the resolved price (item 13).
+5. Once logged in and approved, the price fragment (Product Line page, item 1a) calls our server
+   route → route queries Supabase for account_type + approval status → returns the resolved
+   price (item 13).
 6. Order → Draft Order (item 19) → owner reviews/edits → sends invoice or marks paid →
    confirmation email on completion.
 7. **Region:** provision the Supabase project in a region appropriate for a Saskatchewan-based
    business, per PIPEDA considerations (item 15).
 
-## 6. Edge Cases to Plan For
+## 6. Edge Cases to Plan For (UPDATED, 2026-08-22 — per item 1a)
 
 | Case | Handling |
 |---|---|
 | Customer logs in but is still "pending approval" | Show price placeholder + pending message, not an error; re-check on next visit (tag may have changed). |
-| Flavor deleted/discontinued but still indexed by Google | Serve a proper 404/410, add a "similar flavors in this line" block instead of a dead end. |
+| Flavor (variant) deleted/discontinued but still indexed by Google | The Product Line **page itself stays live** (other flavours still exist on it) — no 404 needed at the page level. Remove that specific option value from the variant list; if it had its own query-param URL (§2's `?flavour=...`) and someone lands on it directly, redirect to the base Product Line URL rather than 404ing. |
 | Price/stock changes between ISR refresh windows | Handled via on-demand revalidation on admin edit (§3, corrected 2026-08-20), not a short timed window; cart/checkout step re-validates live via Shopify checkout itself, which is always authoritative. |
 | Guest adds to cart, then logs in mid-session | Cart must persist across the auth redirect (Shopify cart ID in a cookie, not lost on OAuth round-trip). |
-| A Product Line has 0 flavors temporarily (all out of stock) | Switcher list should show "out of stock" flavors greyed out, not hide the whole line/page. |
-| Session token expires while user is deep in a flavor page | Price fragment fails gracefully (shows "log in again" inline), rest of page (static) unaffected. |
+| A Product Line has 0 flavors temporarily (all out of stock) | Item 41's grid should show "out of stock" flavours greyed out (not removed), not hide the whole page. |
+| Session token expires while user is deep in a Product Line page | Price fragment fails gracefully (shows "log in again" inline), rest of page (static) unaffected. |
+| Selected Region has 0 matching flavours for the current Product Line | Show item 42's V2 "not available in your region" banner rather than an empty/broken grid. |
 | New taxonomy entry (Category/Brand) added mid-day via Shopify admin (item 3) | ISR revalidation window must cover navigation/taxonomy data too, not just product price/stock, or new entries won't appear promptly. |
 | Bulk-add (ADMIN_PANEL.md section 2) creates 50 products at once | Trigger on-demand ISR revalidation for the affected Product Line page after bulk creation, don't wait for the timed window. |
 | Age-gate + SEO conflict (item 8) | Age gate must be client-side only; server-rendered content stays crawlable. |
@@ -231,36 +281,55 @@ approves it (item 22).
    script (`admin-panel/scripts/shopify/create-metaobject-definitions.ts`, run via
    `npm run shopify:create-metaobject-definitions`) — verified idempotent (safe re-run, no
    duplicates) and type/lint-clean. Store plan confirmed Basic (matches item 12's assumption).
-   **Also added (gap found during manual seed-testing):** a Product metafield definition
-   (`taxonomy.product_line`, `metaobject_reference` -> Product Line) via
-   `admin-panel/scripts/shopify/create-product-line-metafield.ts` /
-   `npm run shopify:create-product-line-metafield` — without this, a Shopify Product (flavor,
-   item 1) has no field to link to the taxonomy chain at all, even manually in Shopify Admin.
-   Verified idempotent.
+   **Migrated (2026-08-22, per item 1a/2) — code changes actually applied, not just documented:**
+   - `create-metaobject-definitions.ts` no longer creates a "Product Line" metaobject — only
+     Category/Sub-category/Brand (3, not 4) — since Product Line is now a real Shopify Product.
+   - `create-product-line-metafield.ts` (the old `taxonomy.product_line` Product metafield, for
+     linking a flavor-Product to a Product Line metaobject) **removed** — that link no longer
+     makes sense once flavors are variants, not Products.
+   - **Replaced by** `admin-panel/scripts/shopify/create-product-brand-metafield.ts` /
+     `npm run shopify:create-product-brand-metafield` — a Product metafield (`taxonomy.brand`)
+     so a Product Line product references its Brand metaobject directly; Sub-category/Category
+     are derived by walking that chain, not stored redundantly on the Product.
+   - **Two new variant-metafield scripts added:**
+     `create-variant-region-metafield.ts` (`custom.region`, item 42) and
+     `create-variant-flavour-description-metafield.ts` (`custom.flavour_description`, item 41/43
+     — needed since `ProductVariant` has no native description field, confirmed against official
+     Shopify docs).
+   - **Still pending:** the dev-store's manually-seeded taxonomy chain (step 3 below) was built
+     against the old model (Product Line as a metaobject entry) and needs to be redone as an
+     actual Product Line product under the new scripts above.
 3. **✅ DONE (2026-08-21) — Taxonomy seed data** — first real Category → Sub-category → Brand →
    Product Line chain added manually via Shopify Admin → Content → Metaobjects (per item 3's
    "ongoing, no-developer-needed" workflow) — confirmed each reference dropdown correctly resolved
    the entry created one level down, validating the model end-to-end.
 4. **Storefront read path** — Next.js + Storefront API, static generation for a handful of real
-   flavor products, confirm SEO metadata/canonical/JSON-LD render correctly.
-5. **Flavor-switcher UI** — wire the existing prototype (`script.js`/`index.html` patterns) into
-   the Next.js product page, backed by the single Product-Line query (item 3 above).
+   Product Line pages (item 1a), confirm SEO metadata/canonical/`ProductGroup` JSON-LD (§2) render
+   correctly.
+5. **Flavour case-builder grid UI (item 41)** — build the multi-select flavour grid (image/price
+   swap on tag click, independent `+/-` qty steppers, single Add-to-Cart for all non-zero rows)
+   into the Next.js Product Line page, backed by the single all-variants query (§1 above). ~~Wire
+   the existing flavor-switcher prototype~~ — superseded, item 10 no longer applies.
 6. **Performance pass** — long-interval ISR + on-demand revalidation (corrected, §3 above),
-   hover-intent prefetch, pagination for large lines; verify with Lighthouse/Core Web Vitals
-   against a seeded Product Line with 100+ flavors.
+   grid virtualization for large flavour lists (~30+ rows); verify with Lighthouse/Core Web Vitals
+   against a seeded Product Line with 100+ flavours. ~~Hover-intent prefetch~~ — removed, no
+   longer applicable (§3).
 7. **Supabase foundation** (per item 21) — project provisioned (`ca-central-1` region), customer
    table + RLS policies designed, Supabase Auth (Google OAuth, via `@supabase/ssr`) wired into
    Next.js, cart persistence across login.
 8. **Shopify ↔ Supabase customer bridge** — find-or-create linked Shopify customer on
    signup/first login, store the Shopify customer ID on the Supabase row (BUILD_PLAN §5 step 3).
 9. **Price-gate server route** — Supabase account_type/approval check + Shopify price fetch,
-   wired to the price fragment on flavor pages.
-10. **Admin panel v1** — single flavor add form (ADMIN_PANEL.md §1), taxonomy dropdowns.
-11. **Admin panel v2** — bulk mini-list add (ADMIN_PANEL.md §2, corrected 2026-08-20: use
-    `bulkOperationRunMutation` for the 50-product bulk-add rather than looping single
-    `productCreate` calls — it bypasses standard rate limits and runs async with a pollable
-    status), hierarchy tree + search + counts dashboard (ADMIN_PANEL.md §3), customer approval
-    screen (toggles Supabase approval status + account type, item 14).
+   wired to the price fragment on Product Line pages (item 1a), scoped to the variant(s) in view.
+10. **Admin panel v1** — Product Line create form (name, description, taxonomy dropdowns, brand,
+    etc.) + item 43's bulk flavour/region variant-upload table (Flavour, Description, Region,
+    Price, Compare-at, SKU, Image per row; "duplicate to other regions" helper), replacing the
+    original single-flavor-add form (ADMIN_PANEL.md §1, superseded — needs its own rewrite pass,
+    flagged separately). Submits via batched `productVariantsBulkCreate` (~100/call, item 1a).
+11. **Admin panel v2** — hierarchy tree + search + counts dashboard (ADMIN_PANEL.md §3), customer
+    approval screen (toggles Supabase approval status + account type, item 14). ~~Bulk mini-list
+    add via `bulkOperationRunMutation` for 50-product creation~~ — superseded: there's no longer a
+    "50 flavor products" bulk-create case (item 1a), variant bulk-upload is covered by step 10.
 12. **Draft Order flow** (item 19) — cart submit → server reads Supabase account_type → creates
     Shopify Draft Order via Admin API (`draftOrderCreate`) with resolved price + Retail/Wholesale
     tag; read-modify-write on `tags` if updating an existing draft (§4 caution above).

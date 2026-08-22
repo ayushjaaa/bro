@@ -1,8 +1,12 @@
 /**
  * One-time setup script (DECISIONS.md item 3: definitions are a "one-time setup (developer)"
- * task, unlike entries which are "ongoing, no-developer-needed"). Creates the 4 taxonomy
- * metaobject definitions — Category -> Sub-category -> Brand -> Product Line — each referencing
- * only the level directly above it (DECISIONS.md item 2/3).
+ * task, unlike entries which are "ongoing, no-developer-needed"). Creates the 3 taxonomy
+ * metaobject definitions — Category -> Sub-category -> Brand — each referencing only the level
+ * directly above it (DECISIONS.md item 2/3).
+ *
+ * Product Line is NOT created here (updated 2026-08-22, DECISIONS.md item 2/1a): Product Line is
+ * now a real Shopify Product, not a metaobject — see create-product-brand-metafield.ts for how a
+ * Product Line product references Brand directly.
  *
  * Idempotent: safe to re-run. Skips any type that already exists and reuses its id for
  * downstream reference wiring.
@@ -113,7 +117,7 @@ async function createDefinition(
 }
 
 async function main() {
-  console.log('Creating taxonomy metaobject definitions (Category -> Sub-category -> Brand -> Product Line)...\n');
+  console.log('Creating taxonomy metaobject definitions (Category -> Sub-category -> Brand)...\n');
 
   console.log('Category:');
   const categoryId = await createDefinition('Category', 'category', buildFields({
@@ -135,19 +139,11 @@ async function main() {
     referenceTo: { key: 'sub_category', name: 'Sub-category', definitionId: subCategoryId },
   }));
 
-  console.log('Product Line:');
-  const productLineId = await createDefinition('Product Line', 'product_line', buildFields({
-    imageFieldKey: 'image',
-    imageFieldName: 'Image',
-    referenceTo: { key: 'brand', name: 'Brand', definitionId: brandId },
-  }));
-
   console.log('\nSummary (type -> definition GID):');
   console.table({
     category: { id: categoryId },
     sub_category: { id: subCategoryId },
     brand: { id: brandId },
-    product_line: { id: productLineId },
   });
 }
 
