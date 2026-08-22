@@ -967,6 +967,47 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
   (pricing, customer approval), so inactivity timeout should be stricter (e.g. 30–60 min) than a
   regular shopper's session.
 
+### 44a-i. Admin Authorization — Exact Flow (researched 2026-08-22)
+
+- **`admin_users` table (Supabase):** columns `id`, `email`, `created_at`. **RLS enabled with no
+  client-facing INSERT/UPDATE/DELETE policy at all** — only the Service Role (server-only,
+  bypasses RLS) can write to it. Adding a new admin is a **manual, deliberate action**: the
+  developer/owner inserts a row directly via the Supabase dashboard — no in-app "add admin" form,
+  no self-serve request flow (unlike customer registration, item 22) — friction here is
+  intentional, to prevent anyone becoming admin by accident or exploit.
+- **Why `is_admin` must live in this separate table, not user metadata:** researched — if admin
+  status were stored in `raw_user_meta_data` (the Supabase Auth user object's own metadata),
+  **the user can edit that value themselves client-side**, granting themselves admin. Authorization
+  must always be re-derived from a table only the server can write to, never trusted from a
+  client-editable field or from a JWT claim built off client-editable data.
+- **Request flow (mapped from a MERN mental model — client sends a token, server verifies it and
+  decodes user info, same pattern here just via Supabase's own JWT instead of a hand-rolled one):**
+  1. User logs in via Google OAuth → Supabase issues its own signed JWT, stored in a cookie via
+     `@supabase/ssr` (already the pattern for the storefront, item 21).
+  2. `middleware.ts` runs on every request to `/admin/*` — calls `getClaims()` (verifies the JWT,
+     refreshes if needed) and redirects to login if there's no valid session. **This layer is for
+     fast UX (avoid loading a protected page for a clearly-logged-out visitor), not the actual
+     security boundary.**
+  3. Every admin Server Action/Route Handler **independently re-verifies** — calls
+     `getClaims()`/`getUser()` again itself (never trusts that middleware already checked), gets
+     the verified `email`, then queries `admin_users` (Service Role client) for that email.
+     Row found → action proceeds. Not found → reject (403), regardless of what middleware decided.
+- **Why the middleware check alone is not enough — concrete precedent, not a hypothetical
+  (researched 2026-08-22):** **CVE-2025-29927**, a real, critical, publicly-disclosed Next.js
+  vulnerability (disclosed March 2025, affecting versions before 12.3.5/13.5.9/14.2.25/15.2.3).
+  Attackers could spoof the internal `x-middleware-subrequest` header to make Next.js believe
+  middleware had already run, **skipping it entirely** — bypassing any auth/authorization logic
+  that lived only in middleware. Apps that *also* re-checked authorization inside the actual
+  route/action handler were not exploitable this way; apps that trusted middleware as the sole
+  gate were. This is the concrete justification for the defense-in-depth pattern above (also
+  already the rule for the storefront's price-gate route, item 12/BUILD_PLAN §4) — it is not
+  redundant paranoia, it is what actually would have prevented a real, disclosed attack class.
+- **Session revocation:** access tokens remain valid until their own expiry even after a user is
+  removed from `admin_users` (Supabase's own documented behavior) — this is exactly why the
+  shorter admin session timeout above matters. When revoking an admin, also call
+  `auth.admin.signOut(userId, 'global')` server-side to invalidate refresh tokens immediately (the
+  already-issued access token still runs out on its own short clock either way).
+
 ### 44b. Real-Time + Cache Strategy — Two Different Mechanisms for Two Data Sources
 - **Supabase-native data** (registration requests, cart activity, order status — items 16/21/22)
   uses **Supabase Realtime** (`postgres_changes` subscriptions) — this is already item 21's V2
