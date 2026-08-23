@@ -35,6 +35,60 @@ Shopify Admin API  /  Supabase
 
 ---
 
+## 1a. JWT Verification Mechanics — Exactly What `requireAdmin()` Does And Why (researched 2026-08-23)
+
+Every route's protection reduces to two questions, answered fresh on every request, never cached
+or trusted from a prior check:
+
+1. **Is this token real and unexpired?** (Authentication)
+2. **Is this verified identity in `admin_users`?** (Authorization)
+
+```ts
+// src/data/admin-auth.ts
+export async function requireAdmin() {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getClaims();
+  //   ↑ Reads the access-token JWT from the request's cookie, then verifies its signature
+  //     against Supabase's public keys (JWKS endpoint: /auth/v1/.well-known/jwks.json — fetched
+  //     and cached, not a static shared secret like a hand-rolled `jwt.verify(token, SECRET)`),
+  //     and checks the `exp` claim hasn't passed. Auto-refreshes via the refresh token if the
+  //     access token is close to expiring.
+  if (error || !data?.claims?.email) throw new Error('Unauthorized — not logged in');
+  //   ↑ Token missing/invalid/expired → stop here. Nothing below ever runs.
+
+  const email = data.claims.email as string;
+  //   ↑ Trustworthy because it came from a cryptographically-verified JWT, never from a
+  //     client-supplied form field or header that could be spoofed.
+
+  const service = getServiceRoleClient(); // bypasses RLS — server-only, never exposed
+  const { data: adminRow } = await service
+    .from('admin_users').select('id').eq('email', email).maybeSingle();
+  if (!adminRow) throw new Error('Forbidden — not an admin');
+  //   ↑ Authenticated (real, logged-in person) but not authorized (not on the admin list) →
+  //     stop here too. This is the line that actually decides "customer" vs "admin" — nothing
+  //     about that distinction lives inside the JWT itself.
+
+  return { email, id: data.claims.sub as string };
+}
+```
+
+**Why the JWT's own `role` claim is NOT used for this:** Supabase's built-in `role` claim
+(`authenticated` vs `anon`) is a Postgres/RLS-level concept — every logged-in person, admin or
+regular customer, gets `role: "authenticated"`. It has nothing to do with "is this person an
+admin of our app" — that's an app-level concept this project defines itself via `admin_users`.
+
+**Why this whole check runs twice** (once in `proxy.ts`, once again inside every `requireAdmin()`
+call from a DAL function) — not redundant, it's defense-in-depth: `proxy.ts` is a fast UX layer
+that can theoretically be bypassed by a framework-level bug (item 44a-i's CVE-2025-29927
+precedent); each DAL function re-answering both questions independently means a single point of
+failure in the fast layer never becomes a full security hole.
+
+**Security of this design, concretely:** an attacker cannot forge the `email` used for the
+authorization check (it only ever comes from a signature-verified JWT, never from request
+input), cannot write to `admin_users` directly (RLS enabled, zero client-facing policies, only
+the server-only Service Role key can touch it), and cannot exploit a stale/cached admin status
+(no caching exists — every check is a fresh query).
+
 ## 2. Folder Structure (feature-based, API/UI separated)
 
 ```
