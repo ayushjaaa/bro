@@ -74,7 +74,7 @@ export default function BulkAddPage() {
           </p>
         </div>
         <button
-          onClick={() => router.push("/flavors/new")}
+          onClick={() => router.push("/products/new")}
           className="text-sm text-neutral-500 hover:text-neutral-800"
         >
           Prefer one at a time? →

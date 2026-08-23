@@ -37,7 +37,7 @@ export default function OverviewPage() {
           count: flavorCountForLine(flavors, l.id),
           kind: "Product Line" as const,
           onOpen: () =>
-            router.push("/bulk-add"),
+            router.push("/products/bulk-add"),
           onOpenCtx: () =>
             setSelectedContext({ ...selectedContext, productLineId: l.id }),
         }));
@@ -97,7 +97,7 @@ export default function OverviewPage() {
           </p>
         </div>
         <Link
-          href="/flavors/new"
+          href="/products/new"
           className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 transition"
         >
           + Add Flavor
@@ -154,13 +154,13 @@ export default function OverviewPage() {
           </div>
           <div className="flex gap-2">
             <Link
-              href="/flavors/new"
+              href="/products/new"
               className="rounded-md bg-white border border-emerald-300 text-emerald-700 text-sm font-medium px-3 py-1.5 hover:bg-emerald-100"
             >
               Add one flavor
             </Link>
             <Link
-              href="/bulk-add"
+              href="/products/bulk-add"
               className="rounded-md bg-emerald-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-emerald-700"
             >
               Add multiple (bulk list)
