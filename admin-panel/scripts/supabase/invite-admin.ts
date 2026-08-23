@@ -20,13 +20,32 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/set-password`;
+
   console.log(`Inviting ${email}...`);
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email);
+  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
 
   if (error) {
-    throw new Error(`inviteUserByEmail failed: ${error.message}`);
+    if (error.code === 'email_exists') {
+      // Already invited before (e.g. re-running this script with an old redirectTo) — generate a
+      // fresh link with the correct redirectTo instead of failing. generateLink() does not send
+      // an email itself; print the link so it can be opened directly.
+      console.log(`  already exists — generating a fresh link instead`);
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'recovery', // 'invite' only works for brand-new users; this account already exists
+        email,
+        options: { redirectTo },
+      });
+      if (linkError) {
+        throw new Error(`generateLink failed: ${linkError.message}`);
+      }
+      console.log(`  link: ${linkData.properties.action_link}`);
+    } else {
+      throw new Error(`inviteUserByEmail failed: ${error.message}`);
+    }
+  } else {
+    console.log(`  invited — Supabase Auth user id: ${data.user.id}`);
   }
-  console.log(`  invited — Supabase Auth user id: ${data.user.id}`);
 
   const { error: insertError } = await supabase
     .from('admin_users')

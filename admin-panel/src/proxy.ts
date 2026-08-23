@@ -19,7 +19,12 @@ import { NextResponse, type NextRequest } from 'next/server';
  * what this proxy decides. This admin_users check exists in ADDITION to that DAL check, so a
  * future page/DAL function that forgets to call requireAdmin() still isn't silently exposed.
  */
-const PUBLIC_PATHS = ['/login'];
+// "/set-password" must stay public: the invite email's session token arrives in the URL hash
+// (e.g. #access_token=...), which browsers never send to the server — this proxy can't see it on
+// the first request, only the client-side browser Supabase client can (it parses the hash after
+// the page loads). Blocking this path server-side would redirect the admin to /login before that
+// client-side code ever runs.
+const PUBLIC_PATHS = ['/login', '/set-password'];
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
