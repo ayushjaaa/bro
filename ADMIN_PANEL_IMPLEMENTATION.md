@@ -6,6 +6,63 @@ what for each page, before writing further code.
 
 ---
 
+## 0. The Shopify Structure We Actually Built (ground truth — confirmed against DECISIONS.md
+   items 1a/2/42/43 and the real setup scripts in `scripts/shopify/`, 2026-08-23)
+
+```
+Category (metaobject)
+   ↑ referenced by
+Sub-category (metaobject) — field "category" → Category
+   ↑ referenced by
+Brand (metaobject) — field "sub_category" → Sub-category
+   ↑ referenced by
+Product Line (a REAL Shopify Product — NOT a metaobject) — metafield "taxonomy.brand" → Brand
+   │
+   ├─ Option: "Flavor" (the only formal Shopify Option — max 3 allowed, we use 1)
+   │
+   └─ Variants (one per Flavor value, e.g. "Mango Peach") — up to 2,048 per product:
+        ├─ price, compareAtPrice, sku, 1 image           — all native
+        ├─ metafield "custom.region"                     — e.g. "federal", "ontario" — NOT a
+        │                                                   formal Option, deliberately
+        └─ metafield "custom.flavour_description"        — NOT native (ProductVariant has no
+                                                              built-in description field)
+```
+
+**Three facts that must shape the admin UI, not just be background trivia:**
+
+1. **A Product Line is created BEFORE it has any variants** — `productCreate` alone makes a
+   product with an empty "Flavor" option and zero variants. It is not sellable yet at that point.
+   This is a real two-step sequence, not an implementation detail to hide: **Step 1 creates the
+   Product Line, Step 2 (a separate page) adds its flavours.** The UI must make this obvious
+   (e.g. redirect + a visible "flavours: 0, add some" state), not let the admin believe they're
+   done after Step 1.
+2. **Region is invisible to Shopify's own native product-editing screens** as a selector — it's a
+   metafield per variant, not an Option, so there is no Shopify-native UI for setting it at all.
+   Our custom admin panel is the *only* place Region can be set — this isn't optional polish, the
+   bulk-upload table is the sole interface for a required field.
+3. **Category/Sub-category/Brand are a strict, pre-existing chain** the admin picks from (fetched
+   live from Shopify, item below) — they are not typed free-text and not created inline as part of
+   the product form by default (new entries are a separate, deliberate "+ Add" action elsewhere,
+   per ADMIN_PANEL.md §4), so the product form's taxonomy pickers are read-only selectors, not
+   text inputs.
+
+## 0a. UX Decisions Derived Directly From This Structure
+
+- **Two-step flow is explicit in the UI, not hidden behind one form.** `/products/new` only
+  collects what `productCreate` needs (name, taxonomy, base image) and its success state is a
+  visible hand-off ("Product Line created — now add its flavours") rather than a generic "Saved!"
+  toast, because a Product Line with 0 variants is a real, visible, incomplete state the admin
+  needs to understand, not an edge case to paper over.
+- **Cascading, search-first dropdowns for Category → Sub-category → Brand** (not free-text, per
+  fact 3 above) — each disabled until its parent is chosen, matching ADMIN_PANEL.md §3's
+  search-first principle since these lists grow over time.
+- **The bulk-variant-upload table is not an optional "advanced" feature — it's the only way
+  Region ever gets set** (fact 2). Its empty state after Step 1 should read as "required next
+  step," not "optional bulk tool."
+- **Product list / dashboard should visibly flag Product Lines with 0 variants** (unsellable,
+  incomplete) — a direct consequence of fact 1 — so an admin who left Step 2 unfinished sees it
+  called out rather than discovering it's broken only when a customer can't find flavours.
+
 ## 1. Core Architecture Rule (non-negotiable, applies to every feature below)
 
 ```

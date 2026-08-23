@@ -44,3 +44,9 @@ export async function requireAdmin(): Promise<{ email: string; id: string }> {
 
   return { email, id: data.claims.sub as string };
 }
+
+/** DAL — the actual sign-out call. Server Actions call this, never Supabase directly. */
+export async function signOutAdmin() {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+}

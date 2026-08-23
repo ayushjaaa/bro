@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import TopBar from "@/components/TopBar";
-import Sidebar from "@/components/Sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,18 +17,18 @@ export const metadata: Metadata = {
   description: "Product add & taxonomy navigation admin panel",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Minimal by design (per ADMIN_PANEL_IMPLEMENTATION.md §2) — no Sidebar/TopBar here, so that
+// (auth) pages (login, set-password) don't show dashboard chrome. Only (dashboard)/layout.tsx
+// mounts those.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full h-full flex flex-col bg-neutral-50 text-neutral-900">
-        <TopBar />
-        <div className="flex flex-1 min-h-0">
-          <Sidebar />
-          <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
-        </div>
+      <body className="min-h-full h-full bg-neutral-50 text-neutral-900" suppressHydrationWarning>
+        {children}
       </body>
     </html>
   );
