@@ -1,20 +1,40 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
- * Where /auth/confirm forwards to after exchanging the PKCE `?code=` for a session (confirmed
- * 2026-08-22 — this project uses the query-param PKCE flow, not a URL hash). By the time this
- * page renders, the session already exists as a cookie, so updateUser() can set a real password.
+ * Where the recovery/invite email's link lands directly (no intermediate server redirect — a
+ * redirect's Location header would drop the URL hash the session token arrives in, per the
+ * official Supabase pattern: admin-generated links use the hash-based implicit flow, not PKCE).
+ *
+ * Official pattern (confirmed 2026-08-22, Supabase docs): don't assume a session exists as soon
+ * as the page loads — listen for the PASSWORD_RECOVERY event via onAuthStateChange, which fires
+ * once the browser client has parsed the hash and established the session.
  */
 export default function SetPasswordPage() {
   const router = useRouter();
+  const supabaseRef = useRef(createSupabaseBrowserClient());
+  const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setReady(true);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -30,8 +50,7 @@ export default function SetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabaseRef.current.auth.updateUser({ password });
     setLoading(false);
 
     if (error) {
@@ -40,6 +59,14 @@ export default function SetPasswordPage() {
     }
     router.push('/');
     router.refresh();
+  }
+
+  if (!ready) {
+    return (
+      <div className="max-w-sm mx-auto mt-24 p-6 rounded-lg border border-neutral-200 bg-white">
+        <p className="text-sm text-neutral-500">Verifying your link...</p>
+      </div>
+    );
   }
 
   return (

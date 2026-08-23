@@ -20,9 +20,12 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // PKCE flow (confirmed 2026-08-22): the link redirects here with `?code=`, which /auth/confirm
-  // exchanges for a session server-side before forwarding to /set-password.
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/confirm`;
+  // Corrected 2026-08-22: admin-generated recovery/invite links use the hash-based implicit flow
+  // (#access_token=...), not a PKCE `?code=` query param — confirmed by server logs showing zero
+  // query params on arrival. A hash only survives if the browser lands DIRECTLY on this URL with
+  // no server-side redirect in between (a redirect's Location header drops it), so point straight
+  // at /set-password instead of routing through an intermediate confirm step.
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/set-password`;
 
   console.log(`Inviting ${email}...`);
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
