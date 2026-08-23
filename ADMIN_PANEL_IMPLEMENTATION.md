@@ -7,28 +7,67 @@ what for each page, before writing further code.
 ---
 
 ## 0. The Shopify Structure We Actually Built (ground truth — confirmed against DECISIONS.md
-   items 1a/2/42/43 and the real setup scripts in `scripts/shopify/`, 2026-08-23)
+   items 1a/2/3/41/42/43/44 and the real setup scripts in `scripts/shopify/`, 2026-08-23)
 
 ```
-Category (metaobject)
+Category (metaobject, type: "category")
+   fields: name (single_line_text_field, required)
+           description (multi_line_text_field)
+           image (file_reference)
    ↑ referenced by
-Sub-category (metaobject) — field "category" → Category
+Sub-category (metaobject, type: "sub_category")
+   fields: name, description, image  — same 3 as Category
+           category (metaobject_reference, required) → Category
    ↑ referenced by
-Brand (metaobject) — field "sub_category" → Sub-category
+Brand (metaobject, type: "brand")
+   fields: name (single_line_text_field, required)
+           description (multi_line_text_field)
+           logo (file_reference)                        — note: "logo", not "image", for Brand
+           sub_category (metaobject_reference, required) → Sub-category
    ↑ referenced by
-Product Line (a REAL Shopify Product — NOT a metaobject) — metafield "taxonomy.brand" → Brand
+Product Line (a REAL Shopify Product — NOT a metaobject, unlike the 3 levels above)
+   fields: title, descriptionHtml, media (base image)    — native Product fields
+           metafield "taxonomy.brand" (metaobject_reference, ownerType PRODUCT) → Brand
+   │       (Sub-category/Category are NOT stored redundantly on the Product — derive by
+   │        walking Brand → sub_category → category when needed)
    │
-   ├─ Option: "Flavor" (the only formal Shopify Option — max 3 allowed, we use 1)
+   ├─ Option: "Flavor" — the ONLY formal Shopify Option on this product (Shopify allows max 3
+   │  options/product; using only 1 leaves 2 free for a future dimension, e.g. Nicotine Strength)
+   │  ⚠️ gotcha (DECISIONS.md item 43): if the Product's Category (Standard Shopify Taxonomy, not
+   │  our metaobject one) has a matching standard attribute like "Flavor", Shopify auto-links the
+   │  Option to that attribute's metafield and silently breaks bulk variant creation
+   │  ("Cannot set name for an option value linked to a metafield"). Fix: disconnect it (Shopify
+   │  Admin → Variants → linked-metafield badge → Disconnect), or avoid Standard Taxonomy
+   │  categories with a conflicting attribute name when creating the Product.
    │
-   └─ Variants (one per Flavor value, e.g. "Mango Peach") — up to 2,048 per product:
-        ├─ price, compareAtPrice, sku, 1 image           — all native
-        ├─ metafield "custom.region"                     — e.g. "federal", "ontario" — NOT a
-        │                                                   formal Option, deliberately
-        └─ metafield "custom.flavour_description"        — NOT native (ProductVariant has no
-                                                              built-in description field)
+   └─ Variants — one per Flavor value (e.g. "Mango Peach"), up to 2,048 per product (raised from
+      100 for all merchants/plans, Oct 15 2025):
+        ├─ title            — native, auto-derived from the Flavor option value
+        ├─ price / compareAtPrice / sku / barcode / inventoryQuantity  — all native, independent
+        │  per variant
+        ├─ media            — native, 1 image per variant (not a gallery)
+        ├─ metafield "custom.region" (single_line_text_field, ownerType PRODUCTVARIANT)
+        │     — deliberately a metafield, NOT a formal Option (would consume one of the 3 slots
+        │       and force a full cartesian-product variant explosion for no benefit, since this
+        │       custom admin UI never uses Shopify's native variant-dropdown anyway)
+        │     — real values in use: "federal", "bc", "alberta", "manitoba", "ontario", "quebec"
+        │       (maps to Canada's excise-stamp regions — DECISIONS.md item 42; "bc" uses the
+        │       federal peach stamp since BC isn't a specified vaping province, but the
+        │       distributor still tracks it as its own selectable region)
+        └─ metafield "custom.flavour_description" (multi_line_text_field, ownerType
+              PRODUCTVARIANT) — NOT a native field (ProductVariant has no built-in description),
+              confirmed against official Admin GraphQL schema
 ```
 
-**Three facts that must shape the admin UI, not just be background trivia:**
+**Scale numbers that constrain the UI (not theoretical — live-tested):**
+- 200 flavours × 6 regions = up to 1,200 variants on one Product Line — proven with a real
+  1,200/1,200 successful `productVariantsBulkCreate` run, 0 errors, ~52 seconds, batched 100/call
+  (the documented general array-input max is 250/call, but 100 is what's actually been verified
+  safe for this specific mutation's query-cost profile — not just array-length)
+- Publishing: **products are created unpublished by default** — `publishablePublish` is a
+  required, easy-to-miss extra call, or the Product Line silently never becomes customer-visible
+
+**Five facts that must shape the admin UI, not just be background trivia:**
 
 1. **A Product Line is created BEFORE it has any variants** — `productCreate` alone makes a
    product with an empty "Flavor" option and zero variants. It is not sellable yet at that point.
@@ -39,12 +78,21 @@ Product Line (a REAL Shopify Product — NOT a metaobject) — metafield "taxono
 2. **Region is invisible to Shopify's own native product-editing screens** as a selector — it's a
    metafield per variant, not an Option, so there is no Shopify-native UI for setting it at all.
    Our custom admin panel is the *only* place Region can be set — this isn't optional polish, the
-   bulk-upload table is the sole interface for a required field.
+   bulk-upload table is the sole interface for a required field. **The Region dropdown/checkbox
+   list in that table must use the fixed 6-value list above** (federal/bc/alberta/manitoba/
+   ontario/quebec), not free text — a typo'd region value silently breaks storefront filtering.
 3. **Category/Sub-category/Brand are a strict, pre-existing chain** the admin picks from (fetched
    live from Shopify, item below) — they are not typed free-text and not created inline as part of
    the product form by default (new entries are a separate, deliberate "+ Add" action elsewhere,
    per ADMIN_PANEL.md §4), so the product form's taxonomy pickers are read-only selectors, not
    text inputs.
+4. **Every Product Line needs its "Flavor" Option checked for the auto-link gotcha** right after
+   creation, before any bulk variant upload runs — either by never selecting a conflicting
+   Standard Taxonomy category for the product, or by verifying/disconnecting the link
+   programmatically. Silent failure otherwise (variants fail to create with a cryptic error).
+5. **A newly-created Product Line is unpublished** — if the admin panel ever shows a "live on
+   store" style status, it must reflect this real state (not assume "created" = "visible"), and
+   `publishablePublish` must run before that status can honestly say published.
 
 ## 0a. UX Decisions Derived Directly From This Structure
 
@@ -62,6 +110,16 @@ Product Line (a REAL Shopify Product — NOT a metaobject) — metafield "taxono
 - **Product list / dashboard should visibly flag Product Lines with 0 variants** (unsellable,
   incomplete) — a direct consequence of fact 1 — so an admin who left Step 2 unfinished sees it
   called out rather than discovering it's broken only when a customer can't find flavours.
+- **Region field in the bulk-upload table is a fixed dropdown/checkbox list, never a text
+  input** (fact 2) — the 6 real values only, so a typo can't silently produce an unfilterable
+  variant on the storefront.
+- **`createProductLine()` never sets a Standard-Taxonomy Category that has a conflicting
+  attribute name** (fact 4) — either omit Category entirely at creation, or the DAL checks/
+  disconnects the auto-link before returning success, so the admin is never silently handed a
+  broken Product Line.
+- **Product list shows an honest Published/Unpublished status** (fact 5), and Step 1's DAL calls
+  `publishablePublish` as its last step — "created" and "visible to customers" are never
+  conflated in either the code or what the admin sees.
 
 ## 1. Core Architecture Rule (non-negotiable, applies to every feature below)
 
