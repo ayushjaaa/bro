@@ -985,6 +985,14 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
      `admin_users` lookup — in `proxy.ts` (fast layer) and again in `requireAdmin()` (DAL layer,
      item 44b-i). Shopify has no role in either step; it's purely a data source once both checks
      already passed.
+- **Real bug found and fixed (2026-08-22) — proxy.ts was protecting the wrong paths:** this
+  codebase has **no `/admin` URL prefix** — the entire app from `/` is the admin panel (`/`,
+  `/bulk-add`, `/flavors/new`). An earlier version of `proxy.ts` only gated paths starting with
+  `/admin`, which matched nothing except the throwaway `/admin/test` verification page — the real
+  pages were completely unprotected, reachable by typing the URL directly with no login at all.
+  Caught by the user directly testing the app (landed on the dashboard with no login prompt).
+  **Fixed:** inverted the logic to protect everything by default via a `PUBLIC_PATHS` allow-list
+  (currently just `/login`), rather than trying to enumerate what to protect.
 
 ### 44a-i. Admin Authorization — Exact Flow (researched 2026-08-22)
 

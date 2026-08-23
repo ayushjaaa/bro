@@ -3,16 +3,23 @@ import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
+ * This entire app IS the admin panel (there is no "/admin" URL prefix — every route from "/" is
+ * admin-only). Corrected 2026-08-22: an earlier version of this file only protected paths under
+ * "/admin", which meant the real pages ("/", "/bulk-add", "/flavors/new") were never actually
+ * gated — only a throwaway "/admin/test" verification page was. Fixed to protect everything by
+ * default and explicitly allow-list the handful of public paths instead.
+ *
  * Refreshes the Supabase session on every request (official Supabase SSR pattern) and does a
- * fast, UX-only redirect for visitors to /admin routes who are either not logged in, or logged
- * in but not an admin (e.g. a storefront customer — same Supabase project serves both auth flows
- * per item 21, so "has a valid session" alone does not mean "is an admin").
+ * fast, UX-only redirect for visitors who are either not logged in, or logged in but not an admin
+ * (e.g. a storefront customer — same Supabase project serves both auth flows per item 21, so "has
+ * a valid session" alone does not mean "is an admin").
  *
  * NOT the sole security boundary — DECISIONS.md item 44a-i (CVE-2025-29927 precedent): every
  * admin Server Action/DAL function independently re-verifies via requireAdmin(), regardless of
  * what this proxy decides. This admin_users check exists in ADDITION to that DAL check, so a
  * future page/DAL function that forgets to call requireAdmin() still isn't silently exposed.
  */
+const PUBLIC_PATHS = ['/login'];
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -37,10 +44,9 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
 
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
-  const isLoginPage = request.nextUrl.pathname === '/login';
+  const isPublicPath = PUBLIC_PATHS.includes(request.nextUrl.pathname);
 
-  if (isAdminRoute && !isLoginPage) {
+  if (!isPublicPath) {
     const email = data?.claims?.email as string | undefined;
 
     if (!email) {
