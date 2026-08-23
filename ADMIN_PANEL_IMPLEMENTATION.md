@@ -339,6 +339,166 @@ is a `'use server'` function, it lives in `features/*/actions.ts` and is ≤10 l
 
 ---
 
+## 3a. UI/UX Design Per Page (wireframe-level, ready to implement)
+
+Every page below follows the same states unless noted: **loading** (skeleton, not a blank
+screen), **empty** (a specific message + the one relevant CTA, never a bare "no data"),
+**error** (what failed + a retry action, never a silent failure), **populated**.
+
+### Dashboard (`/`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [Categories: 4] [Sub-cats: 9] [Brands: 22] [Products: 58]    │  ← stat cards, one row
+│                                             [Variants: 6,204] │
+├─────────────────────────────────────────────────────────────┤
+│ ⚠ Low stock / out of stock (3)                    [View all] │  ← widget, only if >0
+├─────────────────────────────────────────────────────────────┤
+│ ⚠ Incomplete Product Lines — 0 flavours (2)       [View all] │  ← fact 1 consequence
+├─────────────────────────────────────────────────────────────┤
+│ Recent activity                                               │
+│  • "Beast Mode Max 2" — 1,200 variants added — 2h ago         │
+│  • "Cherry Fusion" — Product Line created — 5h ago            │
+└─────────────────────────────────────────────────────────────┘
+```
+- Stat cards: plain numbers, no charts (Ockham's Razor — this admin doesn't need graphs, just
+  counts, per the non-technical persona)
+- Both warning widgets **only render when count > 0** (Signal-to-Noise — an empty warning card
+  is noise, not information)
+- No primary "+" button here — Dashboard is a status view, not a creation point (creation lives
+  in Products, matching Mental Model: Shopify's own dashboard doesn't have a product-add button
+  either)
+
+### Products — List (`/products`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Products                                    [+ Add Product]  │  ← Von Restorff: only solid button
+│ [Search...........................]                          │
+├─────────────────────────────────────────────────────────────┤
+│ Name              Brand         Variants   Status            │
+│ Beast Mode Max 2  Flavour Beast 1,200      ● Published        │
+│ Cherry Fusion     Nasty Juice   0          ⚠ 0 flavours       │  ← fact 1/5, inline not buried
+│ ...                                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+- Row click → not an edit page (out of scope for V1) → goes straight to
+  `/products/[id]/variants` (the thing an admin actually needs to revisit most: adding more
+  flavours), per Recognition Over Recall — one obvious next action per row, not a menu of options
+- Status column shows **Published/Unpublished** (fact 5) and a **flavour-count warning** inline
+  (fact 1) — both real states, not decorative
+- Empty state (0 products): dashed-border panel, "No products yet" + the same "+ Add Product"
+  button, centered — first-run experience matches Entry Point principle (inviting, one clear path)
+
+### Add Product — `/products/new`
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Add Product                                                   │
+│                                                                 │
+│ Category         [Search or select ▾]                         │
+│ Sub-category      [Search or select ▾]   (disabled until       │
+│ Brand             [Search or select ▾]    parent chosen)       │
+│                                                                 │
+│ Product Name     [_______________________]                    │
+│ Description      [textarea______________]                     │
+│ Base Image       [ Upload ]                                    │
+│                                                                 │
+│                                    [Create Product Line →]     │
+└─────────────────────────────────────────────────────────────┘
+```
+- 3 taxonomy dropdowns are **read-only selectors** (fact 3) — search-first (type-to-filter),
+  each disabled + greyed with a hint ("Select a category first") until its parent is chosen —
+  Constraint principle (prevent an invalid Sub-category/Brand combination from ever being
+  selectable, rather than validating it after the fact)
+- No Flavor/Region fields anywhere on this form (Progressive Disclosure — this page only ever
+  asks for what `productCreate` needs, per fact 1's two-step design)
+- Submit button label is **"Create Product Line →"** with an arrow, signaling more steps follow
+  — sets correct expectation (Expectation Effect) rather than implying "done" like a plain "Save"
+- On success: **no toast-and-stay** — hard redirect to `/products/[new-id]/variants` with a
+  banner at the top: *"[Name] created — now add its flavours"* (this is the fact-1 hand-off from
+  §0a, made concrete)
+
+### Bulk Variant Upload — `/products/[id]/variants`
+
+```
+Breadcrumb: Dashboard / Products / Beast Mode Max 2 / Add Flavours
+
+┌─────────────────────────────────────────────────────────────┐
+│ ℹ 0 flavours yet — this product isn't visible to customers    │  ← only shown when count = 0
+├─────────────────────────────────────────────────────────────┤
+│ Flavour      Description   Region▾      Price  Compare  SKU  Image │
+│ [_______]    [_______]     [Federal ▾]  [___]  [___]    [_]  [📷]  │
+│ [_______]    [_______]     [Federal ▾]  [___]  [___]    [_]  [📷]  │
+│ ...                                                             │
+│                                                                 │
+│ [+ Add row]  [Duplicate to other regions ▾]  [Apply description │
+│                                                to all ▾]         │
+│                                                                 │
+│                          Draft autosaved · 47 rows [Create All →]│
+└─────────────────────────────────────────────────────────────┘
+```
+- **Region column is a dropdown with exactly the 6 fixed values** (fact 2) — never free text
+- "Duplicate to other regions" and "Apply description to all" are **secondary/outline buttons**,
+  visually subordinate to "Create All" (Von Restorff again — one dominant action per screen)
+- Row-level validation runs **before** submit (price missing, region blank) — invalid rows get a
+  red left-border + inline message, submit button stays enabled but re-validates on click
+  (Forgiveness — catch errors before the expensive network call, not after)
+- Draft-autosave indicator is always visible near the submit button (small text, not a toast) —
+  constant, quiet reassurance for a table that can hold up to ~1,200 rows
+- Submit → progress state replaces the table temporarily: `Creating variants… batch 4/12` with a
+  simple progress bar (Feedback Loop — a 52-second operation with zero feedback reads as frozen)
+- On completion: summary banner (`✓ 1,200 created, 0 failed`) + button back to the product's row
+  in `/products`
+
+### Taxonomy (`/taxonomy`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Taxonomy                                                       │
+│ [Search...........................]                            │
+├─────────────────────────────────────────────────────────────┤
+│ ▾ Vapes                                          [+ Add Brand] │
+│    ▾ Disposables                                                │
+│       • Flavour Beast              [+ Add Sub-category]        │
+│       • Nasty Juice                                             │
+│    ▸ Pod Systems                                                │
+│ ▸ Cannabis                                        [+ Add Sub..] │
+└─────────────────────────────────────────────────────────────┘
+```
+- Collapsible tree, search-first (type-to-filter collapses to only matching branches) —
+  ADMIN_PANEL.md §3's already-decided pattern, unchanged
+- "+ Add [level]" buttons appear **contextually at the level they'd create into** (e.g. "+ Add
+  Brand" shown next to an expanded Sub-category) — Mapping principle: the control is spatially
+  where its effect will land, not in a separate global "add" menu
+- No "+ Add Product Line" here (fact 3/structure — Product Line isn't a metaobject, it's created
+  from `/products/new`, not from this tree)
+
+### Customers — Approval Queue (`/customers`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Customers                                                       │
+├─────────────────────────────────────────────────────────────┤
+│ Name        Email              Requested    Date    [Approve][Reject] │
+│ J. Smith    j@x.com            Wholesale     2d ago  [Approve][Reject] │
+└─────────────────────────────────────────────────────────────┘
+```
+- Approve/Reject are two clearly separate buttons (not a dropdown) — this is the highest-stakes
+  action in the whole panel (grants real account access), so it gets maximum Visibility, not
+  tucked into a menu
+- Confirmation dialog on both actions (Confirmation principle — irreversible-feeling actions
+  always confirm, even though technically re-appliable)
+- Empty state: "No pending requests" — a calm, positive empty state (not a warning), since an
+  empty queue is a *good* state here, unlike the Products list's empty state
+
+### Customers — Cart Activity (`/customers/activity`)
+- Simple reverse-chronological list, live-updating (Supabase Realtime, item 44b) — no pagination
+  needed for V1 given expected volume; add if it becomes a real problem (Satisficing — don't
+  build for a scale that doesn't exist yet)
+
+---
+
 ## 4. Sidebar Navigation (4 sections, per UX pass — Chunking/Hick's Law)
 
 | Label | Route | Matches Shopify's own wording (Mental Model/Mimicry) |
