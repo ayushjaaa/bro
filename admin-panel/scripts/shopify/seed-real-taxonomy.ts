@@ -100,11 +100,20 @@ async function deleteJunk(names: string[]) {
 
 const TREE: Record<string, Record<string, string[]>> = {
   Vapes: {
-    'Disposable Vapes': [],
-    'E-Liquids / Vape Juice': [],
-    'Pre-Filled Pods': [],
-    'Vape Devices': [],
-    'Vape Hardware & Accessories': [],
+    'Disposable Vapes': [
+      'Flavour Beast', 'Oxbar', 'Mr Fog', 'Stlth', 'Kraze', 'Geek Bar', 'Gcore',
+      "Drip'n", 'Ripper', 'Instabar', 'Doozy Quad', 'Vice', 'Elf Bar',
+    ],
+    'E-Liquids / Vape Juice': [
+      'Gcore 30ml', 'Gcore 60ml', 'Flavour Beast 30ml', 'Flavour Beast 60ml',
+      'Lemon Drop', 'Flavour Drop', 'Berry Drop', 'Kapow', 'Mr Fog E-Juices',
+      'Oxbar', 'ElfLiq', 'Delicious Drip E-Juice', 'Vice', 'Koil Killaz', 'Naked',
+    ],
+    'Pre-Filled Pods': [
+      'Flavour Beast Pods', 'Ripper X 75K Pods', 'Oxbar Maglink 90K Pods', 'Mr Fog Switch Pods',
+    ],
+    'Vape Devices': ['Vaporesso', 'Mr Fog Drt Device', 'Battery', 'Caliburn'],
+    'Vape Hardware & Accessories': ['Vaporesso', 'Mr Fog Drt Device', 'Battery', 'Caliburn'],
   },
   Smoking: {
     // "Rolling Accessories" wrapper deliberately skipped -- these are direct children of Smoking
