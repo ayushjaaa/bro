@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
- * Where the invite email's link lands. The invite link carries a temporary session in the URL
- * hash — @supabase/ssr's browser client auto-detects it on load, so by the time this page renders
- * the admin is already authenticated and can set a real password via updateUser().
+ * Where /auth/confirm forwards to after exchanging the PKCE `?code=` for a session (confirmed
+ * 2026-08-22 — this project uses the query-param PKCE flow, not a URL hash). By the time this
+ * page renders, the session already exists as a cookie, so updateUser() can set a real password.
  */
 export default function SetPasswordPage() {
   const router = useRouter();

@@ -20,7 +20,9 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/set-password`;
+  // PKCE flow (confirmed 2026-08-22): the link redirects here with `?code=`, which /auth/confirm
+  // exchanges for a session server-side before forwarding to /set-password.
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/confirm`;
 
   console.log(`Inviting ${email}...`);
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
