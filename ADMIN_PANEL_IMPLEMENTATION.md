@@ -319,13 +319,38 @@ is a `'use server'` function, it lives in `features/*/actions.ts` and is ≤10 l
      setting `custom.region` + `custom.flavour_description` metafields in the same call)
   4. Return `{created, failed, errors}` progress summary
 
-### `(dashboard)/taxonomy` — `/taxonomy`
+### `(dashboard)/taxonomy` — `/taxonomy` — **BUILD ORDER: this is the FIRST real feature**
+(corrected 2026-08-23 — an earlier plan built Product creation first; wrong, since an admin
+can't select a Category/Sub-category/Brand that doesn't exist yet, and creating the first ones
+is not a rare one-off — it's the actual starting point for using this panel at all)
+
 - **UI:** `features/taxonomy/components/TaxonomyTree.tsx` (search-first, collapsible,
-  "+ Add [level]" contextual buttons)
-- **Action:** `features/taxonomy/actions.ts` → `addTaxonomyEntryAction()`
-- **DAL:** `data/taxonomy.ts` → `listTaxonomyTree()`, `addTaxonomyEntry()` (calls
-  `metaobjectCreate` — Category/Sub-category/Brand only; Product Line is NOT a metaobject,
-  DECISIONS.md item 2 correction)
+  "+ Add [level]" contextual buttons — the create action is central to this page, not a buried
+  edge case)
+- **Action:** `features/taxonomy/actions.ts` → `createCategoryAction()`, `createSubcategoryAction()`,
+  `createBrandAction()` — thin, one per level (not a single generic "createEntry" — each level has
+  a different field set and parent requirement, so a shared function would need type-branching
+  anyway)
+- **DAL:** `data/taxonomy.ts`:
+  - `listCategories()` / `listSubcategories(categoryId?)` / `listBrands(subcategoryId?)` —
+    already built, live-verified against real Shopify data
+  - `createCategory({name, description, image?})`, `createSubcategory({..., categoryId})`,
+    `createBrand({..., subcategoryId})` — **TODO**, exact sequence (researched 2026-08-23,
+    official Shopify docs):
+    1. `requireAdmin()`
+    2. If an image/logo file was provided: `stagedUploadsCreate` → upload the file to the
+       returned URL → `fileCreate` (`originalSource`: the staged URL) → get back a File GID
+       (e.g. `gid://shopify/MediaImage/...`)
+    3. `metaobjectCreate({ type, fields: [...] })` — using the **`fields` array format**
+       (`[{key, value}]`), not the alternate `values` JSON-object format (schema confirms both
+       exist but "cannot be used in conjunction with `fields`" — picked `fields` for consistency
+       with this codebase's existing mutation calls). The image/logo field's value is the File
+       GID from step 2; a parent-reference field's (`category`/`sub_category`) value is that
+       parent's metaobject GID (already returned by the `list*()` functions above).
+  - Product Line and its variants are explicitly **out of scope for this page** — they're a real
+    Shopify Product (`productCreate`), not a metaobject, and belong to `/products/new` and
+    `/products/[id]/variants` respectively (built after this page, once Category/Sub-category/
+    Brand actually exist to select from).
 
 ### `(dashboard)/customers` — Approval Queue — `/customers`
 - **UI:** `features/customers/components/ApprovalQueueTable.tsx`
@@ -451,11 +476,11 @@ Breadcrumb: Dashboard / Products / Beast Mode Max 2 / Add Flavours
 - On completion: summary banner (`✓ 1,200 created, 0 failed`) + button back to the product's row
   in `/products`
 
-### Taxonomy (`/taxonomy`)
+### Taxonomy (`/taxonomy`) — **the panel's actual starting point** (build-order correction above)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Taxonomy                                                       │
+│ Taxonomy                                        [+ Add Category] │  ← top-level create, always visible
 │ [Search...........................]                            │
 ├─────────────────────────────────────────────────────────────┤
 │ ▾ Vapes                                          [+ Add Brand] │
@@ -465,14 +490,31 @@ Breadcrumb: Dashboard / Products / Beast Mode Max 2 / Add Flavours
 │    ▸ Pod Systems                                                │
 │ ▸ Cannabis                                        [+ Add Sub..] │
 └─────────────────────────────────────────────────────────────┘
+
+First-run / empty state (no categories yet at all):
+┌─────────────────────────────────────────────────────────────┐
+│ Taxonomy                                                        │
+│  No categories yet — this panel starts here.                    │
+│                                    [+ Add your first Category]  │
+└─────────────────────────────────────────────────────────────┘
 ```
 - Collapsible tree, search-first (type-to-filter collapses to only matching branches) —
   ADMIN_PANEL.md §3's already-decided pattern, unchanged
+- **"+ Add Category" is always visible at the top** (not just contextual) — it's the one entry
+  point with no parent dependency, so unlike Sub-category/Brand it doesn't need to "appear" next
+  to anything
 - "+ Add [level]" buttons appear **contextually at the level they'd create into** (e.g. "+ Add
   Brand" shown next to an expanded Sub-category) — Mapping principle: the control is spatially
   where its effect will land, not in a separate global "add" menu
-- No "+ Add Product Line" here (fact 3/structure — Product Line isn't a metaobject, it's created
-  from `/products/new`, not from this tree)
+- **Clicking any "+ Add" opens an inline form in place** (name, description, image/logo upload,
+  parent pre-filled from context per ADMIN_PANEL.md §4's "context memory" principle) — not a
+  navigation to a separate page, so the admin never loses their place in the tree
+- **Empty-state framing matters here specifically** (unlike other pages' generic empty states):
+  since this is now the panel's first real screen for a brand-new store, its empty state should
+  read as "start here," not "nothing to show" — Entry Point principle, first impression counts
+- No "+ Add Product Line" or "+ Add Flavour" anywhere on this page (fact 3/structure — neither is
+  a metaobject; they're created from `/products/new` and `/products/[id]/variants` respectively,
+  once this tree already has at least one Brand to select)
 
 ### Customers — Approval Queue (`/customers`)
 
