@@ -1,12 +1,17 @@
-/** Placeholder — real tree wired to data/taxonomy.ts is tracked in
- * ADMIN_PANEL_IMPLEMENTATION.md §3, not built yet. */
-export default function TaxonomyPage() {
+import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
+import TaxonomyTree from '@/features/taxonomy/components/TaxonomyTree';
+
+export default async function TaxonomyPage() {
+  const [categories, subcategories, brands] = await Promise.all([
+    listCategories(),
+    listSubcategories(),
+    listBrands(),
+  ]);
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Taxonomy</h1>
-      <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-400">
-        Category / Sub-category / Brand tree coming soon — wire to data/taxonomy.ts.
-      </div>
+      <TaxonomyTree categories={categories} subcategories={subcategories} brands={brands} />
     </div>
   );
 }
