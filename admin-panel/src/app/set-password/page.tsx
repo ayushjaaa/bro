@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -15,7 +15,10 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
  */
 export default function SetPasswordPage() {
   const router = useRouter();
-  const supabaseRef = useRef(createSupabaseBrowserClient());
+  // Lazy initializer: createSupabaseBrowserClient() must run exactly once (on mount), not on
+  // every render — useRef(fn()) would still call fn() every render even though only the first
+  // result is kept, creating multiple client instances that race to process the URL hash.
+  const [supabase] = useState(() => createSupabaseBrowserClient());
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -23,8 +26,6 @@ export default function SetPasswordPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const supabase = supabaseRef.current;
-
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) setReady(true);
     });
@@ -34,7 +35,7 @@ export default function SetPasswordPage() {
     });
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -50,7 +51,7 @@ export default function SetPasswordPage() {
     }
 
     setLoading(true);
-    const { error } = await supabaseRef.current.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
     if (error) {
