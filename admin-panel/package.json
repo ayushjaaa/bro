@@ -10,7 +10,8 @@
     "shopify:create-metaobject-definitions": "tsx --env-file=.env.local scripts/shopify/create-metaobject-definitions.ts",
     "shopify:create-product-brand-metafield": "tsx --env-file=.env.local scripts/shopify/create-product-brand-metafield.ts",
     "shopify:create-variant-region-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-region-metafield.ts",
-    "shopify:create-variant-flavour-description-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-flavour-description-metafield.ts"
+    "shopify:create-variant-flavour-description-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-flavour-description-metafield.ts",
+    "supabase:invite-admin": "tsx --env-file=.env.local scripts/supabase/invite-admin.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
