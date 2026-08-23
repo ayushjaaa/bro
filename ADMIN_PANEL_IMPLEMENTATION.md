@@ -185,7 +185,91 @@ it), admin's email, **Sign out** button (`features/auth/actions.ts` → `signOut
 
 ---
 
-## 5. Status
+## 5. User Flows — Exact Request Sequence Per Flow
+
+Every flow below shows precisely which request goes where, in order, including every protection
+checkpoint. "Client" = browser. "Next.js Server" = this same project's server-side code.
+
+### Flow A — Login
+
+```
+1. Client:        LoginForm submits email+password
+2. Client:        createSupabaseBrowserClient().auth.signInWithPassword() — direct call to
+                   Supabase's own Auth server (NOT our Next.js server, NOT Shopify)
+                   → wrong password: Supabase returns an error here, nothing else runs
+                   → correct password: Supabase issues a session, stored as a cookie
+3. Client:        router.push('/') — client-side navigation
+4. Next.js Server: proxy.ts runs (every request) — getClaims() confirms session is valid,
+                   then queries admin_users (Service Role) — email not found → redirect to
+                   /login; email found → request proceeds
+5. Next.js Server: (dashboard)/page.tsx (Server Component) renders — reads dashboard data
+                   via data/product-lines.ts + data/variants.ts (each calls requireAdmin()
+                   again, independently of proxy.ts — item 44a-i)
+6. Client:        receives rendered Dashboard HTML
+```
+
+### Flow B — Create Product Line
+
+```
+1. Client:        ProductForm (Client Component) submits name, taxonomy, base image (File)
+2. Client → Server: form's `action` prop invokes createProductLineAction (Server Action) —
+                   Next.js sends this as a POST under the hood
+3. Next.js Server: createProductLineAction (features/products/actions.ts) — THIN:
+                   extracts FormData fields, calls data/product-lines.ts, nothing else
+4. Next.js Server: data/product-lines.ts → createProductLine():
+                   a. requireAdmin() — getClaims() + admin_users lookup (Service Role) —
+                      throws here if not an admin; nothing below runs
+                   b. stagedUploadsCreate (Shopify Admin API) — get upload URL
+                   c. upload the file to that staged URL directly
+                   d. productCreate (Shopify Admin API) — title, productOptions (Flavor,
+                      no linkedMetafield), metafields (Brand), media
+                   e. publishablePublish (Shopify Admin API) — product starts unpublished
+5. Next.js Server: createProductLineAction calls revalidateTag/revalidatePath for the
+                   products list, then redirect() to /products/[new id]/variants
+6. Client:         browser navigates to the bulk-upload page for the new Product Line
+```
+
+### Flow C — Bulk Variant Upload (item 43)
+
+```
+1. Client:        VariantBulkTable — admin fills up to ~1,200 rows (200 flavours × 6 regions),
+                   draft autosaved to localStorage as they go (item 44c)
+2. Client:        clicks "Create All" — bulkCreateVariantsAction (Server Action) invoked
+                   with productId + all rows
+3. Next.js Server: bulkCreateVariantsAction — THIN: passes productId + rows to the DAL
+4. Next.js Server: data/variants.ts → bulkCreateVariants():
+                   a. requireAdmin()
+                   b. split rows into batches of 100 (proven safe size — live-tested
+                      1,200/1,200 with 0 errors)
+                   c. per batch: stagedUploadsCreate (images for that batch) → upload each →
+                      productVariantsBulkCreate (variants, each with `custom.region` +
+                      `custom.flavour_description` metafields set in the same call)
+                   d. accumulate {created, failed, errors} across all batches
+5. Next.js Server: revalidateTag for this Product Line's variant data
+6. Client:         receives the summary — success toast + created/failed counts; clears the
+                   autosaved draft on full success
+```
+
+### Flow D — Sign Out
+
+```
+1. Client:        TopBar's "Sign out" button — form action={signOutAction}
+2. Next.js Server: signOutAction (features/auth/actions.ts) — THIN: calls the DAL, redirects
+3. Next.js Server: data/admin-auth.ts → signOutAdmin() — supabase.auth.signOut() (invalidates
+                   the session server-side)
+4. Next.js Server: signOutAction calls redirect('/login')
+5. Client:         browser lands on /login; any subsequent /dashboard/* request now fails
+                   proxy.ts's session check (Flow A step 4) until logging in again
+```
+
+### Protection checkpoints present in every flow above
+1. **proxy.ts** — fast layer: session exists? is this email in admin_users? (redirects if not)
+2. **`requireAdmin()` inside every DAL function** — independent re-check, same two questions,
+   never trusts that proxy.ts already answered them (defense-in-depth, item 44a-i)
+3. **Neither Shopify nor Supabase's Service Role key ever reaches the Client** — both live only
+   inside `server-only`-guarded files (`admin-client.ts`, every `data/*.ts` file)
+
+## 6. Status
 
 Planned 2026-08-23, before writing further admin-panel code. Existing scaffolding
 (old `page.tsx`/`bulk-add`/`flavors/new`, mock `useStore()`) already moved into the route-group
