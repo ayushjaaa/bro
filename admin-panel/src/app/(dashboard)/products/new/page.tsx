@@ -1,21 +1,8 @@
-import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
-import ProductForm from '@/features/products/components/ProductForm';
-
-export default async function AddProductPage() {
-  const [categories, allSubcategories, allBrands] = await Promise.all([
-    listCategories(),
-    listSubcategories(),
-    listBrands(),
-  ]);
-
+/** Rebuilding this page's UI/UX from scratch — 2026-08-23, see ADMIN_PANEL_IMPLEMENTATION.md. */
+export default function AddProductPage() {
   return (
-    <div className="flex flex-col gap-5">
-      <h1 className="text-xl font-semibold">Add Product</h1>
-      <ProductForm
-        categories={categories}
-        allSubcategories={allSubcategories}
-        allBrands={allBrands}
-      />
+    <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-400">
+      Being redesigned.
     </div>
   );
 }
