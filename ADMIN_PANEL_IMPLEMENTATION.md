@@ -293,18 +293,15 @@ is a `'use server'` function, it lives in `features/*/actions.ts` and is ≤10 l
 - **DAL:** `data/product-lines.ts` → `listProductLines()`
 - **Shopify API:** `products(first: N, query: "...")` query
 
-### `(dashboard)/products/new` — Add Product Line — `/products/new`
-- **UI:** `features/products/components/ProductForm.tsx` (name, description, taxonomy dropdowns,
-  base image)
-- **Action:** `features/products/actions.ts` → `createProductLineAction(formData)`
-- **DAL:** `data/product-lines.ts` → `createProductLine()`:
-  1. `requireAdmin()`
-  2. `stagedUploadsCreate` (image)
-  3. `productCreate` (title, `productOptions: [{name:"Flavor"}]`, `metafields` for Brand —
-     no `linkedMetafield`, avoids the Category-auto-link bug, DECISIONS.md item 43's gotcha)
-  4. `publishablePublish` (products are created unpublished by default — easy to miss)
-- **On success:** redirect straight to `/products/[id]/variants` (a Product Line isn't sellable
-  with zero flavours yet)
+### `(dashboard)/products/new` — Add Product Line — `/products/new` — **DEFERRED**
+
+UI/UX removed 2026-08-23 (see §3a) — was designed assuming Taxonomy already existed to pick from,
+which is the wrong build order (Taxonomy page must be built and usable first). Page currently
+shows a placeholder. The underlying Shopify mutation sequence researched earlier is still
+correct and will be reused once this page's UI/UX is actually (re)designed:
+`stagedUploadsCreate` → upload → `productCreate` (title, `productOptions: [{name:"Flavor"}]`,
+`metafields` for Brand — no `linkedMetafield`, avoids DECISIONS.md item 43's gotcha) →
+`publishablePublish`. Not to be implemented until Taxonomy is done.
 
 ### `(dashboard)/products/[id]/variants` — Bulk Variant Upload — `/products/[id]/variants`
 - **UI:** `features/products/components/VariantBulkTable.tsx` — spreadsheet table (Flavour,
@@ -415,34 +412,13 @@ screen), **empty** (a specific message + the one relevant CTA, never a bare "no 
 - Empty state (0 products): dashed-border panel, "No products yet" + the same "+ Add Product"
   button, centered — first-run experience matches Entry Point principle (inviting, one clear path)
 
-### Add Product — `/products/new`
+### Add Product — `/products/new` — **DEFERRED, UI/UX not yet designed**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Add Product                                                   │
-│                                                                 │
-│ Category         [Search or select ▾]                         │
-│ Sub-category      [Search or select ▾]   (disabled until       │
-│ Brand             [Search or select ▾]    parent chosen)       │
-│                                                                 │
-│ Product Name     [_______________________]                    │
-│ Description      [textarea______________]                     │
-│ Base Image       [ Upload ]                                    │
-│                                                                 │
-│                                    [Create Product Line →]     │
-└─────────────────────────────────────────────────────────────┘
-```
-- 3 taxonomy dropdowns are **read-only selectors** (fact 3) — search-first (type-to-filter),
-  each disabled + greyed with a hint ("Select a category first") until its parent is chosen —
-  Constraint principle (prevent an invalid Sub-category/Brand combination from ever being
-  selectable, rather than validating it after the fact)
-- No Flavor/Region fields anywhere on this form (Progressive Disclosure — this page only ever
-  asks for what `productCreate` needs, per fact 1's two-step design)
-- Submit button label is **"Create Product Line →"** with an arrow, signaling more steps follow
-  — sets correct expectation (Expectation Effect) rather than implying "done" like a plain "Save"
-- On success: **no toast-and-stay** — hard redirect to `/products/[new-id]/variants` with a
-  banner at the top: *"[Name] created — now add its flavours"* (this is the fact-1 hand-off from
-  §0a, made concrete)
+Removed 2026-08-23: the previous wireframe here assumed Taxonomy already exists and only needs a
+read-only picker on this form. That build order was wrong (§3's Taxonomy entry above explains
+why) and this page's actual UI/UX hasn't been redesigned yet — to be planned only after the
+Taxonomy page (Category/Sub-category/Brand creation) is built and working. The page currently
+renders a placeholder ("Being redesigned").
 
 ### Bulk Variant Upload — `/products/[id]/variants`
 
@@ -579,26 +555,33 @@ checkpoint. "Client" = browser. "Next.js Server" = this same project's server-si
 6. Client:        receives rendered Dashboard HTML
 ```
 
-### Flow B — Create Product Line
+### Flow B — Create Taxonomy Entry (Category / Sub-category / Brand) — current work
 
 ```
-1. Client:        ProductForm (Client Component) submits name, taxonomy, base image (File)
-2. Client → Server: form's `action` prop invokes createProductLineAction (Server Action) —
-                   Next.js sends this as a POST under the hood
-3. Next.js Server: createProductLineAction (features/products/actions.ts) — THIN:
-                   extracts FormData fields, calls data/product-lines.ts, nothing else
-4. Next.js Server: data/product-lines.ts → createProductLine():
-                   a. requireAdmin() — getClaims() + admin_users lookup (Service Role) —
-                      throws here if not an admin; nothing below runs
-                   b. stagedUploadsCreate (Shopify Admin API) — get upload URL
-                   c. upload the file to that staged URL directly
-                   d. productCreate (Shopify Admin API) — title, productOptions (Flavor,
-                      no linkedMetafield), metafields (Brand), media
-                   e. publishablePublish (Shopify Admin API) — product starts unpublished
-5. Next.js Server: createProductLineAction calls revalidateTag/revalidatePath for the
-                   products list, then redirect() to /products/[new id]/variants
-6. Client:         browser navigates to the bulk-upload page for the new Product Line
+1. Client:        TaxonomyTree's inline "+ Add [level]" form submits name, description,
+                   image/logo (File), parent id (pre-filled from tree context)
+2. Client → Server: form's `action` prop invokes create{Category,Subcategory,Brand}Action —
+                   one Server Action per level (features/taxonomy/actions.ts)
+3. Next.js Server: the Server Action — THIN: extracts FormData, calls the matching
+                   data/taxonomy.ts function, nothing else
+4. Next.js Server: data/taxonomy.ts → create{Category,Subcategory,Brand}():
+                   a. requireAdmin() — throws here if not an admin; nothing below runs
+                   b. if an image/logo file was given: stagedUploadsCreate → upload to the
+                      staged URL → fileCreate(originalSource: staged resourceUrl) → File GID
+                   c. metaobjectCreate({ type, fields: [name, description?, image/logo?,
+                      parent-reference] }) — fields array format, not values JSON-object
+                      (both exist in the schema but can't be combined)
+5. Next.js Server: revalidateTag for the taxonomy tree, action returns the new entry
+6. Client:         tree updates in place (new node appears, inline form closes) — no
+                   navigation, admin stays where they were in the tree
 ```
+
+### Flow B2 — Create Product Line — **DEFERRED, not yet designed/built**
+
+The mutation sequence (`stagedUploadsCreate` → `productCreate` → `publishablePublish`) was
+researched and is still accurate, but this page's actual UI/UX and Server Action/DAL wiring are
+not built — tracked to happen only after the Taxonomy flow above is working, since a Product
+Line needs an existing Brand to reference and none exist until Taxonomy creation works.
 
 ### Flow C — Bulk Variant Upload (item 43)
 
