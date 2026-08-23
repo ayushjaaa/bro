@@ -1,8 +1,18 @@
 /**
- * One-time script — invites a new admin: creates their Supabase Auth user via
- * inviteUserByEmail() (they get an email with a link to set their own password, official
- * Supabase pattern — no public sign-up), then adds their email to admin_users (item 44a-i) so
- * requireAdmin() and proxy.ts actually let them into the admin panel once they've set a password.
+ * One-time script — creates/invites a new admin and prints a link to set their password.
+ *
+ * Official Supabase pattern (confirmed 2026-08-22, supabase.com/docs/guides/auth/passwords):
+ * uses generateLink() to get a `hashed_token`, then builds our OWN URL pointing at our own
+ * /auth/confirm route — NOT Supabase's hosted /auth/v1/verify redirect (action_link), which this
+ * script used before and which didn't hand off a session reliably for this project's setup.
+ * /auth/confirm calls verifyOtp({ type, token_hash }) server-side and redirects to /set-password.
+ *
+ * type: 'invite' works only for brand-new users; 'recovery' works for existing ones (including a
+ * user who was invited but never set a password) — this script tries 'invite' first and falls
+ * back to 'recovery' automatically.
+ *
+ * Also adds the email to admin_users (item 44a-i) so requireAdmin() and proxy.ts actually let
+ * them into the admin panel once they've set a password.
  *
  * Run: npm run supabase:invite-admin -- someone@example.com
  */
@@ -20,37 +30,32 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Corrected 2026-08-22: admin-generated recovery/invite links use the hash-based implicit flow
-  // (#access_token=...), not a PKCE `?code=` query param — confirmed by server logs showing zero
-  // query params on arrival. A hash only survives if the browser lands DIRECTLY on this URL with
-  // no server-side redirect in between (a redirect's Location header drops it), so point straight
-  // at /set-password instead of routing through an intermediate confirm step.
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/set-password`;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
-  console.log(`Inviting ${email}...`);
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo });
+  async function tryGenerateLink(type: 'invite' | 'recovery') {
+    return supabase.auth.admin.generateLink({ type, email });
+  }
+
+  console.log(`Generating link for ${email}...`);
+  let linkType: 'invite' | 'recovery' = 'invite';
+  let { data, error } = await tryGenerateLink(linkType);
 
   if (error) {
-    if (error.code === 'email_exists') {
-      // Already invited before (e.g. re-running this script with an old redirectTo) — generate a
-      // fresh link with the correct redirectTo instead of failing. generateLink() does not send
-      // an email itself; print the link so it can be opened directly.
-      console.log(`  already exists — generating a fresh link instead`);
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type: 'recovery', // 'invite' only works for brand-new users; this account already exists
-        email,
-        options: { redirectTo },
-      });
-      if (linkError) {
-        throw new Error(`generateLink failed: ${linkError.message}`);
-      }
-      console.log(`  link: ${linkData.properties.action_link}`);
-    } else {
-      throw new Error(`inviteUserByEmail failed: ${error.message}`);
-    }
-  } else {
-    console.log(`  invited — Supabase Auth user id: ${data.user.id}`);
+    console.log(`  invite type failed (${error.message}) — trying recovery (existing user)`);
+    linkType = 'recovery';
+    ({ data, error } = await tryGenerateLink(linkType));
   }
+
+  if (error || !data.properties) {
+    throw new Error(`generateLink failed: ${error?.message ?? 'no properties returned'}`);
+  }
+
+  const confirmUrl = new URL('/auth/confirm', appUrl);
+  confirmUrl.searchParams.set('token_hash', data.properties.hashed_token);
+  confirmUrl.searchParams.set('type', linkType);
+  confirmUrl.searchParams.set('next', '/set-password');
+
+  console.log(`  link: ${confirmUrl.toString()}`);
 
   const { error: insertError } = await supabase
     .from('admin_users')
@@ -68,7 +73,7 @@ async function main() {
     console.log(`  added to admin_users`);
   }
 
-  console.log(`\nDone. Check ${email}'s inbox for the invite link to set a password.`);
+  console.log(`\nDone. Open the link above to set a password.`);
 }
 
 main().catch((err) => {

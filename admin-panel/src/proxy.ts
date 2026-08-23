@@ -19,13 +19,11 @@ import { NextResponse, type NextRequest } from 'next/server';
  * what this proxy decides. This admin_users check exists in ADDITION to that DAL check, so a
  * future page/DAL function that forgets to call requireAdmin() still isn't silently exposed.
  */
-// "/set-password" must stay public: admin-generated recovery/invite links carry the session
-// token in the URL hash (e.g. #access_token=...), confirmed 2026-08-22 via server logs — hash
-// fragments are never sent to the server, so this proxy has no way to see a session on the very
-// first request. Only the client-side browser Supabase client (see set-password/page.tsx's
-// PASSWORD_RECOVERY listener) can process it. Blocking this path server-side would redirect to
-// /login before that client-side code ever runs.
-const PUBLIC_PATHS = ['/login', '/set-password'];
+// "/auth/confirm" must stay public: it's the verifyOtp() callback (official Supabase pattern,
+// confirmed 2026-08-22) that establishes a session BEFORE one exists — blocking it would redirect
+// to /login before verifyOtp() ever runs. "/set-password" stays public as a safety net in case
+// the confirm step ever redirects here without a session having been set.
+const PUBLIC_PATHS = ['/login', '/auth/confirm', '/set-password'];
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 

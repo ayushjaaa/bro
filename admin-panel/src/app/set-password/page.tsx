@@ -1,41 +1,21 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
- * Where the recovery/invite email's link lands directly (no intermediate server redirect — a
- * redirect's Location header would drop the URL hash the session token arrives in, per the
- * official Supabase pattern: admin-generated links use the hash-based implicit flow, not PKCE).
- *
- * Official pattern (confirmed 2026-08-22, Supabase docs): don't assume a session exists as soon
- * as the page loads — listen for the PASSWORD_RECOVERY event via onAuthStateChange, which fires
- * once the browser client has parsed the hash and established the session.
+ * Where /auth/confirm redirects to after calling verifyOtp() server-side — the session already
+ * exists as a cookie by the time this page renders, so updateUser() works immediately (no need
+ * to wait for a client-side hash/PASSWORD_RECOVERY event, per the official Supabase pattern —
+ * see /auth/confirm/route.ts for why this replaced two earlier, incorrect attempts).
  */
 export default function SetPasswordPage() {
   const router = useRouter();
-  // Lazy initializer: createSupabaseBrowserClient() must run exactly once (on mount), not on
-  // every render — useRef(fn()) would still call fn() every render even though only the first
-  // result is kept, creating multiple client instances that race to process the URL hash.
-  const [supabase] = useState(() => createSupabaseBrowserClient());
-  const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true);
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, [supabase]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -51,6 +31,7 @@ export default function SetPasswordPage() {
     }
 
     setLoading(true);
+    const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
 
@@ -60,14 +41,6 @@ export default function SetPasswordPage() {
     }
     router.push('/');
     router.refresh();
-  }
-
-  if (!ready) {
-    return (
-      <div className="max-w-sm mx-auto mt-24 p-6 rounded-lg border border-neutral-200 bg-white">
-        <p className="text-sm text-neutral-500">Verifying your link...</p>
-      </div>
-    );
   }
 
   return (
