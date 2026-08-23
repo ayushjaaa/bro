@@ -966,6 +966,25 @@ wholesale distributor) — Sanity Studio is used there; role to be confirmed (se
 - **Shorter session timeout than the storefront** — admin sessions carry more sensitive actions
   (pricing, customer approval), so inactivity timeout should be stricter (e.g. 30–60 min) than a
   regular shopper's session.
+- **Free-plan correction (researched 2026-08-22, official Supabase docs):** custom **inactivity
+  timeout** and **maximum session lifetime** are dashboard settings gated to **Pro plan and
+  above** — not available on the Free plan the project is currently on. On Free, the access token
+  simply uses Supabase's fixed **1-hour default expiry** (the refresh token itself doesn't expire
+  on its own — it keeps the session alive via auto-refresh until an explicit sign-out or a
+  security event revokes it). **V1 accepts the 1-hour default** as good enough; the stricter
+  30–60 min inactivity policy is deferred until/unless the project moves to Pro ($25/month).
+- **What password verification actually is, precisely (clarified 2026-08-22 after a genuine point
+  of confusion in this planning session):** `admin_users` is **not** a substitute for password
+  checking — it's a separate, later authorization step. The full sequence:
+  1. **Authentication** (proves identity) happens entirely inside `signInWithPassword()`, verified
+     by Supabase's own server. A wrong password returns an error and **no session/cookie is ever
+     created** — the request never reaches any of our own code.
+  2. Only a **successful** password check produces a session (JWT). That JWT itself is the proof
+     the password was already correct — nothing downstream re-checks the password.
+  3. **Authorization** (is this already-verified identity allowed into the admin area) is the
+     `admin_users` lookup — in `proxy.ts` (fast layer) and again in `requireAdmin()` (DAL layer,
+     item 44b-i). Shopify has no role in either step; it's purely a data source once both checks
+     already passed.
 
 ### 44a-i. Admin Authorization — Exact Flow (researched 2026-08-22)
 
