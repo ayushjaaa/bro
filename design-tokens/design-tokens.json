@@ -1,0 +1,129 @@
+{
+  "$description": "Design tokens extracted from Figma — Gemini Distribution landing page (fileKey xtrWSXTTvYY0PPol4tbynj, node 1320:49). No Figma variables were bound to text or color; every value below was read directly off individual layers. Typography (below) and color/gradient sections 1-2 (Header+Hero, Brand Strip) are exact, pulled via the Figma API. Color sections 3-14 were extracted by pixel-sampling a full-resolution PNG export after the Figma API hit its Starter-plan monthly quota (20 calls/month) — those are flagged \"precision\": \"approx\" and are close but not exact hex values.",
+  "fontFamilies": {
+    "display": { "value": "Inter Tight", "usage": "The one real system font — ~95% of all text on the page." },
+    "logo": { "value": "NCS Radhiumz", "usage": "Header logo wordmark only. Treat as a brand asset, not a reusable token." },
+    "accentCard": { "value": "Denim-TRIAL", "usage": "One-off: 'Wholesale Benefits' glass card in the Stock-Up banner. Flagged inconsistency." },
+    "strayNewsletter": { "value": "Instrument Sans", "usage": "One-off stray span in footer newsletter placeholder. Flagged as likely a mistake — do not reuse." }
+  },
+  "fontWeights": {
+    "regular": 400,
+    "medium": 500,
+    "semibold": 600,
+    "bold": 700
+  },
+  "letterSpacing": {
+    "displayTight": { "value": "-0.02em", "note": "Consistent -2% of font size on every large heading (61px/49px/31px all divide out to the same ratio)." },
+    "labelWide": { "value": "0.07em", "note": "Consistent +7% tracking, always paired with text-transform: uppercase, exclusive to eyebrow/label pills." }
+  },
+  "typeScale": {
+    "display.statement": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "61px", "lineHeight": 1.15, "letterSpacing": "-1.22px", "usage": "Footer 'STAY CONNECTED WITH WHAT'S NEW' banner headline. Largest text on the page, used exactly once." },
+    "heading.h1": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "49px", "lineHeight": 1.2, "letterSpacing": "-0.98px", "usage": "Main section headline — repeats on every content section (hero, best sellers, benefits, stock-up, warehouse, testimonials, blog, FAQs, contact)." },
+    "heading.h1Compact": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "31px", "lineHeight": 1.2, "letterSpacing": "-0.62px", "usage": "Used once — brand/logo strip headline 'Everything your shelves need, in one catalogue'. Verify with design whether this should just be heading.h1 or heading.h3." },
+    "heading.h2": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "32px", "lineHeight": "normal", "letterSpacing": null, "usage": "'Canada' map label in the Warehouse & Shipping section." },
+    "heading.h3": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "28px", "lineHeight": 1.2, "letterSpacing": null, "textTransform": "capitalize", "usage": "Certification card titles: Licensed Business, Verified Distributor, Authentic Products, Secure Ordering, Serving All Canada." },
+    "heading.h4": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "25px", "lineHeight": 1.2, "letterSpacing": null, "usage": "Benefit-card titles ('Exclusive Wholesale Pricing' etc.), product-card counter digits." },
+    "heading.h4Alt": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "25px", "lineHeight": 1.2, "letterSpacing": null, "usage": "Benefit-card index numbers ('01 /', '02 /'...) — same size as heading.h4, lighter weight to sit behind the title visually." },
+    "heading.h5": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "24px", "lineHeight": "normal", "letterSpacing": null, "usage": "Contact page info-card titles: Address, Call Us, Email Us." },
+    "heading.h6": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "20px", "lineHeight": 1.2, "letterSpacing": null, "usage": "Product card titles, FAQ question text, form field labels." },
+    "body.xl": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "22px", "lineHeight": 1.3, "letterSpacing": null, "usage": "Testimonials — the featured (center, larger) quote only." },
+    "body.lg": { "fontFamily": "display", "fontWeight": "regular", "fontSize": "19px", "lineHeight": 1.3, "letterSpacing": null, "usage": "Testimonials — the two dimmed side-card quotes." },
+    "body.name": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "18px", "lineHeight": 1.5, "letterSpacing": null, "usage": "Testimonial author name." },
+    "body.titleSm": { "fontFamily": "display", "fontWeight": "bold", "fontSize": "18px", "lineHeight": 1.2, "letterSpacing": null, "usage": "Blog card title, footer column headers (Categories/Brands/Quick Links/Wholesale), contact form field labels." },
+    "body.base": { "fontFamily": "display", "fontWeight": "regular", "fontSize": "16px", "lineHeight": 1.3, "letterSpacing": null, "usage": "Default paragraph copy directly under an H1 — hero paragraph, section subheadlines that use Regular weight." },
+    "body.baseMedium": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "16px", "lineHeight": "1.2 to 1.3 (varies by section)", "letterSpacing": null, "usage": "Same size as body.base but Medium weight — testimonial role/company line, warehouse subheadline, feature descriptions, tab labels." },
+    "label.eyebrow": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "16px", "lineHeight": 0.9, "letterSpacing": "1.12px", "textTransform": "uppercase", "usage": "The small pill badge sitting above every section H1: Featured Brands, Benefits, Testimonials, Warehouse & Shipping, FAQs, Blog, Contact." },
+    "label.counter": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "16px", "lineHeight": 0.9, "letterSpacing": "1.12px", "textTransform": "uppercase", "usage": "Hero image carousel counter '02'. Same recipe as label.eyebrow but SemiBold instead of Medium." },
+    "button.label": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "16px", "lineHeight": 0.9, "letterSpacing": null, "usage": "Every CTA button on the page: Apply for Wholesale Account, Shop Wholesale, Browse full catalog, Send Message, Log in." },
+    "body.navSm": { "fontFamily": "display", "fontWeight": "regular", "fontSize": "14px", "lineHeight": 0.9, "letterSpacing": null, "usage": "Header primary nav links (Categories, Vape & e juices, Smoking, etc.) — the smallest nav text." },
+    "body.nav": { "fontFamily": "display", "fontWeight": "regular", "fontSize": "16px", "lineHeight": 0.9, "letterSpacing": null, "usage": "Top utility bar links ('Federal', 'Log in') and the free-shipping/18+ notice strip." },
+    "body.sm": { "fontFamily": "display", "fontWeight": "regular | medium | semibold (context-dependent)", "fontSize": "14px", "lineHeight": "1.2 to 1.3", "letterSpacing": null, "usage": "Blog category pills, form placeholder text, footer link lists, blog meta line ('June 2026 - 5 min read' is SemiBold)." },
+    "body.legal": { "fontFamily": "display", "fontWeight": "semibold", "fontSize": "16px", "lineHeight": 1.2, "letterSpacing": null, "usage": "Footer bottom bar: copyright notice, Terms & Conditions, Privacy Policy." },
+    "caption.xs": { "fontFamily": "display", "fontWeight": "medium | regular (context-dependent)", "fontSize": "13px", "lineHeight": 1.3, "letterSpacing": null, "usage": "Product card 'STARTING FROM' label, benefit-card descriptions, warehouse feature descriptions." },
+    "chip.rating": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "15px", "lineHeight": 1.5, "letterSpacing": null, "usage": "Testimonial star-rating badge number ('4.2')." },
+    "chip.quiet": { "fontFamily": "display", "fontWeight": "medium", "fontSize": "13px", "lineHeight": 1.5, "letterSpacing": null, "usage": "'Login to View Price' micro-copy under gated pricing." }
+  },
+  "typographyFlagsForDesignReview": [
+    "Header logo uses NCS Radhiumz (gradient); footer logo uses Inter Tight SemiBold (different gradient) — same wordmark rendered in two different typefaces.",
+    "'Wholesale Benefits' card (Stock-Up banner section) is entirely Denim-TRIAL — the only real UI copy on the page that isn't Inter Tight.",
+    "Footer 'Enter Your Email Address' placeholder mixes an Instrument Sans wrapper with Inter Tight character spans in the same line — looks like a stray paste from another file.",
+    "heading.h1 (49px) and heading.h1Compact (31px) are both 'H1-level' semantically but sized very differently, and h1Compact is used only once — confirm with design whether that's intentional or a legacy leftover."
+  ],
+  "colorPalette": {
+    "brand.purpleDeep": { "value": "#6b3aac", "precision": "exact", "usage": "Primary brand purple — the single most-used color on the page. Gradient start stop, glow-shadow base, and (pixel-confirmed) the fill/gradient-start on every CTA button, icon badge, and active state across all 14 sections." },
+    "brand.purpleBright": { "value": "#cc66ff", "precision": "exact", "usage": "Gradient end stop, always paired with brand.purpleDeep (Figma shorthand was #c6f)." },
+    "brand.purpleAccent": { "value": "#a855f7", "precision": "exact", "usage": "Logo wordmark gradient's final stop only." },
+    "surface.purplePanel": { "value": "#572f8b", "precision": "approx", "usage": "Flat (non-gradient) deep-purple background — used once, on the Promotions/'Margin-building programs' panel." },
+    "text.ink": { "value": "#050505", "precision": "exact", "usage": "Primary text color everywhere on the page — never pure #000." },
+    "text.ink50": { "value": "rgba(5,5,5,0.5)", "precision": "exact", "usage": "Secondary/muted text (paragraphs, subheadlines) — ink at 50% opacity, not a separate gray." },
+    "text.ink20": { "value": "rgba(5,5,5,0.2)", "precision": "exact", "usage": "Faint dividers, inactive progress track, inactive carousel-arrow border." },
+    "text.ink8": { "value": "rgba(5,5,5,0.08)", "precision": "exact", "usage": "Very faint fill — inactive progress bar segments." },
+    "border.purple10": { "value": "rgba(107,58,172,0.1)", "precision": "exact", "usage": "Hairline section-divider borders." },
+    "border.purple15": { "value": "rgba(107,58,172,0.15)", "precision": "exact", "usage": "Logo-tile grid borders." },
+    "border.purple30": { "value": "rgba(107,58,172,0.3)", "precision": "exact", "usage": "Secondary-button border; also the base color of the pill-badge glow shadow." },
+    "surface.white": { "value": "#ffffff", "precision": "exact", "usage": "Header bar, cards, input fields, most section backgrounds." },
+    "surface.lilacWash": { "value": "#f7f3ff", "precision": "exact", "usage": "Hero background wash; approx-confirmed reused as the page background on Testimonials and Warehouse & Shipping sections." },
+    "surface.nearBlack": { "value": "#050505", "precision": "exact", "usage": "Top utility strip background; approx-confirmed as the fill for EVERY dark eyebrow-pill badge across all 14 sections (Product Categories, Featured Brands, Benefits, Promotions, Warehouse & Shipping, Testimonials, FAQs, Blog, Contact)." },
+    "surface.cardGray": { "value": "#f9f9f9", "precision": "approx", "usage": "Neutral light-gray card background — product cards, benefit cards, contact form panel, info cards." },
+    "status.ratingGold": { "value": "#f4c430", "precision": "approx", "usage": "Testimonial star ratings — the only non-purple, non-neutral accent color found anywhere on the page." }
+  },
+  "gradients": {
+    "logoWordmark": { "type": "linear", "angle": "90deg", "stops": [{ "color": "#050505", "position": "73.889%" }, { "color": "#6b3aac", "position": "86.944%" }, { "color": "#a855f7", "position": "100%" }], "precision": "exact", "usage": "Header logo text (bg-clip-text, transparent fill)." },
+    "brandCta": { "type": "linear", "angle": "90deg", "stops": [{ "color": "#6b3aac", "position": "64.288%" }, { "color": "#cc66ff", "position": "100%" }], "precision": "exact (sec 1-2), approx-confirmed reuse elsewhere", "usage": "THE workhorse gradient. Primary hero CTA, active hero-carousel bar, every Explore/Shop/Browse/Send/Subscribe button across all 14 sections, blog arrow buttons, FAQ expanded-item background." },
+    "heroWash": { "type": "linear", "angle": "180deg", "stops": [{ "color": "#f7f3ff", "position": "0%" }, { "color": "rgba(247,243,255,0)", "position": "100%" }], "precision": "exact", "usage": "Hero section background panel, rounded 60px." },
+    "sectionGlowBand": { "type": "linear", "angle": "180deg", "stops": [{ "color": "rgba(107,58,172,0)", "position": "0%" }, { "color": "rgba(107,58,172,0.1)", "position": "53.409%" }, { "color": "rgba(107,58,172,0)", "position": "100%" }], "precision": "exact", "usage": "Brand/Logo-Strip section background — a soft purple glow peaking in the vertical middle." },
+    "stockUpBanner": { "type": "linear (diagonal, estimated)", "angle": "~135deg", "stops": [{ "color": "#6b3aac", "position": "0% (top-left)" }, { "color": "lighter lavender/pink ~#c9a6e8", "position": "100% (bottom-right)" }], "precision": "approx", "usage": "Stock Up Banner section background, with a blurred building photo composited underneath and product photos in the foreground." },
+    "footerMesh": { "type": "radial/mesh blend (not a clean 2-stop linear)", "stops": [{ "color": "#ffffff", "position": "top" }, { "color": "~#dad5e8 lilac / ~#f5e1ed pink / ~#ded3ed blue-lilac", "position": "bottom, blended patches" }], "precision": "approx", "usage": "Footer section background — reads as a soft 'aurora' blur behind the newsletter block. Best implemented as layered radial-gradients or a background image, not a single linear-gradient." },
+    "certificationHighlight": { "type": "linear", "angle": "180deg (estimated)", "stops": [{ "color": "~#c87cf1", "position": "0%" }, { "color": "#ffffff", "position": "100%" }], "precision": "approx", "usage": "Background photo panel behind the 'Authentic Products' certification card — the one highlighted card of five." }
+  },
+  "effects": {
+    "shadowBadgeGlow": { "value": "0px 4px 20px 0px rgba(107,58,172,0.3)", "precision": "exact", "usage": "Hero pill badge — soft purple glow, no spread, large blur." },
+    "shadowButtonHairline": { "value": "0px 0px 4px 0px rgba(51,51,51,0.25)", "precision": "exact", "usage": "Primary hero CTA button — tight neutral edge-definition shadow." },
+    "shadowCardSoft": { "value": "0px 8px 24px 0px rgba(5,5,5,0.06)", "precision": "approx", "usage": "Consistent 'resting elevation' shadow across testimonial, product, benefit, and contact cards." },
+    "glassmorphism": { "value": "background: rgba(255,255,255,0.18); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.3)", "precision": "approx", "usage": "'Wholesale Benefits' card floating over the Stock Up Banner — the one true frosted-glass element on the page." },
+    "watermarkGhost": { "value": "opacity ~0.05-0.08, surface.lilacWash-toned fill", "precision": "approx", "usage": "Oversized 'Gemini Distribution' watermark text behind the footer newsletter headline." }
+  },
+  "colorFlagsForDesignReview": [
+    "One dominant accent color used with total discipline across all 14 sections (#6b3aac -> #cc66ff) — a strength worth codifying as a single locked token pair so it's never redefined slightly differently by accident.",
+    "Footer logo mark uses a solid icon + solid black text, while the header logo uses a gradient wordmark — a second inconsistency on top of the font mismatch already flagged in typography.",
+    "The 'Authentic Products' certification card is the only one of 5 with a photographic/gradient treatment instead of a flat white card — confirm this is an intentional featured callout, not a leftover state.",
+    "No obvious pattern governs which sections sit on white vs. the lilac-wash background (Testimonials and Warehouse & Shipping are lilac; Benefits, Blog, Contact, FAQs are white) — worth checking whether that's a deliberate alternating rhythm or inconsistent."
+  ],
+  "layoutPrimitives": {
+    "pageWidth": { "value": "1440px", "precision": "exact", "usage": "Root frame width." },
+    "contentMaxWidth": { "value": "1240px", "precision": "exact", "usage": "= 1440 - 2*100. Used in 9 of 14 sections (Header, Featured Products, Best Sellers, Benefits, Stock Up Banner, Warehouse, Testimonials, FAQs, Blog, Contact)." },
+    "horizontalMargin": { "value": "100px", "precision": "exact", "usage": "Standard side margin producing the 1240px content column." },
+    "sectionVerticalPadding": { "value": "50px top + 50px bottom", "precision": "exact", "usage": "Standard section padding, used by the same 9 sections as contentMaxWidth." },
+    "headerBlockToContentGap": { "value": "60px", "precision": "exact", "usage": "Gap between a section's eyebrow+H1+subhead block (consistently 244px tall) and its first content row — seen in Best Sellers, Blog, Contact and others sharing this header pattern." },
+    "standardGridGap": { "value": "32px", "precision": "exact", "usage": "Best Sellers product grid, Blog card grid, Benefits card row, Contact form-vs-info-column gap. Divides the 1240px content width evenly for 3-column grids (392px card + 32px gap x2 = 1240)." }
+  },
+  "spacingScale": {
+    "space3xs": { "value": "4px", "usage": "Icon-in-box padding (20px icon centered in a 28x24 box)." },
+    "space2xs": { "value": "6px", "usage": "Eyebrow-pill inner inset (Blog/Contact style pills); also the tight 3-sided card frame inset seen on Blog cards." },
+    "spaceXs": { "value": "8px", "usage": "Tab-pill container inset (Best Sellers tab group)." },
+    "spaceSm": { "value": "20px", "usage": "Certifications grid gap (the one section using a tighter-than-standard gap); card image-to-text gap inside a Best Sellers product card; Blog card's bottom inset (looser than its other 3 sides)." },
+    "spaceMd": { "value": "24px", "usage": "Benefits card internal padding (symmetric on all 4 sides of a 285x289 card); Contact page's 3 stacked info-card vertical gap." },
+    "spaceLg": { "value": "32px", "usage": "THE standard grid column gap across the page; also Contact form-panel internal padding and the gap between Contact's form column and info-card column." },
+    "spaceXl": { "value": "50px", "usage": "Standard section top/bottom padding; Best Sellers' row-to-row and row-to-button gaps; Promotions panel's (non-standard) side margins." },
+    "space2xl": { "value": "60px", "usage": "Header-block-to-content gap; Certifications section's (non-standard) top/bottom padding." },
+    "space3xl": { "value": "100px", "usage": "Standard page horizontal margin, producing the 1240px content column." },
+    "note": "There isn't one shared base unit for the whole page. Component-level spacing (icon padding, pill insets, card padding) clusters on a 4px increment (4/6/8/20/24/32). Section-level macro spacing uses round decades (50/60/100) that are NOT multiples of 8 — treat as two independent scales, not one grid extended upward."
+  },
+  "radiusScale": {
+    "radiusNone": { "value": "0px", "usage": "Full-bleed section backgrounds (map illustration, banner photography) — radius lives on inner content panels, not the section shell." },
+    "radiusSm": { "value": "~12-16px", "precision": "approx", "usage": "Contact form input fields, smaller UI chrome." },
+    "radiusMd": { "value": "~20px", "precision": "exact (hero image), approx (rest)", "usage": "Hero banner image (exact 20px); approx-matches product/blog/testimonial/benefit card images." },
+    "radiusLg": { "value": "~40px", "precision": "approx", "usage": "Large banner panels: Promotions panel, Stock Up Banner." },
+    "radiusXl": { "value": "60px", "precision": "exact", "usage": "Hero background panel." },
+    "radiusCircle": { "value": "41.4px (half of an 82.8px diameter)", "precision": "exact", "usage": "Carousel arrow buttons — fully circular." },
+    "radiusFull": { "value": "50-99px depending on element height (always fully rounded)", "precision": "exact (sec 1-2), approx-confirmed elsewhere", "usage": "Every button and pill badge on the page: hero CTA (50px), secondary Log-in button (69px), carousel progress track (99px), every eyebrow pill across all 14 sections." }
+  },
+  "sectionLayoutDetail": {
+    "note": "Full per-section breakdown (outer padding, grid gaps, card internal padding, one representative card's measurements) is in spacing-report.md alongside this file — kept out of this JSON to avoid duplicating a large narrative table in a machine-consumable format. Two sections deviate from the standard 100px/50px pattern: the Promotions panel uses 50px side margins (not 100px), and Certifications uses 60px top/bottom padding (not 50px) plus a tighter 20px grid gap with an intentional left-edge card bleed."
+  },
+  "layoutFlagsForDesignReview": [
+    "Promotions panel uses 50px side margins vs. the page's standard 100px — confirm intentional (different visual weight for a 'statement' panel) vs. drift.",
+    "Certifications section uses 60px top/bottom padding (vs. standard 50px) and a tighter 20px grid gap (vs. standard 32px), with its first card intentionally bleeding off the left edge — confirm the overflow/crop is deliberate.",
+    "Contact and Footer appear to share one layer subtree in the Figma file rather than being cleanly separated top-level frames, which makes Footer's spacing screenshot-approximated rather than metadata-exact, and makes future edits to either section riskier for whoever maintains the Figma file."
+  ]
+}

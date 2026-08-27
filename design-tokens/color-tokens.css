@@ -1,0 +1,211 @@
+/* ============================================================
+   COLOR DESIGN TOKENS — Gemini Distribution Landing Page
+   Built from color-report.md + design-tokens-explained.md
+   Tailwind CSS v4 — CSS-first @theme syntax.
+   @import this file into your globals.css, before base styles.
+
+   PRECISION: Header+Hero and Brand/Logo Strip sections were pulled
+   directly from Figma layer data via the API — those values are
+   EXACT. The other 12 sections were extracted by pixel-sampling a
+   full-resolution PNG export after the Figma API hit its Starter-
+   plan monthly quota (20 calls/month) — those are close
+   approximations (±a few RGB points), not exact hex from the file.
+   Every token below is commented `exact` or `approx` so you always
+   know how much to trust it.
+
+   THE ONE-SENTENCE SUMMARY: this entire 14-section page uses exactly
+   ONE accent color — a purple gradient from #6b3aac to #cc66ff, at
+   90° (left-to-right) — reused with total consistency across every
+   button, active state, icon badge, and the logo. Text is never pure
+   black (it's #050505, "ink," muted via opacity not new grays), and
+   borders are never plain gray (always brand-purple at low opacity).
+   The only real exception anywhere on the page is the gold star-
+   rating icons in Testimonials.
+   ============================================================ */
+
+@theme {
+  /* ---------- Brand purple — gradient stops ---------- */
+  --color-brand-purple-deep: #6b3aac;        /* exact — primary brand purple, used everywhere */
+  --color-brand-purple-bright: #cc66ff;      /* exact — Figma shorthand #c6f, gradient end stop */
+  --color-brand-purple-accent: #a855f7;      /* exact — logo wordmark gradient's final stop only */
+
+  /* ---------- Flat purple surface ---------- */
+  --color-surface-purple-panel: #572f8b;     /* approx — used once, on the Promotions/"Margin-building programs" panel */
+
+  /* ---------- Text — one ink color, muted via alpha, never a separate gray ---------- */
+  --color-text-ink: #050505;                 /* exact — primary text, never pure #000 */
+  --color-text-ink-50: rgb(5 5 5 / 0.5);     /* exact — secondary/muted text (paragraphs, subheadlines) */
+  --color-text-ink-20: rgb(5 5 5 / 0.2);     /* exact — faint dividers, inactive progress track, inactive carousel-arrow border */
+  --color-text-ink-8: rgb(5 5 5 / 0.08);     /* exact — very faint fill, inactive progress bar segments */
+
+  /* ---------- Borders — always soft brand-purple at low opacity, never plain gray ---------- */
+  --color-border-purple-10: rgb(107 58 172 / 0.1);   /* exact — hairline section-divider borders */
+  --color-border-purple-15: rgb(107 58 172 / 0.15);  /* exact — logo-tile grid borders */
+  --color-border-purple-30: rgb(107 58 172 / 0.3);   /* exact — secondary-button border; pill-badge glow shadow base */
+
+  /* ---------- Surfaces ---------- */
+  --color-surface-white: #ffffff;            /* exact — header bar, cards, input fields, most section backgrounds */
+  --color-surface-lilac-wash: #f7f3ff;       /* exact — hero wash; approx-confirmed reused on Testimonials + Warehouse & Shipping backgrounds */
+  --color-surface-near-black: #050505;       /* exact — top utility strip; approx-confirmed as the fill for EVERY dark "eyebrow pill" badge across all 14 sections (Product Categories, Featured Brands, Benefits, Promotions, Warehouse & Shipping, Testimonials, FAQs, Blog, Contact) */
+  --color-surface-card-gray: #f9f9f9;        /* approx — product/benefit/contact card backgrounds */
+
+  /* ---------- Status accent ---------- */
+  --color-status-rating-gold: #f4c430;       /* approx — testimonial star ratings; the ONLY non-purple, non-neutral color anywhere on the page */
+
+  /* ==========================================================
+     SHADOWS
+     Tailwind v4 turns --shadow-{name} into a `shadow-{name}` utility.
+     ========================================================== */
+  --shadow-badge-glow: 0px 4px 20px 0px rgb(107 58 172 / 0.3);      /* exact — hero pill badge: soft purple glow, no spread, large blur */
+  --shadow-button-hairline: 0px 0px 4px 0px rgb(51 51 51 / 0.25);   /* exact — primary CTA button: tight neutral edge-definition shadow */
+  --shadow-card-soft: 0px 8px 24px 0px rgb(5 5 5 / 0.06);           /* approx — consistent "resting elevation" on testimonial/product/benefit/contact cards */
+}
+
+/* ==========================================================
+   GRADIENTS
+   Tailwind v4 has no first-class gradient token, so these are
+   plain CSS custom properties + matching @utility classes.
+   Use as `background-image: var(--gradient-brand-cta)` or the
+   generated `.bg-gradient-brand-cta` utility class below.
+   ========================================================== */
+:root {
+  /* Logo wordmark gradient (exact) — bg-clip-text on the header logo text */
+  --gradient-logo-wordmark: linear-gradient(
+    90deg,
+    #050505 73.889%,
+    #6b3aac 86.944%,
+    #a855f7 100%
+  );
+
+  /* THE workhorse gradient (exact stops, approx-confirmed reuse everywhere) —
+     every "Explore/Shop/Browse/Send/Subscribe" CTA button, the active hero-
+     carousel progress bar, the FAQ accordion's expanded-row background,
+     blog arrow buttons, footer subscribe button. One token, 15+ uses. */
+  --gradient-brand-cta: linear-gradient(
+    90deg,
+    #6b3aac 64.288%,
+    #cc66ff 100%
+  );
+
+  /* Hero background wash (exact) — solid lilac fading to transparent, top-to-bottom */
+  --gradient-hero-wash: linear-gradient(
+    180deg,
+    #f7f3ff 0%,
+    rgb(247 243 255 / 0) 100%
+  );
+
+  /* Brand-strip soft glow band (exact) — transparent, rising to 10% purple
+     exactly at the vertical middle of the section, fading back to transparent */
+  --gradient-section-glow-band: linear-gradient(
+    180deg,
+    rgb(107 58 172 / 0) 0%,
+    rgb(107 58 172 / 0.1) 53.409%,
+    rgb(107 58 172 / 0) 100%
+  );
+
+  /* Stock Up banner background (approx) — diagonal, top-left brand purple
+     fading to a lighter lavender/pink bottom-right. In the real design a
+     blurred building photo + product photography are composited on top —
+     this gradient alone won't fully reproduce the banner, just its base tone. */
+  --gradient-stock-up-banner: linear-gradient(
+    135deg,
+    #6b3aac 0%,
+    #c9a6e8 100%
+  );
+
+  /* Footer mesh background (approx) — a soft multi-point blend ("aurora"
+     look), NOT a clean 2-stop linear gradient. Best-effort CSS approximation
+     using layered radial gradients; the real file likely uses a mesh-gradient
+     or blurred-shapes technique that a single gradient can't fully capture. */
+  --gradient-footer-mesh: radial-gradient(
+      circle at 20% 90%,
+      rgb(245 225 237 / 0.8) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 85% 85%,
+      rgb(222 211 237 / 0.8) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, #ffffff 0%, #ded5e8 100%);
+
+  /* Certification-card highlight background (approx) — vivid purple photo
+     panel fading to white, top-to-bottom. Used on exactly one of five
+     certification cards ("Authentic Products") as a featured callout. */
+  --gradient-certification-highlight: linear-gradient(
+    180deg,
+    #c87cf1 0%,
+    #ffffff 100%
+  );
+}
+
+@utility bg-gradient-logo-wordmark {
+  background-image: var(--gradient-logo-wordmark);
+}
+@utility bg-gradient-brand-cta {
+  background-image: var(--gradient-brand-cta);
+}
+@utility bg-gradient-hero-wash {
+  background-image: var(--gradient-hero-wash);
+}
+@utility bg-gradient-section-glow-band {
+  background-image: var(--gradient-section-glow-band);
+}
+@utility bg-gradient-stock-up-banner {
+  background-image: var(--gradient-stock-up-banner);
+}
+@utility bg-gradient-footer-mesh {
+  background-image: var(--gradient-footer-mesh);
+}
+@utility bg-gradient-certification-highlight {
+  background-image: var(--gradient-certification-highlight);
+}
+
+/* ==========================================================
+   GLASSMORPHISM
+   The one true frosted-glass element on the page: the "Wholesale
+   Benefits" card floating over the Stock Up banner (approx — exact
+   blur radius isn't recoverable from a flattened screenshot, but the
+   translucent/frosted look is unambiguous).
+   ========================================================== */
+@utility glass-card-brand {
+  background: rgb(255 255 255 / 0.18);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgb(255 255 255 / 0.3);
+}
+
+/* ==========================================================
+   USAGE NOTES (from design-tokens-explained.md)
+
+   1. One accent color, used with total discipline. Every CTA button
+      on the page — across all 14 sections — pulls from the exact
+      same `--gradient-brand-cta`. Don't introduce a second accent
+      color; there isn't one anywhere in the source file.
+
+   2. Text is never pure black. Anything that looks "gray" or "muted"
+      is `--color-text-ink` at a lower opacity (50%/20%/8%), not a
+      separate gray value. Use the ink-* scale instead of inventing
+      new gray tokens.
+
+   3. Borders are never plain gray either — always brand-purple at
+      10-30% opacity. Even structural card outlines carry brand color.
+
+   4. The dark "eyebrow pill" badge (`--color-surface-near-black` bg,
+      white text, small icon) is ONE reusable component, seen 9 times:
+      Product Categories, Featured Brands, Benefits, Promotions,
+      Warehouse & Shipping, Testimonials, FAQs, Blog, Contact.
+
+   5. The only true glassmorphic element on the page is the
+      "Wholesale Benefits" card — use `.glass-card-brand` for that,
+      and nowhere else unless a new design explicitly calls for it.
+
+   6. Design flags worth raising: the footer logo uses a solid icon +
+      solid black text while the header logo uses a gradient wordmark
+      (inconsistent treatment of the same brand mark); the "Authentic
+      Products" certification card is the only one of 5 with a photo/
+      gradient treatment instead of flat white; no obvious rule
+      governs which sections sit on white vs. the lilac-wash
+      background (Testimonials + Warehouse & Shipping are lilac,
+      Benefits/Blog/Contact/FAQs are white).
+   ========================================================== */
