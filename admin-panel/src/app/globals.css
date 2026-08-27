@@ -3,6 +3,29 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Dashboard theme -- single source of truth for the redesigned Dashboard page
+     (src/app/(dashboard)/page.tsx + src/features/dashboard/**). Change a color here and every
+     dashboard widget that references it updates together -- nothing hardcodes a hex value
+     directly in a component. */
+  --dash-hero-from: #ea580c; /* hero gradient card, top-left */
+  --dash-hero-to: #7c2d12; /* hero gradient card, bottom-right */
+  --dash-card-bg: #ffffff;
+  --dash-card-border: #e5e7eb;
+  --dash-text-muted: #6b7280;
+
+  /* Funnel stage colors (Categories -> Sub-categories -> Brands -> Product Lines -> Flavours) */
+  --dash-funnel-1: #2563eb;
+  --dash-funnel-2: #a855f7;
+  --dash-funnel-3: #ec4899;
+  --dash-funnel-4: #f97316;
+  --dash-funnel-5: #10b981;
+
+  /* Status/semantic colors reused across warning tiles and badges */
+  --dash-danger: #dc2626;
+  --dash-warning: #d97706;
+  --dash-success: #059669;
+  --dash-info: #0284c7;
 }
 
 @theme inline {
@@ -10,6 +33,21 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-dash-hero-from: var(--dash-hero-from);
+  --color-dash-hero-to: var(--dash-hero-to);
+  --color-dash-card-bg: var(--dash-card-bg);
+  --color-dash-card-border: var(--dash-card-border);
+  --color-dash-text-muted: var(--dash-text-muted);
+  --color-dash-funnel-1: var(--dash-funnel-1);
+  --color-dash-funnel-2: var(--dash-funnel-2);
+  --color-dash-funnel-3: var(--dash-funnel-3);
+  --color-dash-funnel-4: var(--dash-funnel-4);
+  --color-dash-funnel-5: var(--dash-funnel-5);
+  --color-dash-danger: var(--dash-danger);
+  --color-dash-warning: var(--dash-warning);
+  --color-dash-success: var(--dash-success);
+  --color-dash-info: var(--dash-info);
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,171 +1,162 @@
-"use client";
+import Link from 'next/link';
+import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
+import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
+import { listProductLines } from '@/data/products';
+import { requireAdmin } from '@/data/admin-auth';
+import { checkWebhookHealth } from '@/data/webhook-health';
+import LiveDashboardStats, {
+  type AttentionItem,
+  type FunnelStage,
+} from '@/features/dashboard/components/LiveDashboardStats';
+import ProductHealthPanel, {
+  type ProductHealthRow,
+  type VariantSkuRow,
+} from '@/features/dashboard/components/ProductHealthPanel';
+import WebhookHealthBadge from '@/features/dashboard/components/WebhookHealthBadge';
+import ConversionFunnel from '@/features/dashboard/components/ConversionFunnel';
+import { getFunnelStats } from '@/data/funnel';
 
-import Link from "next/link";
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
-import {
-  breadcrumbFor,
-  flavorCountForBrand,
-  flavorCountForCategory,
-  flavorCountForLine,
-  flavorCountForSubcategory,
-} from "@/lib/helpers";
+function getReadOnlyClient() {
+  // Both tables allow public SELECT via RLS (see 003/004 migrations) -- service role is used here
+  // purely for convenience in a Server Component, not because the data is sensitive.
+  return createServiceRoleClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
-export default function OverviewPage() {
-  const router = useRouter();
-  const {
-    categories,
-    subcategories,
-    brands,
-    productLines,
-    flavors,
-    selectedContext,
-    setSelectedContext,
-  } = useStore();
+export default async function OverviewPage() {
+  const [admin, categories, subcategories, brands, products, webhookHealth, funnelStats] = await Promise.all([
+    requireAdmin(),
+    listCategories(),
+    listSubcategories(),
+    listBrands(),
+    listProductLines(),
+    checkWebhookHealth(),
+    getFunnelStats(),
+  ]);
 
-  const breadcrumb = breadcrumbFor(selectedContext, categories, subcategories, brands, productLines);
+  const supabase = getReadOnlyClient();
+  const [{ data: productHealthRows }, { data: skuIndexRows }] = await Promise.all([
+    supabase.from('product_health_snapshot').select('*'),
+    supabase.from('variant_sku_index').select('*'),
+  ]);
 
-  const rows = useMemo(() => {
-    if (selectedContext.brandId) {
-      // show product lines within brand
-      return productLines
-        .filter((l) => l.brandId === selectedContext.brandId)
-        .map((l) => ({
-          id: l.id,
-          name: l.name,
-          count: flavorCountForLine(flavors, l.id),
-          kind: "Product Line" as const,
-          onOpen: () =>
-            router.push("/products/bulk-add"),
-          onOpenCtx: () =>
-            setSelectedContext({ ...selectedContext, productLineId: l.id }),
-        }));
-    }
-    if (selectedContext.subcategoryId) {
-      return brands
-        .filter((b) => b.subcategoryId === selectedContext.subcategoryId)
-        .map((b) => ({
-          id: b.id,
-          name: b.name,
-          count: flavorCountForBrand(flavors, productLines, b.id),
-          kind: "Brand" as const,
-          onOpenCtx: () => setSelectedContext({ ...selectedContext, brandId: b.id }),
-        }));
-    }
-    if (selectedContext.categoryId) {
-      return subcategories
-        .filter((s) => s.categoryId === selectedContext.categoryId)
-        .map((s) => ({
-          id: s.id,
-          name: s.name,
-          count: flavorCountForSubcategory(flavors, productLines, brands, s.id),
-          kind: "Sub-category" as const,
-          onOpenCtx: () => setSelectedContext({ ...selectedContext, subcategoryId: s.id }),
-        }));
-    }
-    return categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      count: flavorCountForCategory(flavors, productLines, brands, subcategories, c.id),
-      kind: "Category" as const,
-      onOpenCtx: () => setSelectedContext({ categoryId: c.id }),
-    }));
-  }, [selectedContext, categories, subcategories, brands, productLines, flavors, router, setSelectedContext]);
+  const totalFlavours = products.reduce((sum, p) => sum + p.variantCount, 0);
+  const incomplete = products.filter((p) => p.variantCount === 0);
+  const unpublished = products.filter((p) => p.variantCount > 0 && !p.isPublished);
+  const publishable = products.filter((p) => p.variantCount > 0);
+  const publishedCount = publishable.filter((p) => p.isPublished).length;
+
+  const initialInventoryRows = products.flatMap((p) =>
+    p.variantStock
+      .filter((v): v is { inventoryItemId: string; quantity: number; title: string } => !!v.inventoryItemId)
+      .map((v) => ({ inventory_item_id: v.inventoryItemId, quantity: v.quantity }))
+  );
+
+  const attentionLookup: AttentionItem[] = products.flatMap((p) =>
+    p.variantStock
+      .filter((v): v is { inventoryItemId: string; quantity: number; title: string } => !!v.inventoryItemId)
+      .map((v) => ({
+        inventoryItemId: v.inventoryItemId,
+        productId: p.id,
+        productTitle: p.title,
+        flavourTitle: v.title,
+        imageUrl: p.imageUrl,
+      }))
+  );
+
+  const funnelStages: FunnelStage[] = [
+    { label: 'Categories', value: categories.length, colorVar: '--dash-funnel-1' },
+    { label: 'Sub-categories', value: subcategories.length, colorVar: '--dash-funnel-2' },
+    { label: 'Brands', value: brands.length, colorVar: '--dash-funnel-3' },
+    { label: 'Product Lines', value: products.length, colorVar: '--dash-funnel-4' },
+    { label: 'Flavours', value: totalFlavours, colorVar: '--dash-funnel-5' },
+  ];
 
   return (
-    <div className="max-w-5xl mx-auto p-6 flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Overview</h1>
-          <p className="text-sm text-neutral-500 mt-0.5">
-            {breadcrumb.length > 0 ? (
-              <span className="flex items-center gap-1 flex-wrap">
-                <button onClick={() => setSelectedContext({})} className="text-emerald-700 hover:underline">
-                  All
-                </button>
-                {breadcrumb.map((b, i) => (
-                  <span key={i} className="flex items-center gap-1">
-                    <span className="text-neutral-300">/</span>
-                    <span>{b}</span>
-                  </span>
-                ))}
-              </span>
-            ) : (
-              "Every category, sub-category, brand and product line at a glance."
-            )}
+    <div className="max-w-6xl mx-auto p-6 flex flex-col gap-5">
+      <div className="flex justify-end">
+        <WebhookHealthBadge initial={webhookHealth} />
+      </div>
+
+      <LiveDashboardStats
+        adminEmail={admin.email}
+        initialInventoryRows={initialInventoryRows}
+        attentionLookup={attentionLookup}
+        funnelStages={funnelStages}
+        publishedCount={publishedCount}
+        publishableCount={publishable.length}
+        incomplete={incomplete.map((p) => ({ id: p.id, title: p.title }))}
+        unpublished={unpublished.map((p) => ({ id: p.id, title: p.title, variantCount: p.variantCount }))}
+      />
+
+      <ProductHealthPanel
+        initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]}
+        initialSkuIndex={(skuIndexRows ?? []) as VariantSkuRow[]}
+        allBrands={brands.map((b) => ({ id: b.id, name: b.name }))}
+        allSubcategories={subcategories.map((s) => ({ id: s.id, name: s.name }))}
+      />
+
+      <ConversionFunnel stats={funnelStats} />
+
+      {/* Incomplete Product Lines -- 0 flavours, not sellable yet (§0a) */}
+      <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
+        <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+          <span className="text-sm font-medium text-neutral-700">
+            ⚠ Incomplete Product Lines — 0 flavours
+          </span>
+          <span className="text-xs text-dash-text-muted">{incomplete.length}</span>
+        </div>
+        {incomplete.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-dash-text-muted text-center">
+            None — every Product Line has at least one Flavour.
           </p>
-        </div>
-        <Link
-          href="/products/new"
-          className="rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 transition"
-        >
-          + Add Flavor
-        </Link>
+        ) : (
+          <ul>
+            {incomplete.map((p) => {
+              const numericId = p.id.split('/').pop();
+              return (
+                <li key={p.id} className="border-b border-neutral-50 last:border-0">
+                  <Link
+                    href={`/products/${numericId}/variants`}
+                    className="flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50"
+                  >
+                    <span className="font-medium text-neutral-800">{p.title}</span>
+                    <span className="text-dash-warning text-xs font-medium">+ Add Flavours</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          { label: "Categories", value: categories.length },
-          { label: "Sub-categories", value: subcategories.length },
-          { label: "Brands", value: brands.length },
-          { label: "Product Lines", value: productLines.length },
-          { label: "Flavors", value: flavors.length },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-lg border border-neutral-200 bg-white p-4">
-            <div className="text-2xl font-semibold text-neutral-900">{stat.value}</div>
-            <div className="text-xs text-neutral-500 mt-1">{stat.label}</div>
+      {/* Ready-but-not-live Product Lines -- has flavours, never published (§0a fact 5) */}
+      {unpublished.length > 0 && (
+        <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
+          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+            <span className="text-sm font-medium text-neutral-700">○ Ready but not published</span>
+            <span className="text-xs text-dash-text-muted">{unpublished.length}</span>
           </div>
-        ))}
-      </div>
-
-      <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-neutral-100 text-sm font-medium text-neutral-700">
-          {selectedContext.brandId
-            ? "Product lines"
-            : selectedContext.subcategoryId
-            ? "Brands"
-            : selectedContext.categoryId
-            ? "Sub-categories"
-            : "Categories"}
-        </div>
-        <ul>
-          {rows.map((r) => (
-            <li key={r.id} className="border-b border-neutral-50 last:border-0">
-              <button
-                onClick={r.onOpenCtx}
-                className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50 text-left"
-              >
-                <span className="font-medium text-neutral-800">{r.name}</span>
-                <span className="text-neutral-400">{r.count} flavor{r.count === 1 ? "" : "s"}</span>
-              </button>
-            </li>
-          ))}
-          {rows.length === 0 && (
-            <li className="px-4 py-6 text-sm text-neutral-400 text-center">Nothing here yet.</li>
-          )}
-        </ul>
-      </div>
-
-      {selectedContext.productLineId && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 flex items-center justify-between">
-          <div className="text-sm text-emerald-800">
-            <strong>{breadcrumb[breadcrumb.length - 1]}</strong> selected — add flavors directly into it.
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href="/products/new"
-              className="rounded-md bg-white border border-emerald-300 text-emerald-700 text-sm font-medium px-3 py-1.5 hover:bg-emerald-100"
-            >
-              Add one flavor
-            </Link>
-            <Link
-              href="/products/bulk-add"
-              className="rounded-md bg-emerald-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-emerald-700"
-            >
-              Add multiple (bulk list)
-            </Link>
-          </div>
+          <ul>
+            {unpublished.map((p) => {
+              const numericId = p.id.split('/').pop();
+              return (
+                <li key={p.id} className="border-b border-neutral-50 last:border-0">
+                  <Link
+                    href={`/products/${numericId}`}
+                    className="flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50"
+                  >
+                    <span className="font-medium text-neutral-800">{p.title}</span>
+                    <span className="text-dash-text-muted text-xs">
+                      {p.variantCount} flavour{p.variantCount === 1 ? '' : 's'} — view to publish
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </div>

@@ -293,15 +293,25 @@ is a `'use server'` function, it lives in `features/*/actions.ts` and is ≤10 l
 - **DAL:** `data/product-lines.ts` → `listProductLines()`
 - **Shopify API:** `products(first: N, query: "...")` query
 
-### `(dashboard)/products/new` — Add Product Line — `/products/new` — **DEFERRED**
+### `(dashboard)/products/new` — Add Product Line — `/products/new` — **BUILT 2026-08-24**
 
-UI/UX removed 2026-08-23 (see §3a) — was designed assuming Taxonomy already existed to pick from,
-which is the wrong build order (Taxonomy page must be built and usable first). Page currently
-shows a placeholder. The underlying Shopify mutation sequence researched earlier is still
-correct and will be reused once this page's UI/UX is actually (re)designed:
-`stagedUploadsCreate` → upload → `productCreate` (title, `productOptions: [{name:"Flavor"}]`,
-`metafields` for Brand — no `linkedMetafield`, avoids DECISIONS.md item 43's gotcha) →
-`publishablePublish`. Not to be implemented until Taxonomy is done.
+Built and live-tested once Taxonomy + the Filter system (§7) were both working. `ProductLineForm`
+(Client Component) receives the same `categories`/`subcategories`/`brands`/`filterDefinitions`/
+`subcategoryFilterLinks` props as the Taxonomy page — selecting a Brand locally derives its
+Sub-category (no extra round-trip) and renders only that Sub-category's `product`-level filters
+(§7.2); `native` filters render nothing (their own dedicated inputs live elsewhere), `variant`
+filters are deferred to the Bulk Variant Upload table (Flow C, not yet built).
+
+`data/products.ts` → `createProductLine()`: `requireAdmin()` → (if an image was given)
+`stagedUploadsCreate` → upload → `productCreate` (title, `productOptions: [{name:"Flavor",
+values:[{name:"Default"}]}]`, `metafields`: `taxonomy.brand` (Brand reference) + one `custom.<key>`
+per filled-in Product-Level filter, `media` for the image). No `publishablePublish` call —
+deliberately left unpublished; a Product Line with 0 flavours is a real incomplete state (§0a),
+not ready to go live. Live-verified: created a real Product with correct `taxonomy.brand` metafield
+and a correct `custom.<domain>_<attribute>` metafield value, then cleaned up.
+
+Redirects to `/products` on success (not `/products/[id]/variants` — Flow C doesn't exist yet, so
+that route would 404).
 
 ### `(dashboard)/products/[id]/variants` — Bulk Variant Upload — `/products/[id]/variants`
 - **UI:** `features/products/components/VariantBulkTable.tsx` — spreadsheet table (Flavour,
@@ -576,33 +586,58 @@ checkpoint. "Client" = browser. "Next.js Server" = this same project's server-si
                    navigation, admin stays where they were in the tree
 ```
 
-### Flow B2 — Create Product Line — **DEFERRED, not yet designed/built**
-
-The mutation sequence (`stagedUploadsCreate` → `productCreate` → `publishablePublish`) was
-researched and is still accurate, but this page's actual UI/UX and Server Action/DAL wiring are
-not built — tracked to happen only after the Taxonomy flow above is working, since a Product
-Line needs an existing Brand to reference and none exist until Taxonomy creation works.
-
-### Flow C — Bulk Variant Upload (item 43)
+### Flow B2 — Create Product Line — **BUILT 2026-08-24**
 
 ```
-1. Client:        VariantBulkTable — admin fills up to ~1,200 rows (200 flavours × 6 regions),
-                   draft autosaved to localStorage as they go (item 44c)
-2. Client:        clicks "Create All" — bulkCreateVariantsAction (Server Action) invoked
-                   with productId + all rows
-3. Next.js Server: bulkCreateVariantsAction — THIN: passes productId + rows to the DAL
-4. Next.js Server: data/variants.ts → bulkCreateVariants():
+1. Client:        ProductLineForm — admin picks a Brand (grouped by Category / Sub-category in
+                   the <select>); the form locally derives that Brand's Sub-category from props
+                   already on the page and renders only its relevant `product`-level filters (§7.2)
+2. Client:         fills Product Line name, the rendered filter dropdowns, optional image, submits
+3. Next.js Server: createProductLineAction (Server Action) — THIN: extracts FormData
+                   (title, brandId, `filter:<key>` entries, image), calls the DAL
+4. Next.js Server: data/products.ts → createProductLine():
+                   a. requireAdmin()
+                   b. if an image was given: stagedUploadsCreate -> upload
+                   c. productCreate (title, productOptions: [{name:"Flavor", values:[{name:
+                      "Default"}]}], metafields: taxonomy.brand + one custom.<key> per filled
+                      Product-Level filter, media for the image) -- left UNPUBLISHED on purpose
+5. Next.js Server: revalidatePath('/products'), redirect('/products')
+```
+See §7.2 for the field-rendering rule and §0a for why an unpublished, 0-flavour Product Line is a
+correct intermediate state, not a bug.
+
+### Flow C — Bulk Variant Upload (item 43) — **BUILT 2026-08-24**
+
+```
+1. Client:        VariantBulkTable (features/products/components/) — admin fills rows (Flavour,
+                   Description, Region, Price, Compare-at, SKU, Image), draft autosaves to
+                   localStorage per Product Line (text fields only, not File objects)
+2. Client:        "Dup regions" clones a row across the 5 remaining Regions in one click,
+                   carrying Price/Description/Image forward (packaging is normally identical
+                   across regions -- admin can still override per-row)
+3. Client:        clicks "Create All" — bulkCreateVariantsAction (Server Action) invoked with
+                   FormData encoding rows as indexed `row:<i>:<field>` entries
+4. Next.js Server: bulkCreateVariantsAction — THIN: decodes rows, passes to the DAL
+5. Next.js Server: data/variants.ts → bulkCreateVariants():
                    a. requireAdmin()
                    b. split rows into batches of 100 (proven safe size — live-tested
-                      1,200/1,200 with 0 errors)
-                   c. per batch: stagedUploadsCreate (images for that batch) → upload each →
-                      productVariantsBulkCreate (variants, each with `custom.region` +
-                      `custom.flavour_description` metafields set in the same call)
-                   d. accumulate {created, failed, errors} across all batches
-5. Next.js Server: revalidateTag for this Product Line's variant data
-6. Client:         receives the summary — success toast + created/failed counts; clears the
-                   autosaved draft on full success
+                      1,200/1,200 with 0 errors, scripts/shopify/_tmp-scale-test.ts)
+                   c. per batch, per row: optionValues = [{name: "<flavour> (<region>)",
+                      optionName: "Flavor"}] (Region is a metafield, not a formal Option, so this
+                      keeps Shopify's per-option-value uniqueness satisfied) + custom.region +
+                      custom.flavour_description metafields, then productVariantsBulkCreate
+                   d. building each batch's inputs (including image upload) happens INSIDE the
+                      per-batch try/catch, so one bad image doesn't crash the whole run
+                   e. accumulate {created, failed, errors} across all batches; on a thrown
+                      ShopifyAdminApiError, surface its real `.errors` messages, not the generic
+                      wrapper text
+6. Client:         shows a created/failed summary with real error messages inline; clears the
+                   autosaved draft only on full success (0 failed)
 ```
+
+**Live-tested finding (2026-08-24) — variant images need TWO steps, not one:** `ProductVariantsBulkInput.mediaSrc` (a plain URL) does **not** reliably attach an image — confirmed even a URL matching an already-`READY` product media came back `image: null`. Only `mediaId` (the GID of a MediaImage already registered on the product) works. So `uploadVariantImage()` in `data/variants.ts` does: stage+upload the file → `productCreateMedia` (registers it as PRODUCT-level media, returns a MediaImage GID) → use that GID as `mediaId` on the variant. Live-verified: 6 variants each got their own distinct, correct image this way.
+
+Also live-verified: duplicate-option-value collisions (re-submitting a `flavour+region` pair that already exists) return a Shopify `userErrors` entry ("The variant '...' already exists") that now surfaces verbatim in the UI, not a generic message.
 
 ### Flow D — Sign Out
 
@@ -622,6 +657,161 @@ Line needs an existing Brand to reference and none exist until Taxonomy creation
    never trusts that proxy.ts already answered them (defense-in-depth, item 44a-i)
 3. **Neither Shopify nor Supabase's Service Role key ever reaches the Client** — both live only
    inside `server-only`-guarded files (`admin-client.ts`, every `data/*.ts` file)
+
+## 7. Filter System — Full Design (Native / Product-Level / Variant-Level)
+
+Designed 2026-08-23, after taxonomy seeding was live-verified. Not yet built — this section is
+the spec to build against once Flow B2 (Create Product Line) is picked back up.
+
+### 7.0 The three tiers, and the rule for sorting a filter into one
+
+Every filter named in a Sub-category's `filters` list (source: `script.js`'s `CATALOG`) must be
+classified into exactly one tier. Decide top-down — stop at the first tier that fits:
+
+```
+Step 1 — NATIVE?
+  Is this already a built-in Shopify concept, not something we invent?
+    Price          -> native `price` field
+    Availability   -> native inventory/stock status
+    Brand          -> our own Brand metaobject reference (already exists via Taxonomy)
+    Flavor         -> the formal Product Option (already exists)
+  If yes -> NATIVE. No metafield, no filter_definition entry. The Sub-category just gets a
+  toggle "show this native filter" (on by default) — nothing to create, nothing to seed choices for.
+
+Step 2 — VARIANT-LEVEL?
+  Does the value genuinely change between flavours of the SAME Product Line — and is it
+  intrinsic to what a flavour *is*, not a separate purchasing decision?
+  Examples that qualify: Region, Flavour Description (already built this way).
+  Examples that do NOT qualify: Nicotine Strength, Bottle Size — these are separate purchasing
+  decisions, so per tonight's decision they become separate Product Lines instead of variants.
+  Once that split happens, the attribute is no longer "varies by flavour" — it's constant across
+  every flavour of that (now narrower) Product Line, which pushes it to Step 3, not this step.
+  If yes (rare) -> VARIANT-LEVEL metafield, set per-flavour in the Bulk Variant Upload table.
+
+Step 3 — PRODUCT-LEVEL (the default)
+  Everything else. Same for every flavour under one Product Line, differs between Product Lines.
+  This is where almost everything lands: Material, Paper Size, Paper Type, Length/Width, Pack
+  Quantity, Device Type, Puff Count, Nicotine Strength, Nicotine Type, Bottle Size, Grinder Type,
+  Hookah Hose Count, etc. -> PRODUCT-LEVEL metafield.
+```
+
+**Net result — confirms the hunch from earlier tonight ("most of them will be on the product
+level"):** Variant-level is the exception, not the rule. It stays reserved for the two fields
+already built (Region, Flavour Description) plus any future field that is truly about flavour
+identity itself. Nicotine Strength does NOT need to be variant-level *even though it can differ
+between 20mg/40mg of "the same" vape* — because the fix for that is a separate Product Line per
+strength, not a variant, and once it's a separate Product Line the attribute is constant within
+each one -> Product-Level. Product-Level metafields are what actually drive the listing-page
+filter UI (Search & Discovery reads product-level metafields directly against the Product Line
+shown in the grid — no "does any variant match" indirection needed, which is simpler and is why
+Product-Level should be the default assumption for every new filter, not something to prove).
+
+### 7.1 Data model
+
+New metaobject type: `filter_definition`.
+
+| field | type | notes |
+|---|---|---|
+| `label` | single_line_text_field | UI-facing name, e.g. "Material" — can repeat across domains |
+| `key` | single_line_text_field | the actual `custom.<key>` metafield key, e.g. `rolling_paper_material` — must be globally unique, domain-prefixed (see 7.3) |
+| `level` | single_line_text_field, `choices` validation `["native","product","variant"]` | which tier (7.0) |
+| `choices` | list.single_line_text_field | the admin-editable value list (e.g. `["Hemp","Rice","Unbleached"]`) — empty/unused for `native` level |
+| `native_field` | single_line_text_field, `choices` validation `["price","availability","brand","flavor"]` | only set when `level = native`, says which built-in field this toggle maps to |
+
+Sub-category metaobject gets a new field: `relevant_filters` — `list.metaobject_reference` pointing
+at `filter_definition`. This is the field the Product-form reads to know which fields to render
+for a given Sub-category (already flagged as needed in the earlier filter-architecture pass).
+
+For `level = product`, an actual `metafieldDefinition` (namespace `custom`, key = the
+`filter_definition.key` value) must exist on the `product` owner type, with `validations: [{name:
+"choices", value: <the same choices list, JSON-encoded>}]` and storefront access enabled. For
+`level = variant`, same but on the `productvariant` owner type. Creating a `filter_definition`
+metaobject and creating the matching Shopify `metafieldDefinition` are two separate API calls —
+the admin-panel mutation must do both, in one Server Action, so they can never go out of sync.
+
+### 7.2 Product-form behavior (reads `relevant_filters`)
+
+```
+1. Admin selects Sub-category for a new Product Line.
+2. Form fetches that Sub-category's relevant_filters (list of filter_definition).
+3. For each filter_definition:
+     level = native   -> nothing rendered (native fields — Price, Availability, Brand, Flavor —
+                          already have their own dedicated inputs elsewhere on the form; the
+                          native toggle only controls whether that filter appears on the
+                          storefront, it's a Search & Discovery config concern, not a Product
+                          creation concern)
+     level = product  -> render one <select> (options = filter_definition.choices), label =
+                          filter_definition.label; value saved as `custom.<key>` metafield on
+                          the Product on submit
+     level = variant  -> NOT rendered here; rendered later per-row in the Bulk Variant Upload
+                          table (Flow C), one column per variant-level filter_definition
+                          relevant to this Product Line's Sub-category
+4. If relevant_filters is empty (e.g. "General Convenience", not yet populated) -> render nothing
+   extra, show a plain note: "No extra fields needed for this category yet." — not an error,
+   not a blank confusing gap.
+```
+
+### 7.3 Naming convention (addresses "same label, different meaning" + scale)
+
+- `filter_definition.key` is always `<subcategory-domain>_<attribute>`, e.g. `rolling_paper_material`,
+  `glass_material`, `grinder_material` — never a bare `material`. The domain prefix is derived from
+  the Sub-category's handle when the admin creates the filter (auto-suggested, editable).
+- The UI-facing `label` can still just say "Material" in all three — customers/admins never see the
+  raw key, so the shared label is fine; only the underlying key (and therefore the underlying
+  `choices` list) must stay domain-separated so a Rolling-Papers product can never be assigned a
+  Glass-only choice.
+- All Product/Variant-level metafields live under the single `custom` namespace (matches the
+  existing `custom.region` / `custom.flavour_description` pattern) — the domain-prefixed key is
+  what keeps ~40-60 of them from colliding, not a namespace split.
+
+### 7.4 Edge cases — how each is actually handled
+
+1. **Same label, different meaning** -> solved by 7.3's domain-prefixed keys.
+2. **Product-level vs variant-level per attribute** -> solved by 7.0's decision rule; `level` is a
+   required field on `filter_definition`, chosen explicitly by whoever creates the filter (defaults
+   to `product` in the UI, since that's the common case).
+3. **Retroactive missing data when a filter is added after Product Lines already exist** ->
+   Dashboard gets a warning widget (same pattern as the existing "0 flavours" incomplete-Product-Line
+   flag): for each Sub-category, count Product Lines missing a value for any of that Sub-category's
+   current `product`-level `filter_definition`s; list them so the admin can backfill.
+4. **Scale (~40-60 metafields)** -> solved by 7.3's naming convention; no other mitigation needed at
+   this scale (Shopify's metafield-definition limits are far above 60 per owner type).
+5. **Empty `relevant_filters`** -> solved by 7.2 step 4 (graceful "no extra fields" note).
+6. **Removing an in-use Choice value** -> V1 does not expose a delete button on the Choices editor at
+   all, only "add value" (matches the earlier recommendation) — removes the risk entirely rather
+   than trying to detect in-use values before allowing deletion.
+7. **Changing a Product Line's Sub-category after creation** -> disallowed in V1: once a Product Line
+   is created, its Sub-category field is rendered read-only with a short note; changing category
+   requires deleting and recreating the Product Line.
+
+### 7.5 Filter-management hardening — built 2026-08-24, live-tested
+
+Three gaps found after the initial filter seed (122 filter_definitions, §7 seed scripts) were
+closed before building further on top of the filter system:
+
+- **`battery_capacity` placeholder filled in** (was the one filter left on `["To be confirmed"]"`
+  after the industry-standard choices update — `1000mAh`–`3500mAh` range added).
+- **`AddFilterForm` now auto-suggests the Key** as `<subcategory-slug>_<label-slug>`, derived from
+  the Sub-category's actual name at creation time (not a hardcoded per-subcategory lookup like the
+  seed script used) — works for any future Sub-category the admin adds, not just the 24 seeded so
+  far. Key stays editable; a live client-side check still flags (a) a key that already exists
+  anywhere in the catalog, and (b) a duplicate label already attached to the same Sub-category —
+  both block the Add-Filter button before submit, rather than surfacing as a raw Shopify API error
+  after. Backend-level, Shopify's own `namespace+key+ownerType` uniqueness constraint is the actual
+  final backstop regardless of the UI check (`data/filters.ts` calls `metafieldDefinitionCreate`
+  *before* `metaobjectCreate`, so a collision fails clean with nothing partially created) —
+  live-verified: all 122 seeded filters have globally-unique keys even where labels repeat up to
+  15x ("Size"), confirmed via a direct Shopify query.
+- **New "Edit Filter — Add Choice" capability** (`data/filters.ts` → `addChoiceToFilter`,
+  `features/filters/actions.ts` → `addChoiceToFilterAction`, `FilterChip.tsx` — click a filter chip
+  on `/taxonomy` to see its current choices + an add-value input): appends one value at a time to
+  an existing filter, live-tested end-to-end (added "Bamboo" to Rolling Papers' Material, verified
+  in Shopify, reset after). Three rules enforced: (a) update order is
+  `metafieldDefinitionUpdate` (Shopify's actually-enforced list) BEFORE the `filter_definition`
+  metaobject's own `choices` field (the display copy) — so a partial failure never leaves the
+  Product-form offering a value Shopify would then reject, worst case the display is just briefly
+  stale; (b) case-insensitive/trimmed dedup rejects "hemp" if "Hemp" already exists; (c) no delete
+  control anywhere in this UI — matches rule 6 above, values only ever grow.
 
 ## 6. Status
 

@@ -98,6 +98,15 @@ async function deleteJunk(names: string[]) {
   }
 }
 
+async function deleteJunkBrands(names: string[]) {
+  const brands = await listAll('brand', 'sub_category');
+  for (const junk of brands.filter((b) => names.includes(b.name))) {
+    const data = await shopifyAdminRequest<any>(DELETE_MUTATION, { id: junk.id });
+    assertNoUserErrors(data.metaobjectDelete.userErrors, `delete "${junk.name}"`);
+    console.log(`  deleted junk brand: ${junk.name}`);
+  }
+}
+
 const TREE: Record<string, Record<string, string[]>> = {
   Vapes: {
     'Disposable Vapes': [
@@ -105,7 +114,11 @@ const TREE: Record<string, Record<string, string[]>> = {
       "Drip'n", 'Ripper', 'Instabar', 'Doozy Quad', 'Vice', 'Elf Bar',
     ],
     'E-Liquids / Vape Juice': [
-      'Gcore 30ml', 'Gcore 60ml', 'Flavour Beast 30ml', 'Flavour Beast 60ml',
+      // "Gcore 30ml"/"Gcore 60ml" and "Flavour Beast 30ml"/"Flavour Beast 60ml" were a data bug --
+      // bottle size is a product attribute (Bottle Size filter, see §7 of the implementation doc),
+      // not a separate brand. Fixed 2026-08-23: one brand entry each, size handled as a
+      // Product-Level metafield when the Product Line is created.
+      'Gcore', 'Flavour Beast',
       'Lemon Drop', 'Flavour Drop', 'Berry Drop', 'Kapow', 'Mr Fog E-Juices',
       'Oxbar', 'ElfLiq', 'Delicious Drip E-Juice', 'Vice', 'Koil Killaz', 'Naked',
     ],
@@ -147,6 +160,9 @@ const TREE: Record<string, Record<string, string[]>> = {
 async function main() {
   console.log('Step 1: cleaning up known junk/test categories...');
   await deleteJunk(['flavour beast', 'smock']);
+
+  console.log('\nStep 1b: fixing Gcore/Flavour Beast bottle-size brand-duplication bug...');
+  await deleteJunkBrands(['Gcore 30ml', 'Gcore 60ml', 'Flavour Beast 30ml', 'Flavour Beast 60ml']);
 
   console.log('\nStep 2: seeding categories, sub-categories, brands...');
   const categories = await listAll('category');

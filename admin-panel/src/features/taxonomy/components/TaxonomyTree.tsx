@@ -3,19 +3,31 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { TaxonomyEntry } from '@/data/taxonomy';
+import type { FilterDefinition } from '@/data/filters';
 import { createCategoryAction, createSubcategoryAction, createBrandAction } from '../actions';
 import AddEntryForm from './AddEntryForm';
+import AddFilterForm from '@/features/filters/components/AddFilterForm';
+import FilterChip from '@/features/filters/components/FilterChip';
 
-type OpenForm = 'category' | { level: 'sub'; categoryId: string } | { level: 'brand'; subcategoryId: string } | null;
+type OpenForm =
+  | 'category'
+  | { level: 'sub'; categoryId: string }
+  | { level: 'brand'; subcategoryId: string }
+  | { level: 'filter'; subcategoryId: string }
+  | null;
 
 export default function TaxonomyTree({
   categories,
   subcategories,
   brands,
+  filterDefinitions,
+  subcategoryFilterLinks,
 }: {
   categories: TaxonomyEntry[];
   subcategories: TaxonomyEntry[];
   brands: TaxonomyEntry[];
+  filterDefinitions: FilterDefinition[];
+  subcategoryFilterLinks: Record<string, string[]>;
 }) {
   const router = useRouter();
   // No local copy of server data (categories/subcategories/brands come straight from props) —
@@ -129,6 +141,12 @@ export default function TaxonomyTree({
                           >
                             + Add Brand
                           </button>
+                          <button
+                            onClick={() => setOpenForm({ level: 'filter', subcategoryId: sub.id })}
+                            className="text-xs text-sky-700 hover:underline shrink-0"
+                          >
+                            + Manage Filters
+                          </button>
                         </div>
 
                         {subOpen && (
@@ -144,6 +162,19 @@ export default function TaxonomyTree({
                                   onDone={closeForm}
                                 />
                               )}
+                            {typeof openForm === 'object' &&
+                              openForm?.level === 'filter' &&
+                              openForm.subcategoryId === sub.id && (
+                                <AddFilterForm
+                                  subcategoryId={sub.id}
+                                  subcategoryName={sub.name}
+                                  existingFiltersForThisSubcategory={(subcategoryFilterLinks[sub.id] ?? [])
+                                    .map((id) => filterDefinitions.find((f) => f.id === id))
+                                    .filter((f): f is FilterDefinition => !!f)}
+                                  allFilterKeys={filterDefinitions.map((f) => f.key)}
+                                  onDone={closeForm}
+                                />
+                              )}
                             {subBrands.map((brand) => (
                               <div key={brand.id} className="px-2 py-1.5 text-neutral-600">
                                 • {brand.name}
@@ -152,6 +183,20 @@ export default function TaxonomyTree({
                             {subBrands.length === 0 && !openForm && (
                               <p className="px-2 py-1 text-xs text-neutral-400">No brands yet.</p>
                             )}
+
+                            {(() => {
+                              const attached = (subcategoryFilterLinks[sub.id] ?? [])
+                                .map((id) => filterDefinitions.find((f) => f.id === id))
+                                .filter((f): f is FilterDefinition => !!f);
+                              if (attached.length === 0) return null;
+                              return (
+                                <div className="px-2 py-1.5 flex flex-wrap gap-1.5">
+                                  {attached.map((f) => (
+                                    <FilterChip key={f.id} filter={f} />
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>

@@ -12,7 +12,19 @@
     "shopify:create-variant-region-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-region-metafield.ts",
     "shopify:create-variant-flavour-description-metafield": "tsx --env-file=.env.local scripts/shopify/create-variant-flavour-description-metafield.ts",
     "supabase:invite-admin": "tsx --env-file=.env.local scripts/supabase/invite-admin.ts",
-    "shopify:seed-real-taxonomy": "tsx --env-file=.env.local scripts/shopify/seed-real-taxonomy.ts"
+    "shopify:seed-real-taxonomy": "tsx --env-file=.env.local scripts/shopify/seed-real-taxonomy.ts",
+    "shopify:create-filter-definitions": "tsx --env-file=.env.local scripts/shopify/create-filter-definitions.ts",
+    "shopify:seed-real-filters": "tsx --env-file=.env.local scripts/shopify/seed-real-filters.ts",
+    "shopify:update-filter-choices": "tsx --env-file=.env.local scripts/shopify/update-filter-choices.ts",
+    "shopify:register-inventory-webhook": "tsx --env-file=.env.local scripts/shopify/register-inventory-webhook.ts",
+    "shopify:unregister-inventory-webhook": "tsx --env-file=.env.local scripts/shopify/unregister-inventory-webhook.ts",
+    "shopify:register-products-webhook": "tsx --env-file=.env.local scripts/shopify/register-products-webhook.ts",
+    "shopify:unregister-products-webhook": "tsx --env-file=.env.local scripts/shopify/unregister-products-webhook.ts",
+    "shopify:backfill-stock-aggregates": "tsx --env-file=.env.local scripts/shopify/backfill-stock-aggregates.ts",
+    "shopify:backfill-product-health-snapshot": "tsx --env-file=.env.local scripts/shopify/backfill-product-health-snapshot.ts",
+    "shopify:set-filter-required": "tsx --env-file=.env.local scripts/shopify/set-filter-required.ts",
+    "shopify:register-orders-webhook": "tsx --env-file=.env.local scripts/shopify/register-orders-webhook.ts",
+    "shopify:unregister-orders-webhook": "tsx --env-file=.env.local scripts/shopify/unregister-orders-webhook.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

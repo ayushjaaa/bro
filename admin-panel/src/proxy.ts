@@ -22,8 +22,19 @@ import { NextResponse, type NextRequest } from 'next/server';
 // "/auth/confirm" must stay public: it's the verifyOtp() callback (official Supabase pattern,
 // confirmed 2026-08-22) that establishes a session BEFORE one exists — blocking it would redirect
 // to /login before verifyOtp() ever runs. "/set-password" stays public as a safety net in case
-// the confirm step ever redirects here without a session having been set.
-const PUBLIC_PATHS = ['/login', '/auth/confirm', '/set-password'];
+// the confirm step ever redirects here without a session having been set. "/api/webhooks/*" must
+// also stay public: Shopify's webhook POSTs carry no session/cookies at all (server-to-server
+// calls, not browser requests) — they'd otherwise be redirected to /login before the route
+// handlers ever run. Their trust boundary is HMAC verification inside each route itself, not this
+// admin_users check.
+const PUBLIC_PATHS = [
+  '/login',
+  '/auth/confirm',
+  '/set-password',
+  '/api/webhooks/orders',
+  '/api/webhooks/inventory',
+  '/api/webhooks/products',
+];
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
