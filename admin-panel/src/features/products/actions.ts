@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createProductLine, publishProductLine, unpublishProductLine } from '@/data/products';
+import { REGIONS } from '@/lib/regions';
 import {
   bulkCreateVariants,
   updateVariants,
@@ -18,9 +19,11 @@ function fileOrUndefined(formData: FormData, key: string): File | undefined {
 }
 
 /** Thin Server Action — extract FormData (title, brandId, dynamic custom.* filter fields,
- * optional image), call the DAL, revalidate. Redirects to /products -- the Bulk Variant Upload
- * page (/products/[id]/variants, Flow C) isn't built yet, so a Product Line lands there with 0
- * flavours for now (a real, visibly-incomplete state per Section 0a, not a bug). */
+ * checked regions, optional image), call the DAL, revalidate. One submission creates one Product
+ * Line **per checked region** (PRODUCT_PAGE_PLAN.md §11.3's "region checkboxes + auto-clone"),
+ * so there's no single created-product id to redirect into anymore -- redirects to /products
+ * (the list) where every newly-created region-clone shows up, each with 0 flavours for now (a
+ * real, visibly-incomplete state per Section 0a, not a bug). */
 export async function createProductLineAction(formData: FormData) {
   const filterValues: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
@@ -29,10 +32,14 @@ export async function createProductLineAction(formData: FormData) {
     }
   }
 
+  const checkedRegionValues = new Set(formData.getAll('regions').map(String));
+  const regions = REGIONS.filter((r) => checkedRegionValues.has(r.value));
+
   await createProductLine({
     title: String(formData.get('title') ?? ''),
     brandId: String(formData.get('brandId') ?? ''),
     filterValues,
+    regions,
     image: fileOrUndefined(formData, 'image'),
   });
 
@@ -53,7 +60,6 @@ export async function bulkCreateVariantsAction(formData: FormData): Promise<Bulk
     rows.push({
       flavourName,
       description: String(formData.get(`row:${i}:description`) ?? ''),
-      region: String(formData.get(`row:${i}:region`) ?? ''),
       price: String(formData.get(`row:${i}:price`) ?? ''),
       compareAtPrice: (formData.get(`row:${i}:compareAtPrice`) as string) || undefined,
       sku: (formData.get(`row:${i}:sku`) as string) || undefined,
@@ -84,7 +90,6 @@ export async function updateVariantsAction(formData: FormData): Promise<BulkCrea
       id,
       inventoryItemId: (formData.get(`row:${i}:inventoryItemId`) as string) || null,
       description: String(formData.get(`row:${i}:description`) ?? ''),
-      region: String(formData.get(`row:${i}:region`) ?? ''),
       price: String(formData.get(`row:${i}:price`) ?? ''),
       compareAtPrice: (formData.get(`row:${i}:compareAtPrice`) as string) || undefined,
       sku: (formData.get(`row:${i}:sku`) as string) || undefined,

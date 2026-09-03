@@ -3,27 +3,19 @@ import { randomUUID } from 'node:crypto';
 import { shopifyAdminRequest, ShopifyAdminApiError } from '@/lib/shopify/admin-client';
 import { uploadImageForProductMedia } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
-import { REGIONS } from '@/lib/regions';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
 
-export { REGIONS };
-
 /**
- * Bulk Variant Upload DAL (Flow C, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow C). Region is a fixed,
- * 6-value list (Canada's excise-stamp regions, §0 fact 2, defined in @/lib/regions since this
- * file is server-only but the value list must also be importable from client components) --
- * never free text, since a typo'd region silently breaks storefront filtering. Region is NOT a
- * formal Shopify Option (only "Flavor" is, per the user's explicit variant-limit constraint), so
- * each variant's option value is `"<flavour name> (<region>)"` to keep Shopify's
- * per-option-value uniqueness requirement satisfied -- proven pattern from
- * scripts/shopify/_tmp-scale-test.ts (1,200/1,200 created with 0 errors). Region + Flavour
- * Description are set as ProductVariant metafields in the same call.
+ * Bulk Variant Upload DAL (Flow C, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow C). Region moved to being
+ * a Product-Line-level concern (PRODUCT_PAGE_PLAN.md §11) -- a Product Line now only ever
+ * represents ONE region (the admin creates one Product Line per region up front, via
+ * createProductLine's `regions` list), so Flavour rows here no longer carry a region at all.
+ * Flavour Description is still set as a ProductVariant metafield in the same call.
  */
 
 export type VariantRow = {
   flavourName: string;
   description: string;
-  region: string;
   price: string;
   compareAtPrice?: string;
   sku?: string;
@@ -100,7 +92,6 @@ async function buildVariantInput(
   row: VariantRow
 ): Promise<Record<string, unknown>> {
   const metafields = [
-    { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: row.region },
     {
       namespace: 'custom',
       key: 'flavour_description',
@@ -110,7 +101,7 @@ async function buildVariantInput(
   ];
 
   const input: Record<string, unknown> = {
-    optionValues: [{ name: `${row.flavourName} (${row.region})`, optionName: 'Flavor' }],
+    optionValues: [{ name: row.flavourName, optionName: 'Flavor' }],
     price: row.price,
     metafields,
     // inventoryPolicy: DENY (Shopify's default, left implicit) -- once real quantity tracking is
@@ -138,7 +129,6 @@ export type VariantUpdateRow = {
   id: string;
   inventoryItemId: string | null;
   description: string;
-  region: string;
   price: string;
   compareAtPrice?: string;
   sku?: string;
@@ -277,7 +267,6 @@ export async function updateVariants(
       id: row.id,
       price: row.price,
       metafields: [
-        { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: row.region },
         {
           namespace: 'custom',
           key: 'flavour_description',

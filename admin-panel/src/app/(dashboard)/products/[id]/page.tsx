@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductLine } from '@/data/products';
 import { listFilterDefinitions } from '@/data/filters';
+import { REGIONS } from '@/lib/regions';
 import PublishButton from '@/features/products/components/PublishButton';
 import LiveTotalStock from '@/features/products/components/LiveTotalStock';
 import LiveVariantStock from '@/features/products/components/LiveVariantStock';
@@ -18,6 +19,7 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
   if (!product) notFound();
 
   const labelForKey = (key: string) => filterDefinitions.find((f) => f.key === key)?.label ?? key;
+  const regionLabel = REGIONS.find((r) => r.value === product.region)?.label ?? product.region;
 
   return (
     <div className="flex flex-col gap-4 max-w-4xl">
@@ -48,6 +50,11 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
           ) : (
             <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-500 border border-neutral-200">
               ○ Not published
+            </span>
+          )}
+          {product.region && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+              {regionLabel}
             </span>
           )}
           {(product.isPublished || product.variantCount > 0) && (
@@ -168,7 +175,6 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
                 <tr>
                   <th className="text-left py-1.5 pr-3 font-medium">Image</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Flavour</th>
-                  <th className="text-left py-1.5 pr-3 font-medium">Region</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Price</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Stock</th>
                   <th className="text-left py-1.5 pr-3 font-medium">SKU</th>
@@ -186,7 +192,6 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
                       )}
                     </td>
                     <td className="py-1.5 pr-3 text-neutral-800">{v.title}</td>
-                    <td className="py-1.5 pr-3 text-neutral-600">{v.region ?? '—'}</td>
                     <td className="py-1.5 pr-3 text-neutral-600">${v.price}</td>
                     <td className="py-1.5 pr-3">
                       <LiveVariantStock inventoryItemId={v.inventoryItemId} quantity={v.quantity} />

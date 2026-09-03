@@ -39,6 +39,10 @@ export type ProductLineSummary = {
   brandName: string | null;
   subcategoryName: string | null;
   categoryName: string | null;
+  /** Which region this Product Line represents (PRODUCT_PAGE_PLAN.md §11 -- one region per
+   * Product Line now, not per-variant). Null only for pre-migration data that hasn't had
+   * `custom.region` set yet. */
+  region: string | null;
   isPublished: boolean;
   createdAt: string;
   updatedAt: string;
@@ -87,6 +91,9 @@ const LIST_PRODUCT_LINES_QUERY = /* GraphQL */ `
               id
             }
           }
+        }
+        regionField: metafield(namespace: "custom", key: "region") {
+          value
         }
         metafield(namespace: "taxonomy", key: "brand") {
           reference {
@@ -138,6 +145,7 @@ export async function listProductLines(): Promise<ProductLineSummary[]> {
       brandName: brandRef?.brandName?.value ?? null,
       subcategoryName: subCategoryRef?.subCategoryName?.value ?? null,
       categoryName: subCategoryRef?.categoryField?.reference?.categoryName?.value ?? null,
+      region: n.regionField?.value ?? null,
       isPublished: n.publishedAt !== null,
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
@@ -163,6 +171,9 @@ export type ProductLineDetail = {
   categoryName: string | null;
   subcategoryName: string | null;
   brandName: string | null;
+  /** Which region this Product Line represents (PRODUCT_PAGE_PLAN.md §11) -- product-level now,
+   * not per-variant. Null only for pre-migration data. */
+  region: string | null;
   customFields: Array<{ key: string; value: string }>;
   variants: Array<{
     id: string;
@@ -174,7 +185,6 @@ export type ProductLineDetail = {
     inventoryItemId: string | null;
     isActivatedAtLocation: boolean;
     imageUrl: string | null;
-    region: string | null;
     flavourDescription: string | null;
   }>;
   variantCount: number;
@@ -300,8 +310,12 @@ export async function getProductLine(id: string): Promise<ProductLineDetail | nu
   const brandRef = p.brandField?.reference;
   const subCategoryRef = brandRef?.subCategoryField?.reference;
 
-  const customFields = (p.metafields?.nodes ?? [])
-    .filter((f: any) => f.namespace === 'custom')
+  const allCustomFields = (p.metafields?.nodes ?? []).filter((f: any) => f.namespace === 'custom');
+  // Region is shown as its own dedicated field (below), not mixed into the generic filter-values
+  // grid -- it's structural (which Product Line this is), not a product attribute filter.
+  const region = allCustomFields.find((f: any) => f.key === 'region')?.value ?? null;
+  const customFields = allCustomFields
+    .filter((f: any) => f.key !== 'region')
     .map((f: any) => ({ key: f.key, value: f.value }));
 
   return {
@@ -314,6 +328,7 @@ export async function getProductLine(id: string): Promise<ProductLineDetail | nu
     categoryName: subCategoryRef?.categoryField?.reference?.categoryName?.value ?? null,
     subcategoryName: subCategoryRef?.subCategoryName?.value ?? null,
     brandName: brandRef?.brandName?.value ?? null,
+    region,
     customFields,
     variantCount: p.variantsCount?.count ?? 0,
     isPublished: p.publishedAt !== null,
@@ -326,7 +341,6 @@ export async function getProductLine(id: string): Promise<ProductLineDetail | nu
     currencyCode: p.priceRangeV2?.minVariantPrice?.currencyCode ?? 'USD',
     variants: (p.variants?.nodes ?? []).map((v: any) => {
       const vFields = v.metafields?.nodes ?? [];
-      const region = vFields.find((f: any) => f.namespace === 'custom' && f.key === 'region')?.value ?? null;
       const flavourDescription =
         vFields.find((f: any) => f.namespace === 'custom' && f.key === 'flavour_description')?.value ?? null;
       return {
@@ -341,44 +355,74 @@ export async function getProductLine(id: string): Promise<ProductLineDetail | nu
           (lvl: any) => lvl.location?.id === INVENTORY_LOCATION_ID
         ),
         imageUrl: v.image?.url ?? null,
-        region,
         flavourDescription,
       };
     }),
   };
 }
 
+/** Region-suffixed title for a given region-clone (PRODUCT_PAGE_PLAN.md §11.3) -- e.g.
+ * "Gcore E-Juice" + "federal" -> "Gcore E-Juice — Federal". Shared between createProductLine and
+ * anywhere else that needs to derive/display the same naming convention. */
+export function regionSuffixedTitle(baseTitle: string, regionLabel: string): string {
+  return `${baseTitle} — ${regionLabel}`;
+}
+
+/**
+ * Creates one Shopify Product **per region** in `input.regions` (PRODUCT_PAGE_PLAN.md §11.3's
+ * "region checkboxes + auto-clone" flow) -- each clone shares the same Brand/filter metafields and
+ * gets its own region-suffixed title plus a `custom.region` metafield. Region is a plain
+ * product-level field now (like every other filter, §9), not a variant-level concern -- a single
+ * Product Line only ever represents one region, so its Flavours (variants) never need the old
+ * region-suffix naming hack (see data/variants.ts).
+ */
 export async function createProductLine(input: {
   title: string;
   brandId: string;
   filterValues: Record<string, string>;
+  regions: Array<{ value: string; label: string }>;
   image?: File;
-}): Promise<{ id: string; title: string }> {
+}): Promise<Array<{ id: string; title: string; region: string }>> {
   await requireAdmin();
 
-  const metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [
-    { namespace: 'taxonomy', key: 'brand', type: 'metaobject_reference', value: input.brandId },
-  ];
-  for (const [key, value] of Object.entries(input.filterValues)) {
-    if (!value) continue;
-    metafields.push({ namespace: 'custom', key, type: 'single_line_text_field', value });
+  if (input.regions.length === 0) {
+    throw new Error('At least one region must be selected for a Product Line.');
   }
 
   const media = input.image
     ? [{ originalSource: await uploadImageForProductMedia(input.image), mediaContentType: 'IMAGE' }]
     : undefined;
 
-  const data = await shopifyAdminRequest<any>(PRODUCT_CREATE_MUTATION, {
-    product: {
-      title: input.title,
-      productOptions: [{ name: 'Flavor', values: [{ name: 'Default' }] }],
-      metafields,
-    },
-    media,
-  });
-  assertNoUserErrors(data.productCreate.userErrors, 'productCreate');
-  const created = data.productCreate.product;
-  if (!created) throw new Error('productCreate returned no product and no userErrors');
+  const created: Array<{ id: string; title: string; region: string }> = [];
+
+  // Sequential, not Promise.all -- keeps error attribution simple (which region failed) and
+  // avoids uploading input.image's file data more than once concurrently for no benefit (Shopify
+  // media upload is the slow step here, not worth parallelizing for a handful of regions).
+  for (const region of input.regions) {
+    const title = regionSuffixedTitle(input.title, region.label);
+    const metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [
+      { namespace: 'taxonomy', key: 'brand', type: 'metaobject_reference', value: input.brandId },
+      { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: region.value },
+    ];
+    for (const [key, value] of Object.entries(input.filterValues)) {
+      if (!value) continue;
+      metafields.push({ namespace: 'custom', key, type: 'single_line_text_field', value });
+    }
+
+    const data = await shopifyAdminRequest<any>(PRODUCT_CREATE_MUTATION, {
+      product: {
+        title,
+        productOptions: [{ name: 'Flavor', values: [{ name: 'Default' }] }],
+        metafields,
+      },
+      media,
+    });
+    assertNoUserErrors(data.productCreate.userErrors, `productCreate (${region.label})`);
+    const result = data.productCreate.product;
+    if (!result) throw new Error(`productCreate returned no product and no userErrors for ${region.label}`);
+
+    created.push({ id: result.id, title: result.title, region: region.value });
+  }
 
   return created;
 }

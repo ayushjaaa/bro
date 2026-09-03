@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { REGIONS } from '@/lib/regions';
 import { updateVariantsAction } from '../actions';
 import AddStockButton from './AddStockButton';
 import { useInventorySnapshotSync } from '../hooks/useInventorySnapshotSync';
@@ -12,7 +11,6 @@ type Row = {
   inventoryItemId: string | null;
   title: string;
   description: string;
-  region: string;
   price: string;
   compareAtPrice: string;
   sku: string;
@@ -33,15 +31,15 @@ export type EditableVariant = {
   sku: string | null;
   quantity: number;
   isActivatedAtLocation: boolean;
-  region: string | null;
   flavourDescription: string | null;
 };
 
 /** Edit existing Flavours -- one table serves both a single-Flavour edit (per-row "Save") and a
  * bulk edit ("Save All Changes"), since updateVariantsAction accepts one row or many the same
  * way (§ user request 2026-08-25). Flavour name itself isn't editable here (that's the Shopify
- * option value, a separate/more involved update) -- only its region, description, price,
- * compare-at, quantity, and SKU. */
+ * option value, a separate/more involved update) -- only its description, price, compare-at,
+ * quantity, and SKU. Region is no longer per-variant (PRODUCT_PAGE_PLAN.md §11) -- it's set once
+ * on the whole Product Line, not editable per-flavour here. */
 export default function EditVariantsTable({
   productId,
   variants,
@@ -55,7 +53,6 @@ export default function EditVariantsTable({
       inventoryItemId: v.inventoryItemId,
       title: v.title,
       description: v.flavourDescription ?? '',
-      region: v.region ?? REGIONS[0].value,
       price: v.price,
       compareAtPrice: v.compareAtPrice ?? '',
       sku: v.sku ?? '',
@@ -98,7 +95,6 @@ export default function EditVariantsTable({
       formData.set(`row:${i}:id`, row.id);
       if (row.inventoryItemId) formData.set(`row:${i}:inventoryItemId`, row.inventoryItemId);
       formData.set(`row:${i}:description`, row.description);
-      formData.set(`row:${i}:region`, row.region);
       formData.set(`row:${i}:price`, row.price);
       if (row.compareAtPrice) formData.set(`row:${i}:compareAtPrice`, row.compareAtPrice);
       if (row.sku) formData.set(`row:${i}:sku`, row.sku);
@@ -164,7 +160,6 @@ export default function EditVariantsTable({
             <tr>
               <th className="text-left px-3 py-2 font-medium">Flavour</th>
               <th className="text-left px-3 py-2 font-medium">Description</th>
-              <th className="text-left px-3 py-2 font-medium">Region</th>
               <th className="text-left px-3 py-2 font-medium">Price</th>
               <th className="text-left px-3 py-2 font-medium">Compare-at</th>
               <th className="text-left px-3 py-2 font-medium">Quantity</th>
@@ -182,19 +177,6 @@ export default function EditVariantsTable({
                     onChange={(e) => updateRow(i, { description: e.target.value })}
                     className="w-32 rounded border border-neutral-300 px-1.5 py-1 text-xs"
                   />
-                </td>
-                <td className="px-2 py-1.5">
-                  <select
-                    value={row.region}
-                    onChange={(e) => updateRow(i, { region: e.target.value })}
-                    className="rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  >
-                    {REGIONS.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
                 </td>
                 <td className="px-2 py-1.5">
                   <input

@@ -2,13 +2,11 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { REGIONS } from '@/lib/regions';
 import { bulkCreateVariantsAction } from '../actions';
 
 type Row = {
   flavourName: string;
   description: string;
-  region: string;
   price: string;
   compareAtPrice: string;
   sku: string;
@@ -19,7 +17,6 @@ type Row = {
 const EMPTY_ROW: Row = {
   flavourName: '',
   description: '',
-  region: REGIONS[0].value,
   price: '',
   compareAtPrice: '',
   sku: '',
@@ -31,11 +28,11 @@ function draftKey(productId: string) {
   return `variant-draft:${productId}`;
 }
 
-/** Spreadsheet-style bulk Flavour entry (Flow C). Region is a fixed 6-value dropdown, never free
- * text (§0 fact 2). "Duplicate to other regions" clones a row's Flavour/Description/Price across
- * the 5 remaining regions in one click, since 200 flavours x 6 regions is the expected real
- * scale. Draft (text fields only, not File images) autosaves to localStorage per Product Line so
- * a closed tab doesn't lose entered rows. */
+/** Spreadsheet-style bulk Flavour entry (Flow C). Region is no longer a per-row field
+ * (PRODUCT_PAGE_PLAN.md §11) -- this table is always scoped to one already-region-specific
+ * Product Line (the admin picked regions when creating the Product Line, one Product per region),
+ * so every row here only needs Flavour/Description/Price/etc. Draft (text fields only, not File
+ * images) autosaves to localStorage per Product Line so a closed tab doesn't lose entered rows. */
 export default function VariantBulkTable({
   productId,
   numericId,
@@ -84,23 +81,6 @@ export default function VariantBulkTable({
     setRows((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function duplicateToOtherRegions(index: number) {
-    const source = rows[index];
-    const usedRegions = new Set(
-      rows.filter((r) => r.flavourName === source.flavourName).map((r) => r.region)
-    );
-    const newRows = REGIONS.filter((r) => !usedRegions.has(r.value)).map((r) => ({
-      ...source,
-      region: r.value,
-      // Carry the same image forward -- packaging/photo is normally identical across regions
-      // (only the excise stamp differs internally), and a File reference is safely reusable
-      // across multiple rows in React state. Admin can still override per-row if one region
-      // genuinely needs a different photo.
-    }));
-    if (newRows.length === 0) return;
-    setRows((prev) => [...prev, ...newRows]);
-  }
-
   function handleSubmit() {
     setResult(null);
     const validRows = rows.filter((r) => r.flavourName.trim() && r.price.trim());
@@ -112,7 +92,6 @@ export default function VariantBulkTable({
     validRows.forEach((row, i) => {
       formData.set(`row:${i}:flavourName`, row.flavourName);
       formData.set(`row:${i}:description`, row.description);
-      formData.set(`row:${i}:region`, row.region);
       formData.set(`row:${i}:price`, row.price);
       if (row.compareAtPrice) formData.set(`row:${i}:compareAtPrice`, row.compareAtPrice);
       if (row.sku) formData.set(`row:${i}:sku`, row.sku);
@@ -150,7 +129,6 @@ export default function VariantBulkTable({
             <tr>
               <th className="text-left px-3 py-2 font-medium">Flavour</th>
               <th className="text-left px-3 py-2 font-medium">Description</th>
-              <th className="text-left px-3 py-2 font-medium">Region</th>
               <th className="text-left px-3 py-2 font-medium">Price</th>
               <th className="text-left px-3 py-2 font-medium">Compare-at</th>
               <th className="text-left px-3 py-2 font-medium">Quantity</th>
@@ -176,19 +154,6 @@ export default function VariantBulkTable({
                     onChange={(e) => updateRow(i, { description: e.target.value })}
                     className="w-32 rounded border border-neutral-300 px-1.5 py-1 text-xs"
                   />
-                </td>
-                <td className="px-2 py-1.5">
-                  <select
-                    value={row.region}
-                    onChange={(e) => updateRow(i, { region: e.target.value })}
-                    className="rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  >
-                    {REGIONS.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
                 </td>
                 <td className="px-2 py-1.5">
                   <input
@@ -236,14 +201,6 @@ export default function VariantBulkTable({
                   )}
                 </td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => duplicateToOtherRegions(i)}
-                    title="Duplicate to other regions"
-                    className="text-xs text-sky-700 hover:underline mr-2"
-                  >
-                    Dup regions
-                  </button>
                   <button
                     type="button"
                     onClick={() => removeRow(i)}

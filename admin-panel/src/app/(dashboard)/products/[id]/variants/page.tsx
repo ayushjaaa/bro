@@ -23,8 +23,7 @@ export default async function AddFlavoursPage({ params }: { params: Promise<{ id
       </p>
       <h1 className="text-xl font-semibold">Add Flavours — {product.title}</h1>
       <p className="text-sm text-neutral-500">
-        Currently {product.variantCount} flavour{product.variantCount === 1 ? '' : 's'}. Region is
-        required for every row.
+        Currently {product.variantCount} flavour{product.variantCount === 1 ? '' : 's'}.
       </p>
       <VariantBulkTable productId={productId} numericId={id} productTitle={product.title} />
     </div>

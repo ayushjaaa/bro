@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import type { TaxonomyEntry } from '@/data/taxonomy';
 import type { FilterDefinition } from '@/data/filters';
+import { REGIONS } from '@/lib/regions';
 import { createProductLineAction } from '../actions';
 
 /** Product Line creation form (Flow B2). Reads the same taxonomy + filter-definition data as the
@@ -31,8 +32,20 @@ export default function ProductLineForm({
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
   const [brandId, setBrandId] = useState('');
+  // Which regions this Product Line will be sold in -- one submission creates one Shopify Product
+  // per checked region (PRODUCT_PAGE_PLAN.md §11.3's "region checkboxes + auto-clone"), not a
+  // single product with a region field.
+  const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function toggleRegion(value: string) {
+    setSelectedRegions((prev) => {
+      const next = new Set(prev);
+      next.has(value) ? next.delete(value) : next.add(value);
+      return next;
+    });
+  }
 
   const subsByCategory = useMemo(() => {
     const byCat = new Map<string, TaxonomyEntry[]>();
@@ -247,14 +260,39 @@ export default function ProductLineForm({
             <input name="image" type="file" accept="image/*" className="w-full text-sm" />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1">Regions</label>
+            <p className="text-xs text-neutral-400 mb-2">
+              One Product Line is created per checked region, sharing this same info — flavours are
+              added separately per region afterwards.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {REGIONS.map((region) => (
+                <label key={region.value} className="flex items-center gap-1.5 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    name="regions"
+                    value={region.value}
+                    checked={selectedRegions.has(region.value)}
+                    onChange={() => toggleRegion(region.value)}
+                    className="accent-emerald-600"
+                  />
+                  {region.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || selectedRegions.size === 0}
             className="rounded-md bg-emerald-600 text-white text-sm font-medium px-4 py-2 hover:bg-emerald-700 disabled:opacity-50"
           >
-            {pending ? 'Creating...' : 'Create Product Line'}
+            {pending
+              ? 'Creating...'
+              : `Create Product Line${selectedRegions.size > 1 ? ` (${selectedRegions.size} regions)` : ''}`}
           </button>
         </form>
       )}
