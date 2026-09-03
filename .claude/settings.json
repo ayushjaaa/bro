@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(cd \"/Users/ayushjaiswal/Downloads/new varinat and the category/storefront\" && git show 4303046:src/components/ui/SectionHeading.tsx > src/components/ui/SectionHeading.tsx && cat src/components/ui/SectionHeading.tsx)",
+      "Bash(npx --yes playwright screenshot --viewport-size=1440,900 --full-page http://localhost:3001 /private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/667ac4e1-4ecd-411a-b675-2c5a93138e44/scratchpad/full6.png)",
+      "Bash(npx --yes playwright screenshot --viewport-size=1440,900 --full-page http://localhost:3001 /private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/667ac4e1-4ecd-411a-b675-2c5a93138e44/scratchpad/full8.png)",
+      "Bash(npx --yes playwright screenshot --viewport-size=1440,900 --full-page http://localhost:3001 /private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/667ac4e1-4ecd-411a-b675-2c5a93138e44/scratchpad/full31.png)",
+      "Bash(cp /tmp/shot.mjs ./shot.mjs)",
+      "Bash(node shot.mjs)",
+      "Bash(rm -f shot.mjs)",
+      "Bash(cp \"/private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/f518d0b4-ba4d-45ea-87db-7e248184c6ad/scratchpad/shot5.mjs\" \"/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/shot5.mjs\")",
+      "Bash(node shot5.mjs)",
+      "Bash(cp \"/private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/f518d0b4-ba4d-45ea-87db-7e248184c6ad/scratchpad/shot6.mjs\" \"/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/shot6.mjs\")",
+      "Bash(node shot6.mjs)",
+      "Bash(cp \"/private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/f518d0b4-ba4d-45ea-87db-7e248184c6ad/scratchpad/shot7.mjs\" \"/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/shot7.mjs\")",
+      "Bash(node shot7.mjs)",
+      "Bash(cp \"/private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/f518d0b4-ba4d-45ea-87db-7e248184c6ad/scratchpad/shot8.mjs\" \"/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/shot8.mjs\")",
+      "Bash(node shot8.mjs)",
+      "Bash(command -v chromium-cli)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(sips -g pixelWidth -g pixelHeight \"Banner 1.jpg\")",
+      "Bash(sort -k9)",
+      "Bash(sips -g pixelWidth -g pixelHeight _tmp-logo-*.png)",
+      "Bash(break)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/5a1c7ad6-9e76-4812-8906-777c9bf7ab3a/scratchpad/*.png /private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/5a1c7ad6-9e76-4812-8906-777c9bf7ab3a/scratchpad/check_*.js)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(xargs -r kill)",
+      "Bash(find / -maxdepth 4 -iname \"chromium-cli*\")",
+      "Bash(npx --yes playwright --version)",
+      "WebFetch(domain:jubileesk.ca)",
+      "WebFetch(domain:shopify.dev)",
+      "Bash(npx tsx *)",
+      "WebFetch(domain:help.shopify.com)",
+      "WebFetch(domain:community.shopify.com)"
+    ],
+    "additionalDirectories": [
+      "/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/src/components/ui",
+      "/private/tmp/claude-501/-Users-ayushjaiswal-Downloads-new-varinat-and-the-category/5a1c7ad6-9e76-4812-8906-777c9bf7ab3a/scratchpad"
+    ]
+  }
+}

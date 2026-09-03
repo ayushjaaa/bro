@@ -17,6 +17,7 @@ export type Customer = {
   firstName: string;
   lastName: string;
   phone: string | null;
+  personalCell: string | null;
   businessName: string | null;
   businessRegistrationNumber: string | null;
   pstNumber: string | null;
@@ -29,6 +30,34 @@ export type Customer = {
   approvedAt: string | null;
   approvedBy: string | null;
   shopifyCustomerId: string | null;
+  // Fields collected by the storefront's real registration wizard (008 migration) --
+  // undocumented/unused by the older 005-era fields above, which stay for any pre-existing rows.
+  legalBusinessName: string | null;
+  operatingName: string | null;
+  businessNumber: string | null;
+  numStores: number | null;
+  businessTypes: string[] | null;
+  monthlyPurchaseRange: string | null;
+  sellsOnline: boolean | null;
+  onlineUrl: string | null;
+  instagramHandle: string | null;
+  shipLine1: string | null;
+  shipLine2: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostalCode: string | null;
+  billSameAsShipping: boolean | null;
+  billLine1: string | null;
+  billLine2: string | null;
+  billCity: string | null;
+  billProvince: string | null;
+  billPostalCode: string | null;
+  businessLicencePath: string | null;
+  specialtyLicencePath: string | null;
+  taxExempt: boolean | null;
+  referralSource: string | null;
+  signatureName: string | null;
+  signedAt: string | null;
 };
 
 function toCustomer(row: any): Customer {
@@ -38,6 +67,7 @@ function toCustomer(row: any): Customer {
     firstName: row.first_name,
     lastName: row.last_name,
     phone: row.phone,
+    personalCell: row.personal_cell,
     businessName: row.business_name,
     businessRegistrationNumber: row.business_registration_number,
     pstNumber: row.pst_number,
@@ -50,6 +80,32 @@ function toCustomer(row: any): Customer {
     approvedAt: row.approved_at,
     approvedBy: row.approved_by,
     shopifyCustomerId: row.shopify_customer_id,
+    legalBusinessName: row.legal_business_name,
+    operatingName: row.operating_name,
+    businessNumber: row.business_number,
+    numStores: row.num_stores,
+    businessTypes: row.business_types,
+    monthlyPurchaseRange: row.monthly_purchase_range,
+    sellsOnline: row.sells_online,
+    onlineUrl: row.online_url,
+    instagramHandle: row.instagram_handle,
+    shipLine1: row.ship_line1,
+    shipLine2: row.ship_line2,
+    shipCity: row.ship_city,
+    shipProvince: row.ship_province,
+    shipPostalCode: row.ship_postal_code,
+    billSameAsShipping: row.bill_same_as_shipping,
+    billLine1: row.bill_line1,
+    billLine2: row.bill_line2,
+    billCity: row.bill_city,
+    billProvince: row.bill_province,
+    billPostalCode: row.bill_postal_code,
+    businessLicencePath: row.business_licence_path,
+    specialtyLicencePath: row.specialty_licence_path,
+    taxExempt: row.tax_exempt,
+    referralSource: row.referral_source,
+    signatureName: row.signature_name,
+    signedAt: row.signed_at,
   };
 }
 
@@ -94,6 +150,17 @@ export async function rejectCustomer(id: string): Promise<void> {
   const supabase = getServiceRoleClient();
   const { error } = await supabase.rpc('reject_customer', { p_id: id });
   if (error) throw new Error(error.message);
+}
+
+/** The `registration-documents` bucket is private -- an admin needs a short-lived signed URL to
+ * actually view a customer's uploaded licence file (RLS only lets the customer who uploaded it
+ * read it directly; service_role bypasses that for review purposes). */
+export async function getRegistrationDocumentUrl(path: string): Promise<string> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.storage.from('registration-documents').createSignedUrl(path, 60);
+  if (error || !data) throw new Error(error?.message ?? 'Could not generate document URL');
+  return data.signedUrl;
 }
 
 export async function updateAccountType(id: string, accountType: 'retail' | 'wholesale'): Promise<void> {

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { approveCustomer, rejectCustomer, updateAccountType } from '@/data/customers';
+import { approveCustomer, rejectCustomer, updateAccountType, getRegistrationDocumentUrl } from '@/data/customers';
 
 export async function approveCustomerAction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
@@ -20,4 +20,8 @@ export async function updateAccountTypeAction(formData: FormData) {
   const accountType = formData.get('accountType') === 'wholesale' ? 'wholesale' : 'retail';
   await updateAccountType(id, accountType);
   revalidatePath('/customers');
+}
+
+export async function getRegistrationDocumentUrlAction(path: string): Promise<string> {
+  return getRegistrationDocumentUrl(path);
 }

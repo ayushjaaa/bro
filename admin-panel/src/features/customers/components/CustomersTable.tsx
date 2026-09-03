@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Customer, CartSnapshotRow, OrderStatusRow } from '@/data/customers';
-import { approveCustomerAction, rejectCustomerAction, updateAccountTypeAction } from '../actions';
+import { approveCustomerAction, rejectCustomerAction, updateAccountTypeAction, getRegistrationDocumentUrlAction } from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 
 /** Unified expandable Customers screen (design decision: item 38) -- pending and approved rows
@@ -114,6 +114,11 @@ function CustomerRow({
     });
   }
 
+  async function handleViewDocument(path: string) {
+    const url = await getRegistrationDocumentUrlAction(path);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   function handleAccountTypeChange(accountType: 'retail' | 'wholesale') {
     startTransition(async () => {
       const formData = new FormData();
@@ -176,16 +181,97 @@ function CustomerRow({
           <td colSpan={6} className="px-4 py-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
               <Field label="Email" value={customer.email} />
-              <Field label="Phone" value={customer.phone} />
-              <Field label="Business Name" value={customer.businessName} />
-              <Field label="Business Registration #" value={customer.businessRegistrationNumber} />
-              <Field label="PST Number" value={customer.pstNumber} />
-              <Field label="VPT Number" value={customer.vptNumber} />
-              <Field label="Type of Business" value={customer.typeOfBusiness} />
-              <Field label="License Number" value={customer.licenseNumber} />
+              <Field label="Business Phone" value={customer.phone} />
+              <Field label="Personal Cell" value={customer.personalCell} />
               {customer.status === 'approved' && (
                 <Field label="Approved" value={`${customer.approvedBy ?? '—'} on ${customer.approvedAt ? new Date(customer.approvedAt).toLocaleDateString('en-CA') : '—'}`} />
               )}
+            </div>
+
+            {/* Older 005-era fields -- only ever populated for rows created before the real
+                registration wizard existed; blank for every new signup, so this section is
+                skipped entirely once there's nothing in it. */}
+            {(customer.businessRegistrationNumber || customer.pstNumber || customer.vptNumber || customer.typeOfBusiness || customer.licenseNumber) && (
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <Field label="Business Registration #" value={customer.businessRegistrationNumber} />
+                <Field label="PST Number" value={customer.pstNumber} />
+                <Field label="VPT Number" value={customer.vptNumber} />
+                <Field label="Type of Business" value={customer.typeOfBusiness} />
+                <Field label="License Number" value={customer.licenseNumber} />
+              </div>
+            )}
+
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Business Info</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <Field label="Legal Business Name" value={customer.legalBusinessName} />
+                <Field label="Operating Name" value={customer.operatingName} />
+                <Field label="Business Number" value={customer.businessNumber} />
+                <Field label="No of Stores" value={customer.numStores != null ? String(customer.numStores) : null} />
+                <Field label="Types of Business" value={customer.businessTypes?.join(', ') ?? null} />
+                <Field label="Expected Monthly Purchase" value={customer.monthlyPurchaseRange} />
+                <Field label="Instagram" value={customer.instagramHandle} />
+                <Field
+                  label="Sells Online"
+                  value={customer.sellsOnline == null ? null : customer.sellsOnline ? (customer.onlineUrl ?? 'Yes') : 'No'}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Shipping Address</h3>
+                <p className="text-sm text-neutral-800">
+                  {[customer.shipLine1, customer.shipLine2, customer.shipCity, customer.shipProvince, customer.shipPostalCode]
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </p>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Billing Address</h3>
+                <p className="text-sm text-neutral-800">
+                  {customer.billSameAsShipping
+                    ? 'Same as shipping'
+                    : [customer.billLine1, customer.billLine2, customer.billCity, customer.billProvince, customer.billPostalCode]
+                        .filter(Boolean)
+                        .join(', ') || '—'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Documents</h3>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {customer.businessLicencePath ? (
+                  <button
+                    type="button"
+                    onClick={() => handleViewDocument(customer.businessLicencePath!)}
+                    className="text-emerald-700 hover:underline"
+                  >
+                    View Business/Tax Licence
+                  </button>
+                ) : (
+                  <span className="text-neutral-400">No business licence uploaded</span>
+                )}
+                {customer.specialtyLicencePath && (
+                  <button
+                    type="button"
+                    onClick={() => handleViewDocument(customer.specialtyLicencePath!)}
+                    className="text-emerald-700 hover:underline"
+                  >
+                    View Specialty Store Licence
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+              <Field label="Tax Exempt" value={customer.taxExempt == null ? null : customer.taxExempt ? 'Yes' : 'No'} />
+              <Field label="How They Heard About Us" value={customer.referralSource} />
+              <Field
+                label="Signed By"
+                value={customer.signatureName ? `${customer.signatureName}${customer.signedAt ? ` on ${new Date(customer.signedAt).toLocaleString('en-CA')}` : ''}` : null}
+              />
             </div>
 
             {customer.status === 'approved' && (

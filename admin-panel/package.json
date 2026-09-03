@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 4000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -23,6 +23,7 @@
     "shopify:backfill-stock-aggregates": "tsx --env-file=.env.local scripts/shopify/backfill-stock-aggregates.ts",
     "shopify:backfill-product-health-snapshot": "tsx --env-file=.env.local scripts/shopify/backfill-product-health-snapshot.ts",
     "shopify:set-filter-required": "tsx --env-file=.env.local scripts/shopify/set-filter-required.ts",
+    "shopify:enable-storefront-taxonomy-access": "tsx --env-file=.env.local scripts/shopify/enable-storefront-taxonomy-access.ts",
     "shopify:register-orders-webhook": "tsx --env-file=.env.local scripts/shopify/register-orders-webhook.ts",
     "shopify:unregister-orders-webhook": "tsx --env-file=.env.local scripts/shopify/unregister-orders-webhook.ts"
   },
