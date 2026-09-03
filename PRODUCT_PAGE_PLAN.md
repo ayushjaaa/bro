@@ -571,3 +571,75 @@ than retrofitting it later. Order of implementation:
    already-built fetch logic.
 5. Webhooks for both invalidation paths (products/inventory → per-tag; taxonomy metaobjects →
    `taxonomy-tree`).
+
+All 5 steps are now built and live-verified (2026-09-03):
+
+### 12.4 Step 5 result — webhooks, and two real gotchas found while building
+
+- **New files (storefront):** `lib/shopify/admin-client.core.ts` + `lib/shopify/product-webhook-queries.ts`
+  (Admin API access, mirroring admin-panel's own copy — needed because the webhook must resolve a
+  just-created/unpublished product's Sub-category+Region too, which the Storefront API token can't
+  see), `lib/webhooks/verify.ts` (HMAC verification, copied from admin-panel), `app/api/webhooks/
+  products/route.ts` and `app/api/webhooks/taxonomy/route.ts` (the two Route Handlers),
+  `scripts/shopify/register-webhooks.ts` / `unregister-webhooks.ts`.
+- **Separate subscriptions from admin-panel's own webhooks** — admin-panel already had
+  `products`/`inventory` webhook routes for its own Supabase-backed stock-sync feature, pointing at
+  its own URL. Shopify allows multiple subscriptions on the same topic with different callback
+  URLs, so storefront's cache-invalidation subscriptions coexist with those independently.
+- **Gotcha 1 — Storefront-API access gap, again:** `SHOPIFY_CLIENT_SECRET`/`SHOPIFY_CLIENT_ID`
+  (Admin API app credentials) didn't exist in storefront's `.env.local` at all — copied over from
+  admin-panel's (same Shopify custom app, two consumers). Needed both for HMAC verification
+  (signed with the app's client secret) and for the taxonomy-lookup query itself.
+- **Gotcha 2 — Next.js 16 breaking change:** `revalidateTag(tag)` (one argument) no longer
+  compiles — this version requires `revalidateTag(tag, profile)`. For a webhook (no Server Action
+  context, so `updateTag()` isn't available), the correct second argument is `{ expire: 0 }`
+  (immediate expiration) per Next's own docs, not `'max'` (which is for the Server Action case
+  where stale-while-revalidate is fine).
+- **Live-verified end-to-end** (not just typechecked): a hand-crafted, correctly-HMAC-signed
+  request against the running dev server for both routes. Products route: given the real "RAW Nav
+  Test" product's id, correctly resolved it to Rolling Papers/federal and logged
+  `revalidated: products:rolling-papers:federal` — the exact, single, correctly-scoped tag, not a
+  broader one. Taxonomy route: correctly logged `revalidated: taxonomy-tree`.
+### 12.5 Correction — the products webhook route needs no Admin API access at all
+
+The first working version of `product-webhook-queries.ts` used the Admin API for the taxonomy
+lookup (mirroring admin-panel's own webhook helper), reasoning that it needed to work for
+not-yet-published products too. The user caught this as unnecessary: this app is buyer-facing, and
+buyers can only ever see/buy **published** products — the storefront's own product-listing fetch
+already only returns published products via the Storefront API, so an unpublished product was
+never visible here to begin with. If the webhook lookup returns nothing for an unpublished product,
+that's the *correct* outcome (nothing to invalidate), not a gap that justifies broader access.
+
+**Fixed:** `product-webhook-queries.ts` now uses `shopifyStorefrontRequest` (the same Storefront
+API client every other fetch in this app uses), not the Admin API. Re-verified live afterward —
+same correct result (`products:rolling-papers:federal`).
+
+**What this narrows credential-wise:**
+- The **live webhook route** (`app/api/webhooks/products/route.ts`) now touches only
+  `SHOPIFY_CLIENT_SECRET` (for HMAC verification — Shopify signs webhooks with this exact secret,
+  no alternative exists) and the existing Storefront API token. No Admin API client, no
+  `SHOPIFY_CLIENT_ID`, in the deployed app that serves buyer traffic at all.
+- The **register-webhooks.ts / unregister-webhooks.ts scripts** still use full Admin API access
+  (`admin-client.core.ts`, `SHOPIFY_CLIENT_ID` + `SHOPIFY_CLIENT_SECRET`) — creating/deleting a
+  webhook subscription is inherently an admin-level operation — but these are one-off dev-tool
+  scripts run manually, never part of the deployed app itself.
+
+### 12.6 Registered and live-verified with a real Shopify webhook (not simulated)
+
+`npm run shopify:register-webhooks` run against an ngrok tunnel — all 7 subscriptions created
+(4 products/inventory topics + 3 metaobjects topics). The `METAOBJECTS_*` topics required a
+`filter` field on the subscription input (`"type:'category' OR type:'sub_category'"`) or Shopify
+rejects the create with "the specified filter is invalid" — not documented anywhere obvious, found
+by trial.
+
+**Real end-to-end proof:** updated the real "RAW Nav Test" product's title via the Admin API
+(`productUpdate`, admin-panel's own mutation) — genuinely, not a hand-crafted HMAC-signed request
+this time — and Shopify's own servers delivered a real webhook through the ngrok tunnel to the
+storefront's route, which correctly resolved and logged
+`[products-webhook] revalidated: products:rolling-papers:federal`. Title reverted back to "RAW Nav
+Test" afterward.
+
+**Still open:** the ngrok tunnel is only for local dev — once this app has a real deployed domain,
+`register-webhooks.ts` needs re-running with `WEBHOOK_CALLBACK_BASE_URL` pointed at that domain
+(the ngrok-pointed subscriptions should be deleted via `unregister-webhooks.ts` first, since a
+closed tunnel URL would just sit there failing deliveries).
