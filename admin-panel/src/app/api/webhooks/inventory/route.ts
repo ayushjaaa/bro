@@ -40,18 +40,46 @@ function getServiceRoleClient() {
 async function reconcileOneItem(inventoryItemId: string, orderingTimestamp: string) {
   lastQueriedAt.set(inventoryItemId, Date.now());
 
-  const quantity = await getCurrentAvailableQuantity(inventoryItemId, INVENTORY_LOCATION_ID);
-  if (quantity === null) return; // Shopify query failed -- safe to drop; a later webhook, the
+  const result = await getCurrentAvailableQuantity(inventoryItemId, INVENTORY_LOCATION_ID);
+  if (result === null) return; // Shopify query failed -- safe to drop; a later webhook, the
   // 5-min client-side reconciliation poll, or a plain page load will pick up the true value.
 
   const supabase = getServiceRoleClient();
   const { error } = await supabase.rpc('sync_inventory_and_aggregates', {
     p_inventory_item_id: inventoryItemId,
     p_location_id: INVENTORY_LOCATION_ID,
-    p_quantity: quantity,
+    p_quantity: result.quantity,
     p_shopify_updated_at: orderingTimestamp,
   });
   if (error) console.error('[inventory-webhook] Supabase sync failed:', error);
+
+  if (result.handle) {
+    void notifyStorefrontRevalidate(result.handle);
+  }
+}
+
+// Fire-and-forget: the storefront's cache being briefly stale is never a correctness problem
+// (addToCart always re-checks live against Shopify regardless of what the page showed), so a slow
+// or unreachable storefront must never hold up or fail this webhook's own response to Shopify.
+async function notifyStorefrontRevalidate(handle: string) {
+  const baseUrl = process.env.STOREFRONT_INTERNAL_URL;
+  const secret = process.env.INTERNAL_REVALIDATE_SECRET;
+  if (!baseUrl || !secret) {
+    console.error('[inventory-webhook] STOREFRONT_INTERNAL_URL or INTERNAL_REVALIDATE_SECRET not set -- skipping storefront revalidate');
+    return;
+  }
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/internal/revalidate-product`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
+      body: JSON.stringify({ handle }),
+    });
+    if (!res.ok) {
+      console.error(`[inventory-webhook] storefront revalidate failed: ${res.status} ${await res.text()}`);
+    }
+  } catch (err) {
+    console.error('[inventory-webhook] storefront revalidate request failed:', err);
+  }
 }
 
 function scheduleOrRunReconcile(inventoryItemId: string, updatedAt: string) {

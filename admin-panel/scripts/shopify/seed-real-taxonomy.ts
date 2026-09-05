@@ -107,6 +107,15 @@ async function deleteJunkBrands(names: string[]) {
   }
 }
 
+async function deleteJunkSubcategories(names: string[]) {
+  const subcategories = await listAll('sub_category', 'category');
+  for (const junk of subcategories.filter((s) => names.includes(s.name))) {
+    const data = await shopifyAdminRequest<any>(DELETE_MUTATION, { id: junk.id });
+    assertNoUserErrors(data.metaobjectDelete.userErrors, `delete "${junk.name}"`);
+    console.log(`  deleted junk sub-category: ${junk.name}`);
+  }
+}
+
 const TREE: Record<string, Record<string, string[]>> = {
   Vapes: {
     'Disposable Vapes': [
@@ -140,13 +149,46 @@ const TREE: Record<string, Record<string, string[]>> = {
     Butane: ['Spider', 'Supernova', 'London', 'Whip-It', 'Soul', 'Ronson', 'Zippo', 'K-Lite', 'Nibo'],
   },
   'Cannabis Accessories': {
-    Glass: [],
-    'Dab & Concentrate': [],
-    Grinders: [],
+    // "Glass" split into real, flat sub-categories (2026-09-04 decision) -- matches real headshop
+    // industry practice (headshop.com, dankgeek.com, smokecartel.com all treat bong-types as
+    // independent top-level browsable categories, not filters within one "Glass" page). "Glass"
+    // had zero brands/products, so this is a pure addition, nothing to migrate.
+    'Straight Tube Bongs': [],
+    'Beaker Bongs': [],
+    'Water Pipes': [],
+    'Glass Pipes': [],
+    'Hand Pipes': [],
+    Bubblers: [],
+    // "Dab & Concentrate" split (market-research confirmed: headshop.com/dankgeek.com treat these
+    // as distinct collections) -- individual small parts (carb caps/bangers/tools/terp pearls) stay
+    // filters within "Dab Rig Accessories" rather than becoming their own sub-categories.
+    'Dab Rigs': [],
+    'Nectar Collectors': [],
+    'E-Rigs': [],
+    'Dab Rig Accessories': [],
+    // "Grinders" split by piece-count (the functional dimension) -- Material (Metal/Wood/Acrylic)
+    // and Size (Regular/Mini) become filters within each, not separate sub-categories, to avoid a
+    // combinatorial explosion of piece-count x material x size sub-categories.
+    '2-Piece Grinders': [],
+    '3-Piece Grinders': [],
+    '4-Piece Grinders': [],
+    'Electric Grinders': [],
+    // Scales: research found no distinct real sub-type beyond capacity (a filter), stays flat.
     Scales: [],
+    // "Hookahs" split -- matches real headshop.com/dankgeek.com collection structure.
     Hookahs: [],
-    Storage: [],
+    'Hookah Bowls': [],
+    'Hookah Hoses': [],
+    'Hookah Accessories & Parts': [],
+    Charcoal: [],
+    // "Storage" split -- matches real headshop.com/smokecartel.com collection structure.
+    'Stash Jars': [],
+    'Storage Containers': [],
+    'Smell-Proof Bags': [],
+    // Cleaning: research found no distinct real sub-type (brushes/solutions bundled under generic
+    // "Smoking Accessories" on real sites), stays flat.
     Cleaning: [],
+    // Replacement Parts: no real-inventory data yet to split meaningfully, stays flat for now.
     'Replacement Parts': [],
   },
   Convenience: {
@@ -163,6 +205,9 @@ async function main() {
 
   console.log('\nStep 1b: fixing Gcore/Flavour Beast bottle-size brand-duplication bug...');
   await deleteJunkBrands(['Gcore 30ml', 'Gcore 60ml', 'Flavour Beast 30ml', 'Flavour Beast 60ml']);
+
+  console.log('\nStep 1c: removing old flat sub-categories split into real granular types...');
+  await deleteJunkSubcategories(['Glass', 'Dab & Concentrate', 'Grinders', 'Hookahs', 'Storage']);
 
   console.log('\nStep 2: seeding categories, sub-categories, brands...');
   const categories = await listAll('category');

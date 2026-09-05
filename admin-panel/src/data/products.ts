@@ -3,6 +3,7 @@ import { shopifyAdminRequest, assertNoUserErrors } from '@/lib/shopify/admin-cli
 import { uploadImageForProductMedia } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
+import { listBrands, listSubcategories } from './taxonomy';
 
 /**
  * Product Line DAL (Flow B2, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow B2 / §3 route map). A Product
@@ -389,6 +390,17 @@ export async function createProductLine(input: {
     throw new Error('At least one region must be selected for a Product Line.');
   }
 
+  // Resolve native Shopify fields from the taxonomy chain (PRODUCT_PAGE_PLAN.md filtering
+  // architecture, 2026-09-04): `productType` = the Brand's parent Sub-category's name,
+  // `vendor` = the Brand's own name. These power fast native `products(query:...)` filtering on
+  // the storefront -- the `taxonomy.brand` metafield below stays too (admin-panel dashboard reads
+  // it directly), this is additive, not a replacement.
+  const [brands, subcategories] = await Promise.all([listBrands(), listSubcategories()]);
+  const brand = brands.find((b) => b.id === input.brandId);
+  if (!brand) throw new Error(`Brand not found: ${input.brandId}`);
+  const subcategory = subcategories.find((s) => s.id === brand.parentId);
+  if (!subcategory) throw new Error(`Sub-category not found for brand "${brand.name}"`);
+
   const media = input.image
     ? [{ originalSource: await uploadImageForProductMedia(input.image), mediaContentType: 'IMAGE' }]
     : undefined;
@@ -412,6 +424,9 @@ export async function createProductLine(input: {
     const data = await shopifyAdminRequest<any>(PRODUCT_CREATE_MUTATION, {
       product: {
         title,
+        productType: subcategory.name,
+        vendor: brand.name,
+        tags: [`region-${region.value}`],
         productOptions: [{ name: 'Flavor', values: [{ name: 'Default' }] }],
         metafields,
       },

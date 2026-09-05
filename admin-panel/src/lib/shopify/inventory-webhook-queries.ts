@@ -15,6 +15,10 @@ import { shopifyAdminRequest, ShopifyAdminApiError } from './admin-client';
  * can be empty/wrong if multiple inventory items change close together) -- this always re-queries
  * Shopify directly for the authoritative current quantity of one item at one location.
  */
+// `variant { product { handle } }` added alongside quantity in this SAME query -- no separate
+// Shopify call needed to later resolve which storefront product page to invalidate (the
+// inventory_levels/update webhook itself only ever carries an anonymous inventory_item_id, never
+// a product reference; see the inventory webhook route's doc comment).
 const GET_INVENTORY_LEVEL_QUERY = /* GraphQL */ `
   query GetInventoryLevel($inventoryItemId: ID!, $locationId: ID!) {
     inventoryItem(id: $inventoryItemId) {
@@ -24,14 +28,24 @@ const GET_INVENTORY_LEVEL_QUERY = /* GraphQL */ `
           quantity
         }
       }
+      variant {
+        product {
+          handle
+        }
+      }
     }
   }
 `;
 
+export type InventoryLevelResult = {
+  quantity: number;
+  handle: string | null;
+};
+
 export async function getCurrentAvailableQuantity(
   inventoryItemId: string,
   locationId: string
-): Promise<number | null> {
+): Promise<InventoryLevelResult | null> {
   try {
     const data = await shopifyAdminRequest<any>(GET_INVENTORY_LEVEL_QUERY, {
       inventoryItemId,
@@ -39,7 +53,11 @@ export async function getCurrentAvailableQuantity(
     });
     const quantities = data.inventoryItem?.inventoryLevel?.quantities ?? [];
     const available = quantities.find((q: any) => q.name === 'available');
-    return typeof available?.quantity === 'number' ? available.quantity : null;
+    if (typeof available?.quantity !== 'number') return null;
+    return {
+      quantity: available.quantity,
+      handle: data.inventoryItem?.variant?.product?.handle ?? null,
+    };
   } catch (err) {
     console.error(
       '[inventory-webhook] Shopify re-query failed:',
