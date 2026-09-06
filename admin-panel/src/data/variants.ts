@@ -25,6 +25,13 @@ export type VariantRow = {
 
 const BATCH_SIZE = 100;
 
+// Shopify's `Money` scalar rejects anything that isn't a plain decimal string -- catch that here
+// instead of letting a typo (e.g. "dfd") round-trip to the API as a cryptic "invalid money" error.
+const MONEY_RE = /^\d+(\.\d{1,2})?$/;
+function isValidMoney(value: string | undefined): boolean {
+  return value === undefined || MONEY_RE.test(value.trim());
+}
+
 // strategy: REMOVE_STANDALONE_VARIANT -- not DEFAULT. DEFAULT only auto-deletes Shopify's own
 // generic "Default Title" placeholder; it explicitly PRESERVES a custom-named standalone variant
 // (live-verified via introspection 2026-08-25) -- and createProductLine() deliberately gives the
@@ -112,7 +119,7 @@ async function buildVariantInput(
     ],
   };
   if (row.compareAtPrice) input.compareAtPrice = row.compareAtPrice;
-  if (row.sku) input.sku = row.sku;
+  if (row.sku) input.inventoryItem = { sku: row.sku };
   if (row.image) {
     input.mediaId = await uploadVariantImage(productId, row.image);
   }
@@ -159,7 +166,22 @@ export async function bulkCreateVariants(
   const result: BulkCreateResult = { created: 0, failed: 0, errors: [] };
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batchRows = rows.slice(i, i + BATCH_SIZE);
+    const allBatchRows = rows.slice(i, i + BATCH_SIZE);
+
+    // Reject non-numeric price/compareAtPrice before they ever reach Shopify -- the API's own
+    // "invalid money" error doesn't say which row caused it, so catch it here with a clear message.
+    const batchRows = allBatchRows.filter((row) => {
+      const valid = isValidMoney(row.price) && isValidMoney(row.compareAtPrice);
+      if (!valid) {
+        result.failed += 1;
+        result.errors.push({
+          field: null,
+          message: `"${row.flavourName}": price must be a plain number (e.g. "12.99"), got "${row.price}"`,
+        });
+      }
+      return valid;
+    });
+    if (batchRows.length === 0) continue;
 
     try {
       // Building inputs (image uploads included) happens INSIDE the try -- a failed image
@@ -262,7 +284,19 @@ export async function updateVariants(
 
   const result: BulkCreateResult = { created: 0, failed: 0, errors: [] };
 
-  const variants = rows.map((row) => {
+  // Same "invalid money" guard as bulkCreateVariants -- catch a bad price/compareAtPrice here
+  // with a row-identifying message instead of letting Shopify's opaque error surface.
+  const invalidRows = rows.filter((row) => !isValidMoney(row.price) || !isValidMoney(row.compareAtPrice));
+  for (const row of invalidRows) {
+    result.failed += 1;
+    result.errors.push({
+      field: null,
+      message: `Row ${row.id}: price must be a plain number (e.g. "12.99"), got "${row.price}"`,
+    });
+  }
+  const validRows = rows.filter((row) => isValidMoney(row.price) && isValidMoney(row.compareAtPrice));
+
+  const variants = validRows.map((row) => {
     const input: Record<string, unknown> = {
       id: row.id,
       price: row.price,
@@ -276,29 +310,31 @@ export async function updateVariants(
       ],
     };
     if (row.compareAtPrice) input.compareAtPrice = row.compareAtPrice;
-    if (row.sku) input.sku = row.sku;
+    if (row.sku) input.inventoryItem = { sku: row.sku };
     return input;
   });
 
-  try {
-    const data = await shopifyAdminRequest<any>(BULK_UPDATE_MUTATION, { productId, variants });
-    const userErrors = data.productVariantsBulkUpdate.userErrors ?? [];
-    const updatedCount = data.productVariantsBulkUpdate.productVariants?.length ?? 0;
-    result.created += updatedCount;
-    result.failed += rows.length - updatedCount;
-    result.errors.push(...userErrors);
-  } catch (err) {
-    result.failed += rows.length;
-    if (err instanceof ShopifyAdminApiError && Array.isArray(err.errors)) {
-      for (const e of err.errors as Array<{ message?: string }>) {
-        result.errors.push({ field: null, message: e.message ?? JSON.stringify(e) });
+  if (validRows.length > 0) {
+    try {
+      const data = await shopifyAdminRequest<any>(BULK_UPDATE_MUTATION, { productId, variants });
+      const userErrors = data.productVariantsBulkUpdate.userErrors ?? [];
+      const updatedCount = data.productVariantsBulkUpdate.productVariants?.length ?? 0;
+      result.created += updatedCount;
+      result.failed += validRows.length - updatedCount;
+      result.errors.push(...userErrors);
+    } catch (err) {
+      result.failed += validRows.length;
+      if (err instanceof ShopifyAdminApiError && Array.isArray(err.errors)) {
+        for (const e of err.errors as Array<{ message?: string }>) {
+          result.errors.push({ field: null, message: e.message ?? JSON.stringify(e) });
+        }
+      } else {
+        result.errors.push({ field: null, message: err instanceof Error ? err.message : 'Update failed' });
       }
-    } else {
-      result.errors.push({ field: null, message: err instanceof Error ? err.message : 'Update failed' });
     }
   }
 
-  const quantityRows = rows.filter((r) => r.quantity !== undefined && r.inventoryItemId);
+  const quantityRows = validRows.filter((r) => r.quantity !== undefined && r.inventoryItemId);
   const toActivate = quantityRows.filter((r) => !r.isActivatedAtLocation);
   const toSet = quantityRows.filter((r) => r.isActivatedAtLocation);
 

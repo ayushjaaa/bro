@@ -26,7 +26,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 // also stay public: Shopify's webhook POSTs carry no session/cookies at all (server-to-server
 // calls, not browser requests) — they'd otherwise be redirected to /login before the route
 // handlers ever run. Their trust boundary is HMAC verification inside each route itself, not this
-// admin_users check.
+// admin_users check. "/api/internal/*" is the same story for storefront-to-admin-panel calls
+// (e.g. checkout's create-draft-order): no admin session exists for those either, so they'd
+// otherwise be silently redirected to /login (a 200 HTML page, not an error) instead of ever
+// reaching the route handler. Their trust boundary is the X-Internal-Secret check inside each
+// route itself.
 const PUBLIC_PATHS = [
   '/login',
   '/auth/confirm',
@@ -35,6 +39,7 @@ const PUBLIC_PATHS = [
   '/api/webhooks/inventory',
   '/api/webhooks/products',
 ];
+const PUBLIC_PATH_PREFIXES = ['/api/internal/'];
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -59,7 +64,9 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
 
-  const isPublicPath = PUBLIC_PATHS.includes(request.nextUrl.pathname);
+  const isPublicPath =
+    PUBLIC_PATHS.includes(request.nextUrl.pathname) ||
+    PUBLIC_PATH_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
 
   if (!isPublicPath) {
     const email = data?.claims?.email as string | undefined;

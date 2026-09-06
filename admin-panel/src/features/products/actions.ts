@@ -130,6 +130,12 @@ export async function adjustVariantQuantityAction(formData: FormData) {
   const delta = Number(formData.get('delta') ?? 0);
   const currentQuantity = Number(formData.get('currentQuantity') ?? 0);
 
+  // Guard the server boundary itself -- the one existing caller validates client-side, but a
+  // Server Action is a public endpoint and must not trust that every caller does the same.
+  if (!Number.isFinite(delta) || delta === 0 || !Number.isFinite(currentQuantity)) {
+    return { ok: false, error: 'Quantity change must be a non-zero number' };
+  }
+
   const result = await adjustVariantQuantity(inventoryItemId, delta, currentQuantity);
 
   revalidatePath(`/products/${productId.split('/').pop()}`);
