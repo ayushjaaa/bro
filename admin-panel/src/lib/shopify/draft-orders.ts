@@ -1,5 +1,6 @@
 import 'server-only';
 import { shopifyAdminRequest, assertNoUserErrors } from './admin-client';
+import { getShopifyCustomerIdForCustomer } from '@/data/customer-shopify-id';
 
 /**
  * Draft Order creation for the storefront's custom checkout (Part 1 of the checkout/dashboard
@@ -96,6 +97,16 @@ export async function createDraftOrder(
   };
   if (input.note) draftOrderInput.note = input.note;
   if (input.discountCode) draftOrderInput.discountCodes = [input.discountCode];
+
+  // Links this Draft Order to the customer's real Shopify Customer record (needed so the
+  // customer-orders feature can list "my orders" via Shopify's own `customer_id:` search) --
+  // never blocks order creation if this lookup comes back empty, only omits the link (see
+  // getShopifyCustomerIdForCustomer's own doc comment for why that should be unreachable for an
+  // approved customer, but is still handled defensively rather than assumed impossible).
+  const shopifyCustomerId = await getShopifyCustomerIdForCustomer(input.customerId);
+  if (shopifyCustomerId) {
+    draftOrderInput.purchasingEntity = { customerId: shopifyCustomerId };
+  }
 
   if (input.fulfillmentMethod === 'ship') {
     if (!input.shippingAddress) {
