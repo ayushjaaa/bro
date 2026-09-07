@@ -4,10 +4,7 @@ import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
 import { listProductLines } from '@/data/products';
 import { requireAdmin } from '@/data/admin-auth';
 import { checkWebhookHealth } from '@/data/webhook-health';
-import LiveDashboardStats, {
-  type AttentionItem,
-  type FunnelStage,
-} from '@/features/dashboard/components/LiveDashboardStats';
+import LiveDashboardStats, { type FunnelStage } from '@/features/dashboard/components/LiveDashboardStats';
 import ProductHealthPanel, {
   type ProductHealthRow,
   type VariantSkuRow,
@@ -15,6 +12,7 @@ import ProductHealthPanel, {
 import WebhookHealthBadge from '@/features/dashboard/components/WebhookHealthBadge';
 import ConversionFunnel from '@/features/dashboard/components/ConversionFunnel';
 import { getFunnelStats } from '@/data/funnel';
+import { buildAttentionData } from '@/features/dashboard/lib/attention';
 
 function getReadOnlyClient() {
   // Both tables allow public SELECT via RLS (see 003/004 migrations) -- service role is used here
@@ -48,23 +46,7 @@ export default async function OverviewPage() {
   const publishable = products.filter((p) => p.variantCount > 0);
   const publishedCount = publishable.filter((p) => p.isPublished).length;
 
-  const initialInventoryRows = products.flatMap((p) =>
-    p.variantStock
-      .filter((v): v is { inventoryItemId: string; quantity: number; title: string } => !!v.inventoryItemId)
-      .map((v) => ({ inventory_item_id: v.inventoryItemId, quantity: v.quantity }))
-  );
-
-  const attentionLookup: AttentionItem[] = products.flatMap((p) =>
-    p.variantStock
-      .filter((v): v is { inventoryItemId: string; quantity: number; title: string } => !!v.inventoryItemId)
-      .map((v) => ({
-        inventoryItemId: v.inventoryItemId,
-        productId: p.id,
-        productTitle: p.title,
-        flavourTitle: v.title,
-        imageUrl: p.imageUrl,
-      }))
-  );
+  const { initialInventoryRows, attentionLookup } = buildAttentionData(products);
 
   const funnelStages: FunnelStage[] = [
     { label: 'Categories', value: categories.length, colorVar: '--dash-funnel-1' },

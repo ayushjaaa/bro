@@ -93,12 +93,14 @@ export default function LiveDashboardStats({
           value={outOfStock.length}
           tone={outOfStock.length > 0 ? 'danger' : 'success'}
           sub={outOfStock.length > 0 ? `${outOfStock.length} Flavour${outOfStock.length === 1 ? '' : 's'}` : 'All stocked'}
+          href={outOfStock.length > 0 ? '/products/attention' : undefined}
         />
         <StatTile
           label="Low Stock"
           value={lowStock.length}
           tone={lowStock.length > 0 ? 'warning' : 'success'}
           sub={`below ${LOW_STOCK_THRESHOLD} units`}
+          href={lowStock.length > 0 ? '/products/attention' : undefined}
         />
         <StatTile
           label="Incomplete Product Lines"
@@ -159,7 +161,12 @@ export default function LiveDashboardStats({
         <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
           <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
             <span className="text-sm font-medium text-neutral-700">⚠ Needs Attention — Stock</span>
-            <span className="text-xs text-dash-text-muted">{outOfStock.length + lowStock.length}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-dash-text-muted">{outOfStock.length + lowStock.length}</span>
+              <Link href="/products/attention" className="text-xs font-medium text-emerald-700 hover:underline">
+                View all →
+              </Link>
+            </div>
           </div>
           <ul>
             {[...outOfStock, ...lowStock].slice(0, 8).map((item) => {
@@ -202,11 +209,15 @@ function StatTile({
   value,
   sub,
   tone,
+  href,
 }: {
   label: string;
   value: number;
   sub: string;
   tone: 'danger' | 'warning' | 'success' | 'info';
+  /** When set, the tile links to the full detail page for that stat (e.g. Out of Stock / Low
+   * Stock -> /products/attention) instead of just being a static number. */
+  href?: string;
 }) {
   const toneClass = {
     danger: 'text-dash-danger',
@@ -215,13 +226,26 @@ function StatTile({
     info: 'text-dash-info',
   }[tone];
 
-  return (
-    <div className="rounded-xl border border-dash-card-border bg-dash-card-bg p-4">
+  const content = (
+    <>
       <div className="text-xs text-dash-text-muted">{label}</div>
       <div className={`text-2xl font-semibold mt-1 ${toneClass}`}>{value}</div>
       <div className="text-[11px] text-dash-text-muted mt-0.5">{sub}</div>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="rounded-xl border border-dash-card-border bg-dash-card-bg p-4 block hover:border-neutral-300 hover:shadow-sm transition"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="rounded-xl border border-dash-card-border bg-dash-card-bg p-4">{content}</div>;
 }
 
 function PublishedRing({ percent }: { percent: number }) {

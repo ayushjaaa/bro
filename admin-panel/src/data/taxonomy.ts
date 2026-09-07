@@ -2,6 +2,7 @@ import 'server-only';
 import { shopifyAdminRequest, assertNoUserErrors } from '@/lib/shopify/admin-client';
 import { uploadImageFile } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
+import { createSubcategoryCollection, setMegaMenuMetafields } from '@/lib/shopify/collection-helpers.core';
 
 export type TaxonomyEntry = {
   id: string;
@@ -148,6 +149,13 @@ export async function createSubcategory(input: {
   description?: string;
   image?: File;
   categoryId: string;
+  /** Optional mega-menu placement, set on the auto-created Collection right away instead of
+   * requiring a separate trip to Shopify Admin (2026-09-07). All 4 optional -- omitting them
+   * preserves the original behavior exactly: Collection created, not opted into the mega menu. */
+  menuNavKey?: string;
+  menuGroupLabel?: string;
+  menuGroupMode?: string;
+  menuSortOrder?: number;
 }): Promise<TaxonomyEntry> {
   await requireAdmin();
   const fields = [
@@ -156,7 +164,36 @@ export async function createSubcategory(input: {
   ];
   if (input.description) fields.push({ key: 'description', value: input.description });
   if (input.image) fields.push({ key: 'image', value: await uploadImageFile(input.image) });
-  return createMetaobjectEntry('sub_category', fields);
+  const entry = await createMetaobjectEntry('sub_category', fields);
+
+  // Mega-menu plan (2026-09-07): every Sub-category gets a matching Collection so the
+  // storefront's live mega-menu (and any future Collection-based feature) can read real
+  // products for it via product_type, without a Collection ever needing to be created by hand.
+  // Deliberately never thrown -- a Collection hiccup must never break Sub-category creation,
+  // which other flows already depend on completing. `backfill-subcategory-collections.ts`
+  // covers any Sub-category this ever fails for (idempotent, safe to re-run).
+  try {
+    const collectionId = await createSubcategoryCollection(input.name);
+
+    // Same never-throw reasoning as the Collection creation above, kept as its own try/catch so
+    // a metafields hiccup can't be mistaken for (or mask) a Collection-creation failure in logs.
+    if (input.menuNavKey || input.menuGroupLabel || input.menuGroupMode || input.menuSortOrder !== undefined) {
+      try {
+        await setMegaMenuMetafields(collectionId, {
+          navKey: input.menuNavKey,
+          groupLabel: input.menuGroupLabel,
+          groupMode: input.menuGroupMode,
+          sortOrder: input.menuSortOrder,
+        });
+      } catch (err) {
+        console.error(`createSubcategory: failed to set mega-menu metafields for "${input.name}" -- continuing anyway.`, err);
+      }
+    }
+  } catch (err) {
+    console.error(`createSubcategory: failed to auto-create Collection for "${input.name}" -- continuing anyway.`, err);
+  }
+
+  return entry;
 }
 
 export async function createBrand(input: {

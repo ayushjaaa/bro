@@ -1,14 +1,8 @@
-import { listCustomers, listCartActivity, listCartSnapshot, listOrderStatusLog } from '@/data/customers';
+import { listCustomers, listOrderStatusLog } from '@/data/customers';
 import CustomersTable from '@/features/customers/components/CustomersTable';
-import CartActivityList from '@/features/customers/components/CartActivityList';
 
 export default async function CustomersPage() {
-  const [customers, cartActivity, cartSnapshot, orderStatusLog] = await Promise.all([
-    listCustomers(),
-    listCartActivity(),
-    listCartSnapshot(),
-    listOrderStatusLog(),
-  ]);
+  const [customers, orderStatusLog] = await Promise.all([listCustomers(), listOrderStatusLog()]);
   const pendingCount = customers.filter((c) => c.status === 'pending').length;
 
   return (
@@ -22,12 +16,7 @@ export default async function CustomersPage() {
         </p>
       </div>
 
-      <CustomersTable customers={customers} initialCartSnapshot={cartSnapshot} initialOrderStatusLog={orderStatusLog} />
-
-      <div>
-        <h2 className="text-sm font-semibold text-neutral-700 mb-2">Cart Activity</h2>
-        <CartActivityList initialEvents={cartActivity} />
-      </div>
+      <CustomersTable customers={customers} initialOrderStatusLog={orderStatusLog} />
     </div>
   );
 }

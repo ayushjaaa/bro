@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/products', label: 'Products' },
   { href: '/taxonomy', label: 'Taxonomy' },
   { href: '/customers', label: 'Customers' },
+  { href: '/cart', label: 'Cart' },
 ];
 
 export default function Sidebar() {

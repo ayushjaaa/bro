@@ -210,16 +210,69 @@ export type CartSnapshotRow = {
   updated_at: string;
 };
 
-/** Current cart contents for every customer (see cart_snapshot table comment -- this always
- * reflects "what's in the cart RIGHT NOW", unlike cart_events' append-only history). Raw snake_case
- * shape returned as-is since it's consumed directly by useLiveTable, which needs to match
- * Realtime's own payload shape. */
-export async function listCartSnapshot(): Promise<CartSnapshotRow[]> {
+/** Cart contents for a specific set of customers -- used to hydrate the item lines for whichever
+ * page of customers `listCustomerCartsPage()` returned (and, since a customer can only be opened
+ * in the detail modal from a row already on screen, that's also all the modal ever needs). Never
+ * called with an unbounded id list -- callers are expected to pass a page's worth of ids, not
+ * every customer with a cart. */
+export async function listCartSnapshotForCustomers(customerIds: string[]): Promise<CartSnapshotRow[]> {
   await requireAdmin();
+  if (customerIds.length === 0) return [];
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase.from('cart_snapshot').select('*');
+  const { data, error } = await supabase.from('cart_snapshot').select('*').in('customer_id', customerIds);
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export type CustomerCartSummary = {
+  customerId: string;
+  firstName: string;
+  lastName: string;
+  businessName: string | null;
+  email: string;
+  itemCount: number;
+  lastUpdated: string;
+};
+
+export type CustomerCartsPage = {
+  customers: CustomerCartSummary[];
+  totalCount: number;
+  totalItems: number;
+};
+
+/** Server-side paginated "which customers have items in their cart right now, most recently
+ * active first" -- backed by the `list_customer_carts` Postgres function (see
+ * 012-cart-snapshot-pagination.sql for why this can't be a plain LIMIT/OFFSET on cart_snapshot
+ * itself: it's grouped by customer and ordered by each customer's latest item, both of which need
+ * every one of that customer's rows to compute). `search` matches name/business/email, same as
+ * this page's search box did when filtering client-side. */
+export async function listCustomerCartsPage(params: {
+  search?: string;
+  limit: number;
+  offset: number;
+}): Promise<CustomerCartsPage> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.rpc('list_customer_carts', {
+    p_search: params.search?.trim() || null,
+    p_limit: params.limit,
+    p_offset: params.offset,
+  });
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  return {
+    customers: rows.map((r: any) => ({
+      customerId: r.customer_id,
+      firstName: r.first_name,
+      lastName: r.last_name,
+      businessName: r.business_name,
+      email: r.email,
+      itemCount: Number(r.item_count),
+      lastUpdated: r.last_updated,
+    })),
+    totalCount: rows.length > 0 ? Number(rows[0].total_count) : 0,
+    totalItems: rows.length > 0 ? Number(rows[0].total_items) : 0,
+  };
 }
 
 export type OrderStatusRow = {

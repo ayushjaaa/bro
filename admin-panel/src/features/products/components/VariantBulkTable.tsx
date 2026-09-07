@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { bulkCreateVariantsAction } from '../actions';
 
 type Row = {
+  id: number;
   flavourName: string;
   description: string;
   price: string;
@@ -14,7 +15,9 @@ type Row = {
   image: File | null;
 };
 
-const EMPTY_ROW: Row = {
+type RowErrors = Partial<Record<keyof Row, string>>;
+
+const BLANK_ROW: Omit<Row, 'id'> = {
   flavourName: '',
   description: '',
   price: '',
@@ -28,11 +31,78 @@ function draftKey(productId: string) {
   return `variant-draft:${productId}`;
 }
 
+/** A row with nothing entered yet (the default blank starter row, or one a draft-reload left
+ * empty) shouldn't be flagged with a wall of "Required" errors -- only rows the admin has
+ * actually started filling in get validated. */
+function isRowTouched(row: Row): boolean {
+  return (
+    row.flavourName.trim() !== '' ||
+    row.description.trim() !== '' ||
+    row.price.trim() !== '' ||
+    row.compareAtPrice.trim() !== '' ||
+    row.sku.trim() !== '' ||
+    row.quantity.trim() !== '' ||
+    row.image !== null
+  );
+}
+
+/** Every field is required except Compare-at (the one genuinely optional field, used only to show
+ * a strikethrough "was $X" price). Price and Quantity must be greater than 0 -- a $0 Flavour or
+ * one with 0 stock isn't a real sellable state. Compare-at, when given, must be less than Price,
+ * otherwise Shopify's storefront would render a "discount" that's actually a markup. */
+function validateRow(row: Row): RowErrors {
+  const errors: RowErrors = {};
+
+  if (!row.flavourName.trim()) errors.flavourName = 'Required';
+  if (!row.description.trim()) errors.description = 'Required';
+  if (!row.sku.trim()) errors.sku = 'Required';
+  if (!row.image) errors.image = 'Required';
+
+  const price = Number(row.price);
+  if (!row.price.trim()) {
+    errors.price = 'Required';
+  } else if (!Number.isFinite(price) || price <= 0) {
+    errors.price = 'Must be > 0';
+  }
+
+  const quantity = Number(row.quantity);
+  if (!row.quantity.trim()) {
+    errors.quantity = 'Required';
+  } else if (!Number.isInteger(quantity) || quantity <= 0) {
+    errors.quantity = 'Must be > 0';
+  }
+
+  if (row.compareAtPrice.trim()) {
+    const compareAtPrice = Number(row.compareAtPrice);
+    if (!Number.isFinite(compareAtPrice)) {
+      errors.compareAtPrice = 'Invalid number';
+    } else if (!errors.price && compareAtPrice >= price) {
+      errors.compareAtPrice = 'Must be < Price';
+    }
+  }
+
+  return errors;
+}
+
+const inputClass = (hasError: boolean, locked: boolean) =>
+  `w-full rounded border px-1.5 py-1 text-xs ${
+    locked
+      ? 'border-emerald-200 bg-emerald-50/60 text-neutral-500 cursor-not-allowed'
+      : hasError
+        ? 'border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400'
+        : 'border-neutral-300'
+  }`;
+
 /** Spreadsheet-style bulk Flavour entry (Flow C). Region is no longer a per-row field
  * (PRODUCT_PAGE_PLAN.md §11) -- this table is always scoped to one already-region-specific
  * Product Line (the admin picked regions when creating the Product Line, one Product per region),
  * so every row here only needs Flavour/Description/Price/etc. Draft (text fields only, not File
- * images) autosaves to localStorage per Product Line so a closed tab doesn't lose entered rows. */
+ * images) autosaves to localStorage per Product Line so a closed tab doesn't lose entered rows.
+ *
+ * Once "Create All" succeeds, the rows that were just sent to Shopify get locked in place (green
+ * tint, read-only, no Remove) instead of being cleared -- they're now real variants, not draft
+ * data, so editing them here wouldn't do anything to Shopify anyway. Only rows added afterward
+ * (via "+ Add row") stay editable. */
 export default function VariantBulkTable({
   productId,
   numericId,
@@ -42,7 +112,9 @@ export default function VariantBulkTable({
   numericId: string;
   productTitle: string;
 }) {
-  const [rows, setRows] = useState<Row[]>([{ ...EMPTY_ROW }]);
+  const nextRowId = useRef(1);
+  const [rows, setRows] = useState<Row[]>([{ ...BLANK_ROW, id: 0 }]);
+  const [createdIds, setCreatedIds] = useState<Set<number>>(new Set());
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ created: number; failed: number; errors: string[] } | null>(
     null
@@ -53,9 +125,11 @@ export default function VariantBulkTable({
     const saved = localStorage.getItem(draftKey(numericId));
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as Omit<Row, 'image'>[];
+        const parsed = JSON.parse(saved) as Array<Omit<Row, 'image' | 'id'> & { id?: number }>;
         if (parsed.length > 0) {
-          setRows(parsed.map((r) => ({ ...r, image: null })));
+          const restored = parsed.map((r, i) => ({ ...r, id: r.id ?? i, image: null }));
+          nextRowId.current = Math.max(...restored.map((r) => r.id)) + 1;
+          setRows(restored);
         }
       } catch {
         // ignore corrupt draft
@@ -69,22 +143,37 @@ export default function VariantBulkTable({
     localStorage.setItem(draftKey(numericId), JSON.stringify(toSave));
   }, [rows, numericId]);
 
-  function updateRow(index: number, patch: Partial<Row>) {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  function updateRow(id: number, patch: Partial<Row>) {
+    if (createdIds.has(id)) return;
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { ...EMPTY_ROW }]);
+    setRows((prev) => [...prev, { ...BLANK_ROW, id: nextRowId.current++ }]);
   }
 
-  function removeRow(index: number) {
-    setRows((prev) => prev.filter((_, i) => i !== index));
+  function removeRow(id: number) {
+    if (createdIds.has(id)) return;
+    setRows((prev) => prev.filter((r) => r.id !== id));
   }
+
+  const editableRows = rows.filter((r) => !createdIds.has(r.id));
+  const rowValidations = new Map(
+    editableRows.map((row) => [row.id, { touched: isRowTouched(row), errors: validateRow(row) }])
+  );
+  const hasBlockingErrors = editableRows.some((row) => {
+    const v = rowValidations.get(row.id)!;
+    return v.touched && Object.keys(v.errors).length > 0;
+  });
+  const validRows = editableRows.filter((row) => {
+    const v = rowValidations.get(row.id)!;
+    return v.touched && Object.keys(v.errors).length === 0;
+  });
+  const canSubmit = !hasBlockingErrors && validRows.length > 0 && !pending;
 
   function handleSubmit() {
+    if (!canSubmit) return;
     setResult(null);
-    const validRows = rows.filter((r) => r.flavourName.trim() && r.price.trim());
-    if (validRows.length === 0) return;
 
     const formData = new FormData();
     formData.set('productId', productId);
@@ -93,9 +182,9 @@ export default function VariantBulkTable({
       formData.set(`row:${i}:flavourName`, row.flavourName);
       formData.set(`row:${i}:description`, row.description);
       formData.set(`row:${i}:price`, row.price);
+      formData.set(`row:${i}:sku`, row.sku);
+      formData.set(`row:${i}:quantity`, row.quantity);
       if (row.compareAtPrice) formData.set(`row:${i}:compareAtPrice`, row.compareAtPrice);
-      if (row.sku) formData.set(`row:${i}:sku`, row.sku);
-      if (row.quantity) formData.set(`row:${i}:quantity`, row.quantity);
       if (row.image) formData.set(`row:${i}:image`, row.image);
     });
 
@@ -108,7 +197,7 @@ export default function VariantBulkTable({
           errors: res.errors.map((e) => e.message),
         });
         if (res.failed === 0) {
-          localStorage.removeItem(draftKey(numericId));
+          setCreatedIds((prev) => new Set([...prev, ...validRows.map((r) => r.id)]));
           router.refresh();
         }
       } catch (err) {
@@ -138,79 +227,114 @@ export default function VariantBulkTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {rows.map((row, i) => (
-              <tr key={i}>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.flavourName}
-                    onChange={(e) => updateRow(i, { flavourName: e.target.value })}
-                    placeholder="e.g. Blue Razz"
-                    className="w-32 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.description}
-                    onChange={(e) => updateRow(i, { description: e.target.value })}
-                    className="w-32 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.price}
-                    onChange={(e) => updateRow(i, { price: e.target.value })}
-                    placeholder="0.00"
-                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.compareAtPrice}
-                    onChange={(e) => updateRow(i, { compareAtPrice: e.target.value })}
-                    placeholder="0.00"
-                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.quantity}
-                    onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                    placeholder="0"
-                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={row.sku}
-                    onChange={(e) => updateRow(i, { sku: e.target.value })}
-                    className="w-20 rounded border border-neutral-300 px-1.5 py-1 text-xs"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => updateRow(i, { image: e.target.files?.[0] ?? null })}
-                    className="w-24 text-xs"
-                  />
-                  {/* File inputs can't be pre-filled via JS (browser security) -- if a duplicated
-                   * row already carries an image in state, the input itself will misleadingly
-                   * show "No file chosen", so surface it explicitly here. */}
-                  {row.image && (
-                    <p className="text-[10px] text-emerald-600 mt-0.5">✓ {row.image.name}</p>
-                  )}
-                </td>
-                <td className="px-2 py-1.5 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => removeRow(i)}
-                    className="text-xs text-red-600 hover:underline"
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const locked = createdIds.has(row.id);
+              const v = rowValidations.get(row.id);
+              const showErrors = !locked && !!v?.touched;
+              const errors = v?.errors ?? {};
+              return (
+                <tr key={row.id} className={locked ? 'bg-emerald-50/40' : ''}>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.flavourName}
+                      onChange={(e) => updateRow(row.id, { flavourName: e.target.value })}
+                      placeholder="e.g. Blue Razz"
+                      disabled={locked}
+                      className={`w-32 ${inputClass(showErrors && !!errors.flavourName, locked)}`}
+                    />
+                    {showErrors && errors.flavourName && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.flavourName}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.description}
+                      onChange={(e) => updateRow(row.id, { description: e.target.value })}
+                      disabled={locked}
+                      className={`w-32 ${inputClass(showErrors && !!errors.description, locked)}`}
+                    />
+                    {showErrors && errors.description && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.description}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.price}
+                      onChange={(e) => updateRow(row.id, { price: e.target.value })}
+                      placeholder="0.00"
+                      disabled={locked}
+                      className={`w-16 ${inputClass(showErrors && !!errors.price, locked)}`}
+                    />
+                    {showErrors && errors.price && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.price}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.compareAtPrice}
+                      onChange={(e) => updateRow(row.id, { compareAtPrice: e.target.value })}
+                      placeholder="0.00"
+                      disabled={locked}
+                      className={`w-16 ${inputClass(showErrors && !!errors.compareAtPrice, locked)}`}
+                    />
+                    {showErrors && errors.compareAtPrice && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.compareAtPrice}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.quantity}
+                      onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+                      placeholder="0"
+                      disabled={locked}
+                      className={`w-16 ${inputClass(showErrors && !!errors.quantity, locked)}`}
+                    />
+                    {showErrors && errors.quantity && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.quantity}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.sku}
+                      onChange={(e) => updateRow(row.id, { sku: e.target.value })}
+                      disabled={locked}
+                      className={`w-20 ${inputClass(showErrors && !!errors.sku, locked)}`}
+                    />
+                    {showErrors && errors.sku && <p className="text-[10px] text-red-600 mt-0.5">{errors.sku}</p>}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    {!locked && (
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => updateRow(row.id, { image: e.target.files?.[0] ?? null })}
+                        className="w-24 text-xs"
+                      />
+                    )}
+                    {/* File inputs can't be pre-filled via JS (browser security) -- if a duplicated
+                     * row already carries an image in state, the input itself will misleadingly
+                     * show "No file chosen", so surface it explicitly here. */}
+                    {row.image && !locked && (
+                      <p className="text-[10px] text-emerald-600 mt-0.5">✓ {row.image.name}</p>
+                    )}
+                    {showErrors && errors.image && <p className="text-[10px] text-red-600 mt-0.5">{errors.image}</p>}
+                  </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap align-top">
+                    {locked ? (
+                      <span className="text-xs text-emerald-700 font-medium">✓ Created</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => removeRow(row.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -226,11 +350,17 @@ export default function VariantBulkTable({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={pending}
-          className="rounded-md bg-emerald-600 text-white text-xs font-medium px-4 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
+          disabled={!canSubmit}
+          className="rounded-md bg-emerald-600 text-white text-xs font-medium px-4 py-1.5 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {pending ? 'Creating...' : `Create All (${rows.filter((r) => r.flavourName.trim()).length})`}
+          {pending ? 'Creating...' : `Create All (${validRows.length})`}
         </button>
+        {hasBlockingErrors && (
+          <span className="text-xs text-red-600">Fix the highlighted fields before creating.</span>
+        )}
+        {!hasBlockingErrors && validRows.length === 0 && (
+          <span className="text-xs text-neutral-500">Add at least one Flavour with every required field filled in.</span>
+        )}
       </div>
 
       {result && (

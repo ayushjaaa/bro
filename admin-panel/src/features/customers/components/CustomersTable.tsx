@@ -2,34 +2,28 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Customer, CartSnapshotRow, OrderStatusRow } from '@/data/customers';
+import type { Customer, OrderStatusRow } from '@/data/customers';
 import { approveCustomerAction, rejectCustomerAction, updateAccountTypeAction, getRegistrationDocumentUrlAction } from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 
 /** Unified expandable Customers screen (design decision: item 38) -- pending and approved rows
  * live in one table, not separate pages. Collapsed row = name + business name + the
  * status-appropriate action; expanding reveals every registration field, an account-type switch
- * for already-approved rows, and (per user request) that customer's current cart contents +
- * order history -- so an admin can see at a glance "what did they add, and did they ever order."
+ * for already-approved rows, and order history -- so an admin can see at a glance whether they
+ * ever ordered. Cart contents live on their own page (/cart) now, not nested in here -- see that
+ * page's doc comment for why (this row also can't cleanly show live cart contents: they're keyed
+ * by this app's internal customer id, not `shopifyCustomerId`, which is the only Shopify identifier
+ * available here).
  */
 export default function CustomersTable({
   customers,
-  initialCartSnapshot,
   initialOrderStatusLog,
 }: {
   customers: Customer[];
-  initialCartSnapshot: CartSnapshotRow[];
   initialOrderStatusLog: OrderStatusRow[];
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Subscribed ONCE here (not per-row) to avoid opening N Realtime channels for N customer rows --
-  // each row below just filters this shared live data down to its own shopifyCustomerId.
-  const cartSnapshot = useLiveTable(
-    'cart_snapshot',
-    (r: CartSnapshotRow) => `${r.customer_id}:${r.variant_id}`,
-    initialCartSnapshot
-  );
   const orderStatusLog = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
 
   if (customers.length === 0) {
@@ -55,9 +49,6 @@ export default function CustomersTable({
         </thead>
         <tbody className="divide-y divide-neutral-100">
           {customers.map((c) => {
-            const cartItems = c.shopifyCustomerId
-              ? [...cartSnapshot.values()].filter((row) => row.customer_id === c.shopifyCustomerId)
-              : [];
             const orders = c.shopifyCustomerId
               ? [...orderStatusLog.values()].filter((row) => row.customer_id === c.shopifyCustomerId)
               : [];
@@ -65,7 +56,6 @@ export default function CustomersTable({
               <CustomerRow
                 key={c.id}
                 customer={c}
-                cartItems={cartItems}
                 orders={orders}
                 expanded={expandedId === c.id}
                 onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
@@ -80,13 +70,11 @@ export default function CustomersTable({
 
 function CustomerRow({
   customer,
-  cartItems,
   orders,
   expanded,
   onToggle,
 }: {
   customer: Customer;
-  cartItems: CartSnapshotRow[];
   orders: OrderStatusRow[];
   expanded: boolean;
   onToggle: () => void;
@@ -296,45 +284,27 @@ function CustomerRow({
             )}
 
             {customer.shopifyCustomerId && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">
-                    Current Cart {cartItems.length > 0 && `(${cartItems.length})`}
-                  </h3>
-                  {cartItems.length === 0 ? (
-                    <p className="text-xs text-neutral-400">Cart is empty.</p>
-                  ) : (
-                    <ul className="text-xs flex flex-col gap-1">
-                      {cartItems.map((item) => (
-                        <li key={item.variant_id} className="flex items-center justify-between text-neutral-700">
-                          <span>{item.product_id.split('/').pop()}</span>
-                          <span className="text-neutral-400">
-                            ×{item.quantity} · {new Date(item.updated_at).toLocaleString('en-CA')}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">
-                    Orders {hasOrdered ? '✓ has ordered' : '— never ordered'}
-                  </h3>
-                  {latestByOrder.size === 0 ? (
-                    <p className="text-xs text-neutral-400">No order requests yet.</p>
-                  ) : (
-                    <ul className="text-xs flex flex-col gap-1">
-                      {[...latestByOrder.values()].map((o) => (
-                        <li key={o.order_id} className="flex items-center justify-between text-neutral-700">
-                          <span>{o.order_id.includes('/DraftOrder/') ? 'Draft' : 'Order'} {o.order_id.split('/').pop()}</span>
-                          <span className="text-neutral-400">
-                            {o.new_status} · {new Date(o.changed_at).toLocaleString('en-CA')}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">
+                  Orders {hasOrdered ? '✓ has ordered' : '— never ordered'}
+                </h3>
+                {latestByOrder.size === 0 ? (
+                  <p className="text-xs text-neutral-400">No order requests yet.</p>
+                ) : (
+                  <ul className="text-xs flex flex-col gap-1 max-w-md">
+                    {[...latestByOrder.values()].map((o) => (
+                      <li key={o.order_id} className="flex items-center justify-between text-neutral-700">
+                        <span>{o.order_id.includes('/DraftOrder/') ? 'Draft' : 'Order'} {o.order_id.split('/').pop()}</span>
+                        <span className="text-neutral-400">
+                          {o.new_status} · {new Date(o.changed_at).toLocaleString('en-CA')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs text-neutral-400 mt-2">
+                  Cart contents live on the <a href="/cart" className="text-emerald-700 hover:underline">Cart</a> page.
+                </p>
               </div>
             )}
           </td>

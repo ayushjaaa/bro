@@ -2,7 +2,13 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { createProductLine, publishProductLine, unpublishProductLine } from '@/data/products';
+import {
+  createProductLine,
+  publishProductLine,
+  unpublishProductLine,
+  listProductLinesPage,
+  type ProductLinesPage,
+} from '@/data/products';
 import { REGIONS } from '@/lib/regions';
 import {
   bulkCreateVariants,
@@ -104,6 +110,14 @@ export async function updateVariantsAction(formData: FormData): Promise<BulkCrea
   revalidatePath(`/products/${productId.split('/').pop()}`);
   revalidatePath('/products');
   return result;
+}
+
+/** Backs the /products table's Next/Previous controls -- called from the client with whichever
+ * cursor it wants to jump to (its own cursor stack tracks "previous"; `endCursor` from the last
+ * response is "next"), so paging never re-fetches the same Shopify `first: 100` window the old
+ * unpaginated listProductLines() was stuck with. */
+export async function getProductLinesPageAction(params: { cursor?: string | null; limit: number }): Promise<ProductLinesPage> {
+  return listProductLinesPage(params);
 }
 
 /** Thin Server Action — publishes a Product Line to the Online Store channel. */

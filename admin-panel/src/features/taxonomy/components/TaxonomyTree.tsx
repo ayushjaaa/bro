@@ -120,7 +120,48 @@ export default function TaxonomyTree({
                         parentField={{ name: 'categoryId', value: cat.id }}
                         onSubmit={createSubcategoryAction}
                         onDone={closeForm}
-                      />
+                      >
+                        {/* Optional mega-menu placement -- Category/Brand's own AddEntryForm
+                         * calls above pass no children, so they're unaffected. Fixed dropdowns
+                         * for navKey/mode (not free text) so this path can't reproduce the
+                         * leading-whitespace bug already hit once via Shopify Admin's free-text
+                         * metafield editor. Leaving all 4 blank preserves today's behavior
+                         * exactly: Collection created, not opted into the mega menu. */}
+                        <div className="flex flex-col gap-1.5 rounded border border-neutral-200 bg-white p-2">
+                          <p className="text-[11px] font-medium text-neutral-500">Mega menu placement (optional)</p>
+                          <select
+                            name="menuNavKey"
+                            defaultValue=""
+                            className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-emerald-500"
+                          >
+                            <option value="">Not in mega menu</option>
+                            <option value="vape-e-juices">Vape &amp; e juices</option>
+                            <option value="smoking">Smoking</option>
+                            <option value="cannabis-accessories">Cannabis accessories</option>
+                            <option value="convenience">Convenience</option>
+                          </select>
+                          <input
+                            name="menuGroupLabel"
+                            placeholder="Menu group label (e.g. Bongs)"
+                            className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-emerald-500"
+                          />
+                          <select
+                            name="menuGroupMode"
+                            defaultValue=""
+                            className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-emerald-500"
+                          >
+                            <option value="">Panel 2 shows: (default) sub-categories</option>
+                            <option value="subcategory">Panel 2 shows: sub-categories</option>
+                            <option value="brand">Panel 2 shows: brands</option>
+                          </select>
+                          <input
+                            name="menuSortOrder"
+                            type="number"
+                            placeholder="Sort order (e.g. 1)"
+                            className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </AddEntryForm>
                     )}
                   {catSubs.map((sub) => {
                     const subOpen = expandedSubs.has(sub.id);

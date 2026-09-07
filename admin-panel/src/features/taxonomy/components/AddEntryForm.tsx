@@ -12,12 +12,19 @@ export default function AddEntryForm({
   parentField,
   onSubmit,
   onDone,
+  children,
 }: {
   label: string;
   imageFieldName: 'image' | 'logo';
   parentField?: { name: string; value: string };
   onSubmit: (formData: FormData) => Promise<unknown>;
   onDone: () => void;
+  /** Extra named inputs to render inside the form -- e.g. Sub-category's mega-menu placement
+   * fields. Automatically included in the FormData `onSubmit` receives (a plain `new
+   * FormData(e.currentTarget)` collects every named input inside the <form>, not just the ones
+   * this component itself renders), so no change to the submit logic is needed. Category's and
+   * Brand's call sites pass nothing here and render exactly as before. */
+  children?: React.ReactNode;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +62,7 @@ export default function AddEntryForm({
         className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-emerald-500"
       />
       <input name={imageFieldName} type="file" accept="image/*" className="text-xs" />
+      {children}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex items-center gap-2">
         <button

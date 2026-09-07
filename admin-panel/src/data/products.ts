@@ -59,8 +59,12 @@ export type ProductLineSummary = {
 };
 
 const LIST_PRODUCT_LINES_QUERY = /* GraphQL */ `
-  query ListProductLines {
-    products(first: 100, sortKey: UPDATED_AT, reverse: true) {
+  query ListProductLines($limit: Int!, $after: String) {
+    products(first: $limit, after: $after, sortKey: UPDATED_AT, reverse: true) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         id
         title
@@ -128,38 +132,98 @@ const LIST_PRODUCT_LINES_QUERY = /* GraphQL */ `
   }
 `;
 
-/** Lists Product Lines for the /products page -- newest-updated first. Flags Product Lines with
- * 0 variants as an incomplete state (§0a), not fetched separately: variantsCount comes back on
- * the same query. */
+function toProductLineSummary(n: any): ProductLineSummary {
+  const brandRef = n.metafield?.reference;
+  const subCategoryRef = brandRef?.subCategoryField?.reference;
+  return {
+    id: n.id,
+    title: n.title,
+    status: n.status,
+    imageUrl: n.featuredImage?.url ?? null,
+    variantCount: n.variantsCount?.count ?? 0,
+    brandName: brandRef?.brandName?.value ?? null,
+    subcategoryName: subCategoryRef?.subCategoryName?.value ?? null,
+    categoryName: subCategoryRef?.categoryField?.reference?.categoryName?.value ?? null,
+    region: n.regionField?.value ?? null,
+    isPublished: n.publishedAt !== null,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+    totalInventory: n.totalInventory ?? 0,
+    minPrice: n.priceRangeV2?.minVariantPrice?.amount ?? '0.0',
+    maxPrice: n.priceRangeV2?.maxVariantPrice?.amount ?? '0.0',
+    currencyCode: n.priceRangeV2?.minVariantPrice?.currencyCode ?? 'USD',
+    variantStock: (n.variants?.nodes ?? []).map((v: any) => ({
+      inventoryItemId: v.inventoryItem?.id ?? null,
+      quantity: v.inventoryQuantity ?? 0,
+    })),
+  };
+}
+
+/** Lists Product Lines, newest-updated first -- used where the FULL set is needed (dashboard
+ * aggregate stats, resolving product titles for the cart page) rather than a single page of the
+ * /products table. Still capped at a single `first: 100` page: fine for those aggregate/lookup
+ * uses today, but NOT what backs the /products listing itself -- see `listProductLinesPage` for
+ * that, which pages through the real Shopify cursor instead of silently truncating. */
 export async function listProductLines(): Promise<ProductLineSummary[]> {
   await requireAdmin();
-  const data = await shopifyAdminRequest<any>(LIST_PRODUCT_LINES_QUERY);
-  return data.products.nodes.map((n: any) => {
-    const brandRef = n.metafield?.reference;
-    const subCategoryRef = brandRef?.subCategoryField?.reference;
-    return {
-      id: n.id,
-      title: n.title,
-      status: n.status,
-      imageUrl: n.featuredImage?.url ?? null,
-      variantCount: n.variantsCount?.count ?? 0,
-      brandName: brandRef?.brandName?.value ?? null,
-      subcategoryName: subCategoryRef?.subCategoryName?.value ?? null,
-      categoryName: subCategoryRef?.categoryField?.reference?.categoryName?.value ?? null,
-      region: n.regionField?.value ?? null,
-      isPublished: n.publishedAt !== null,
-      createdAt: n.createdAt,
-      updatedAt: n.updatedAt,
-      totalInventory: n.totalInventory ?? 0,
-      minPrice: n.priceRangeV2?.minVariantPrice?.amount ?? '0.0',
-      maxPrice: n.priceRangeV2?.maxVariantPrice?.amount ?? '0.0',
-      currencyCode: n.priceRangeV2?.minVariantPrice?.currencyCode ?? 'USD',
-      variantStock: (n.variants?.nodes ?? []).map((v: any) => ({
-        inventoryItemId: v.inventoryItem?.id ?? null,
-        quantity: v.inventoryQuantity ?? 0,
-      })),
-    };
+  const data = await shopifyAdminRequest<any>(LIST_PRODUCT_LINES_QUERY, { limit: 100, after: null });
+  return data.products.nodes.map(toProductLineSummary);
+}
+
+export type ProductLinesPage = {
+  products: ProductLineSummary[];
+  hasNextPage: boolean;
+  endCursor: string | null;
+};
+
+/** Cursor-paginated Product Lines for the /products table -- Shopify's Admin API only supports
+ * cursor (`after`) pagination, not offset/limit, so the page just walks forward one cursor at a
+ * time; `page.tsx` renders the first page server-side and the client component fetches
+ * subsequent/previous pages by keeping its own stack of cursors it's already seen. */
+export async function listProductLinesPage(params: { cursor?: string | null; limit: number }): Promise<ProductLinesPage> {
+  await requireAdmin();
+  const data = await shopifyAdminRequest<any>(LIST_PRODUCT_LINES_QUERY, {
+    limit: params.limit,
+    after: params.cursor ?? null,
   });
+  return {
+    products: data.products.nodes.map(toProductLineSummary),
+    hasNextPage: data.products.pageInfo?.hasNextPage ?? false,
+    endCursor: data.products.pageInfo?.endCursor ?? null,
+  };
+}
+
+/** Resolves a specific set of Product GIDs to titles directly, bypassing `listProductLines()`'s
+ * `first: 100` page -- needed anywhere a product id comes from stored data (e.g. `cart_snapshot`/
+ * `cart_events`) rather than from that list itself, since a cart can reference a product that's
+ * since been deleted, unpublished, or simply isn't in the newest 100 by update time. Without this,
+ * those ids fall back to showing their bare Shopify numeric id instead of a name. Returns titles
+ * only for ids that still resolve (a deleted product comes back `null` from `nodes` and is
+ * skipped, not thrown on). */
+export async function getProductTitlesByIds(ids: string[]): Promise<Map<string, string>> {
+  await requireAdmin();
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return new Map();
+
+  const data = await shopifyAdminRequest<any>(
+    /* GraphQL */ `
+      query ProductTitlesByIds($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Product {
+            id
+            title
+          }
+        }
+      }
+    `,
+    { ids: uniqueIds }
+  );
+
+  const map = new Map<string, string>();
+  for (const node of data.nodes ?? []) {
+    if (node?.id && node?.title) map.set(node.id, node.title);
+  }
+  return map;
 }
 
 export type ProductLineDetail = {
