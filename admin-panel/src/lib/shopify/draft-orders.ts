@@ -54,6 +54,11 @@ export interface CreateDraftOrderInput {
   fulfillmentMethod: FulfillmentMethod;
   /** Required when fulfillmentMethod is 'ship'. */
   shippingAddress?: ShippingAddressInput;
+  /** Sent on every order regardless of fulfillment method -- billing is about invoicing, not
+   * delivery. Storefront's CheckoutPage.tsx always resolves a real address before calling this
+   * (either the same one as shipping, or a separately-picked billing location), so it's expected
+   * on every call even though it's typed optional here for forward compatibility. */
+  billingAddress?: ShippingAddressInput;
   /** Required when fulfillmentMethod is 'pickup' -- folded into customAttributes since DraftOrder
    * has no native pickup-location field (confirmed via Shopify's own schema docs). */
   pickupLocationName?: string;
@@ -128,6 +133,20 @@ export async function createDraftOrder(
     };
   } else if (input.fulfillmentMethod === 'pickup' && !input.pickupLocationName) {
     return { ok: false, error: 'pickupLocationName is required when fulfillmentMethod is "pickup"' };
+  }
+
+  if (input.billingAddress) {
+    const b = input.billingAddress;
+    draftOrderInput.billingAddress = {
+      firstName: b.firstName,
+      lastName: b.lastName,
+      address1: b.address1,
+      address2: b.address2,
+      city: b.city,
+      provinceCode: b.provinceCode,
+      zip: b.zip,
+      countryCode: 'CA', // Same Canada-only reasoning as shippingAddress above.
+    };
   }
 
   try {

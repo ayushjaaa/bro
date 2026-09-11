@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  let body: { customerId?: string };
+  let body: { customerId?: string; from?: string; to?: string };
   try {
     body = await request.json();
   } catch {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const orders = await listDraftOrdersForShopifyCustomer(shopifyCustomerId);
+    const orders = await listDraftOrdersForShopifyCustomer(shopifyCustomerId, { from: body.from, to: body.to });
     return NextResponse.json({ orders }, { status: 200 });
   } catch (err) {
     console.error('[internal-customer-orders] lookup failed:', err);

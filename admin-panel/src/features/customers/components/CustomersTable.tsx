@@ -43,6 +43,7 @@ export default function CustomersTable({
             <th className="text-left px-4 py-2 font-medium">Business</th>
             <th className="text-left px-4 py-2 font-medium">Type</th>
             <th className="text-left px-4 py-2 font-medium">Status</th>
+            <th className="text-left px-4 py-2 font-medium">Account #</th>
             <th className="text-left px-4 py-2 font-medium">Requested</th>
             <th className="text-left px-4 py-2 font-medium"></th>
           </tr>
@@ -136,6 +137,7 @@ function CustomerRow({
         <td className="px-4 py-2.5">
           <StatusBadge status={customer.status} />
         </td>
+        <td className="px-4 py-2.5 text-neutral-600 font-mono text-xs">{customer.accountNumber ?? '—'}</td>
         <td className="px-4 py-2.5 text-neutral-500 text-xs">
           {new Date(customer.requestedAt).toLocaleDateString('en-CA')}
         </td>
@@ -166,13 +168,16 @@ function CustomerRow({
       </tr>
       {expanded && (
         <tr className="bg-neutral-50/60">
-          <td colSpan={6} className="px-4 py-4">
+          <td colSpan={7} className="px-4 py-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
               <Field label="Email" value={customer.email} />
               <Field label="Business Phone" value={customer.phone} />
               <Field label="Personal Cell" value={customer.personalCell} />
               {customer.status === 'approved' && (
-                <Field label="Approved" value={`${customer.approvedBy ?? '—'} on ${customer.approvedAt ? new Date(customer.approvedAt).toLocaleDateString('en-CA') : '—'}`} />
+                <>
+                  <Field label="Approved" value={`${customer.approvedBy ?? '—'} on ${customer.approvedAt ? new Date(customer.approvedAt).toLocaleDateString('en-CA') : '—'}`} />
+                  <Field label="Account Number" value={customer.accountNumber} />
+                </>
               )}
             </div>
 

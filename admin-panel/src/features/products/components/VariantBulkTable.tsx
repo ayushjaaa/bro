@@ -56,7 +56,10 @@ function validateRow(row: Row): RowErrors {
   if (!row.flavourName.trim()) errors.flavourName = 'Required';
   if (!row.description.trim()) errors.description = 'Required';
   if (!row.sku.trim()) errors.sku = 'Required';
-  if (!row.image) errors.image = 'Required';
+  // TEMPORARY (testing only, per explicit request) -- image left optional so 100 rows can be
+  // Created without a photo per row first. Put `if (!row.image) errors.image = 'Required';` back
+  // as soon as testing is done -- the backend (data/variants.ts) already treats image as optional
+  // on its own, so this was purely a frontend guard.
 
   const price = Number(row.price);
   if (!row.price.trim()) {
@@ -114,6 +117,7 @@ export default function VariantBulkTable({
 }) {
   const nextRowId = useRef(1);
   const [rows, setRows] = useState<Row[]>([{ ...BLANK_ROW, id: 0 }]);
+  const [bulkPrice, setBulkPrice] = useState('');
   const [createdIds, setCreatedIds] = useState<Set<number>>(new Set());
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ created: number; failed: number; errors: string[] } | null>(
@@ -155,6 +159,31 @@ export default function VariantBulkTable({
   function removeRow(id: number) {
     if (createdIds.has(id)) return;
     setRows((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  /** Generates 100 rows named "1".."100" -- Price/Compare-at/Quantity are the same across all 100
+   * (Price from the `bulkPrice` input since there's no single sensible default to guess; Compare-at
+   * fixed at "0", Quantity fixed at "2" per what was asked for), SKU unique per row so Shopify
+   * never rejects a duplicate. Image is deliberately left blank on every row -- a File can't be
+   * generated, only picked by the admin per-row in the table afterward. Appends rather than
+   * replacing existing rows, so it's safe to click even if the starter blank row (or an
+   * already-filled one) is still there -- an untouched row is silently excluded from submission
+   * anyway (see isRowTouched/validRows above). */
+  function generateHundredRows() {
+    const newRows: Row[] = Array.from({ length: 100 }, (_, i) => {
+      const n = i + 1;
+      return {
+        id: nextRowId.current++,
+        flavourName: String(n),
+        description: String(n),
+        price: bulkPrice,
+        compareAtPrice: '0',
+        sku: `${numericId}-${n}`,
+        quantity: '2',
+        image: null,
+      };
+    });
+    setRows((prev) => [...prev, ...newRows]);
   }
 
   const editableRows = rows.filter((r) => !createdIds.has(r.id));
@@ -337,6 +366,27 @@ export default function VariantBulkTable({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
+        <span className="text-xs text-neutral-600">Price for all 100:</span>
+        <input
+          value={bulkPrice}
+          onChange={(e) => setBulkPrice(e.target.value)}
+          placeholder="0.00"
+          className="w-20 rounded border border-neutral-300 px-1.5 py-1 text-xs"
+        />
+        <button
+          type="button"
+          onClick={generateHundredRows}
+          disabled={!bulkPrice.trim() || Number(bulkPrice) <= 0}
+          className="rounded-md bg-neutral-800 text-white text-xs font-medium px-3 py-1.5 hover:bg-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Generate 100 Rows
+        </button>
+        <span className="text-xs text-neutral-500">
+          Names 1–100, Compare-at $0, Quantity 2, unique SKU per row — fill in each row&apos;s image yourself, then Create All.
+        </span>
       </div>
 
       <div className="flex items-center gap-3">

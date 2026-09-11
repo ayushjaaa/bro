@@ -25,6 +25,9 @@ export type Customer = {
   typeOfBusiness: string | null;
   licenseNumber: string | null;
   accountType: 'retail' | 'wholesale';
+  /** Assigned only at approval (014 migration), never at signup -- format "<W|R>-<PROVINCE>-<YY>-<SEQ>",
+   * e.g. "W-ON-26-0142". Null for pending/rejected customers, since they never became a real account. */
+  accountNumber: string | null;
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: string;
   approvedAt: string | null;
@@ -75,6 +78,7 @@ function toCustomer(row: any): Customer {
     typeOfBusiness: row.type_of_business,
     licenseNumber: row.license_number,
     accountType: row.account_type,
+    accountNumber: row.account_number,
     status: row.status,
     requestedAt: row.requested_at,
     approvedAt: row.approved_at,

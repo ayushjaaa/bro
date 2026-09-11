@@ -71,7 +71,15 @@ async function notifyStorefrontRevalidate(handle: string) {
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/internal/revalidate-product`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': secret,
+        // storefront's own Vercel deployment is Protection-gated -- lets this internal call
+        // through. Absent locally (no Vercel Protection there), harmless no-op in dev.
+        ...(process.env.STOREFRONT_PROTECTION_BYPASS
+          ? { 'x-vercel-protection-bypass': process.env.STOREFRONT_PROTECTION_BYPASS }
+          : {}),
+      },
       body: JSON.stringify({ handle }),
     });
     if (!res.ok) {

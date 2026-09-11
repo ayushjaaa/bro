@@ -52,6 +52,10 @@ const GET_DRAFT_ORDER_DETAIL_QUERY = /* GraphQL */ `
       createdAt
       email
       phone
+      invoiceUrl
+      order {
+        statusPageUrl
+      }
       shippingAddress {
         address1
         address2
@@ -79,6 +83,10 @@ const GET_DRAFT_ORDER_DETAIL_QUERY = /* GraphQL */ `
               currencyCode
             }
           }
+          variant {
+            id
+            availableForSale
+          }
         }
       }
       totalPriceSet {
@@ -100,11 +108,31 @@ export interface CustomerOrderLineItem {
   image: string | null;
   unitAmount: string;
   currencyCode: string;
+  /** Null for a custom line item with no product/variant attached (an admin can type an
+   * arbitrary line into a Draft Order in Shopify) -- nothing to re-add to cart for those.
+   * `availableForSale` is false once a variant's since been discontinued/archived -- reorder
+   * skips both cases and reports them back to the customer rather than silently failing. */
+  variantId: string | null;
+  availableForSale: boolean;
 }
 
 export interface CustomerOrderDetail extends CustomerOrderSummary {
   email: string | null;
   phone: string | null;
+  /** The correct link to show the customer for THIS order's current status, or null if none
+   * applies -- never OPEN's raw invoiceUrl by itself. Two real Shopify behaviors forced this to
+   * be computed rather than just passing invoiceUrl straight through (verified live against this
+   * store, not assumed):
+   *   - INVOICE_SENT: invoiceUrl is a live, payable checkout link and works correctly.
+   *   - COMPLETED: invoiceUrl is DEAD -- Shopify returns a flat 404 ("invoice has already been
+   *     paid") once a draft order is paid/converted, because that URL is fundamentally a
+   *     *payment* link, not a permanent receipt link. A completed draft order converts into a
+   *     real Shopify `Order`, which has its own separate, persistent `statusPageUrl` -- THAT is
+   *     the correct link once COMPLETED.
+   *   - OPEN/CANCELLED/EXPIRED: null -- OPEN is still a mutable draft (see decision log), and
+   *     CANCELLED/EXPIRED have no valid link to show at all.
+   */
+  invoiceUrl: string | null;
   shippingAddress: {
     address1: string | null;
     address2: string | null;
@@ -150,6 +178,12 @@ export async function getDraftOrderDetail(
     currencyCode: order.totalPriceSet.shopMoney.currencyCode,
     email: order.email,
     phone: order.phone,
+    invoiceUrl:
+      order.status === 'COMPLETED'
+        ? (order.order?.statusPageUrl ?? null)
+        : order.status === 'INVOICE_SENT'
+          ? order.invoiceUrl
+          : null,
     shippingAddress: order.shippingAddress,
     customerName: [order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(' ') || null,
     lineItems: order.lineItems.nodes.map((li: any) => ({
@@ -159,20 +193,50 @@ export async function getDraftOrderDetail(
       image: li.image?.url ?? null,
       unitAmount: li.originalUnitPriceSet.shopMoney.amount,
       currencyCode: li.originalUnitPriceSet.shopMoney.currencyCode,
+      variantId: li.variant?.id ?? null,
+      availableForSale: li.variant?.availableForSale ?? false,
     })),
   };
 }
 
+const PLAIN_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Shopify's search-query date filter only reliably accepts a plain YYYY-MM-DD date -- a full
+ * ISO timestamp (with a time component) confirmed live to trip a parser warning
+ * (`created_at:>=2020-01-01T00:00:00Z` gets misread, splitting on the colon) and silently returns
+ * unfiltered results instead of erroring. `from`/`to` are never quoted in the query (Shopify's
+ * date fields aren't quoted values), so this strict format check is also this function's only
+ * defense against query-string injection via a malformed date -- reject rather than attempt to
+ * escape a bare, unquoted token. */
+function validateDate(date: string, label: string): string {
+  if (!PLAIN_DATE_RE.test(date)) {
+    throw new Error(`listDraftOrdersForShopifyCustomer: invalid ${label} date "${date}", expected YYYY-MM-DD`);
+  }
+  return date;
+}
+
+export interface DraftOrderDateRange {
+  /** Inclusive. */
+  from?: string;
+  /** Inclusive. */
+  to?: string;
+}
+
 export async function listDraftOrdersForShopifyCustomer(
-  shopifyCustomerId: string
+  shopifyCustomerId: string,
+  dateRange?: DraftOrderDateRange
 ): Promise<CustomerOrderSummary[]> {
   const numericId = shopifyCustomerId.match(/(\d+)$/)?.[1];
   if (!numericId) {
     throw new Error(`listDraftOrdersForShopifyCustomer: unexpected Shopify Customer GID shape: ${shopifyCustomerId}`);
   }
 
+  const queryParts = [`customer_id:${numericId}`];
+  if (dateRange?.from) queryParts.push(`created_at:>=${validateDate(dateRange.from, 'from')}`);
+  if (dateRange?.to) queryParts.push(`created_at:<=${validateDate(dateRange.to, 'to')}`);
+
   const data = await shopifyAdminRequest<any>(LIST_DRAFT_ORDERS_BY_CUSTOMER_QUERY, {
-    query: `customer_id:${numericId}`,
+    query: queryParts.join(' AND '),
   });
 
   return (data.draftOrders.nodes as any[]).map((n) => ({
