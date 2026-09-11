@@ -28,6 +28,10 @@ export type Customer = {
   /** Assigned only at approval (014 migration), never at signup -- format "<W|R>-<PROVINCE>-<YY>-<SEQ>",
    * e.g. "W-ON-26-0142". Null for pending/rejected customers, since they never became a real account. */
   accountNumber: string | null;
+  /** Assigned rep (015 migration: sales_reps table + customers.sales_rep_id). Null until the
+   * join is added to listCustomers()'s select AND a rep has actually been assigned. */
+  salesRepId: string | null;
+  salesRep: { name: string; phone: string; email: string } | null;
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: string;
   approvedAt: string | null;
@@ -79,6 +83,8 @@ function toCustomer(row: any): Customer {
     licenseNumber: row.license_number,
     accountType: row.account_type,
     accountNumber: row.account_number,
+    salesRepId: row.sales_rep_id ?? null,
+    salesRep: row.sales_reps ?? null,
     status: row.status,
     requestedAt: row.requested_at,
     approvedAt: row.approved_at,
@@ -114,13 +120,15 @@ function toCustomer(row: any): Customer {
 }
 
 /** Lists every customer (pending, approved, rejected together) -- the unified Customers screen
- * (item 38's design) renders all of them in one table, not separate pages. */
+ * (item 38's design) renders all of them in one table, not separate pages. Joins in the
+ * assigned sales rep (015-sales-reps-and-notes.sql) -- confirmed live against the database that
+ * this migration has been applied before adding the join. */
 export async function listCustomers(): Promise<Customer[]> {
   await requireAdmin();
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('customers')
-    .select('*')
+    .select('*, sales_reps(name, phone, email)')
     .order('requested_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map(toCustomer);
@@ -165,6 +173,16 @@ export async function getRegistrationDocumentUrl(path: string): Promise<string> 
   const { data, error } = await supabase.storage.from('registration-documents').createSignedUrl(path, 60);
   if (error || !data) throw new Error(error?.message ?? 'Could not generate document URL');
   return data.signedUrl;
+}
+
+/** Plain service-role update, not an RPC -- unlike approve_customer (which needs atomic
+ * account-number generation), assigning a rep has no special server-side logic to protect, so
+ * a direct update through the already-admin-gated service-role client is enough. */
+export async function updateCustomerSalesRep(customerId: string, salesRepId: string | null): Promise<void> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { error } = await supabase.from('customers').update({ sales_rep_id: salesRepId }).eq('id', customerId);
+  if (error) throw new Error(error.message);
 }
 
 export async function updateAccountType(id: string, accountType: 'retail' | 'wholesale'): Promise<void> {

@@ -5,6 +5,7 @@ import {
   approveCustomer,
   rejectCustomer,
   updateAccountType,
+  updateCustomerSalesRep,
   getRegistrationDocumentUrl,
   listCustomerCartsPage,
   listCartSnapshotForCustomers,
@@ -12,6 +13,8 @@ import {
   type CartSnapshotRow,
 } from '@/data/customers';
 import { getProductTitlesByIds } from '@/data/products';
+import { listSalesReps, createSalesRep, type SalesRep } from '@/data/sales-reps';
+import { listNotes, createNote, type NoteEntityType, type InternalNote } from '@/data/internal-notes';
 
 export async function approveCustomerAction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
@@ -34,6 +37,45 @@ export async function updateAccountTypeAction(formData: FormData) {
 
 export async function getRegistrationDocumentUrlAction(path: string): Promise<string> {
   return getRegistrationDocumentUrl(path);
+}
+
+export async function listSalesRepsAction(): Promise<SalesRep[]> {
+  return listSalesReps();
+}
+
+export async function createSalesRepAction(input: {
+  name: string;
+  phone: string;
+  email: string;
+}): Promise<{ ok: true; rep: SalesRep } | { ok: false; error: string }> {
+  try {
+    const rep = await createSalesRep(input);
+    return { ok: true, rep };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create sales rep' };
+  }
+}
+
+export async function updateCustomerSalesRepAction(customerId: string, salesRepId: string | null) {
+  await updateCustomerSalesRep(customerId, salesRepId);
+  revalidatePath('/customers');
+}
+
+export async function listNotesAction(entityType: NoteEntityType, entityId: string): Promise<InternalNote[]> {
+  return listNotes(entityType, entityId);
+}
+
+export async function createNoteAction(
+  entityType: NoteEntityType,
+  entityId: string,
+  body: string
+): Promise<{ ok: true; note: InternalNote } | { ok: false; error: string }> {
+  try {
+    const note = await createNote(entityType, entityId, body);
+    return { ok: true, note };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create note' };
+  }
 }
 
 export type CustomerCartsPageResult = CustomerCartsPage & {

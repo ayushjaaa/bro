@@ -280,8 +280,57 @@ before.
 
 ---
 
+## 10. Assigned sales rep (customer-facing) + internal team notes (staff-only)
+
+**Design approach** (via the `design` skill): two features with deliberately opposite trust
+boundaries, kept structurally separate rather than bolted onto one table/UI section. Reps are a
+**reusable list** (`sales_reps` table + `customers.sales_rep_id`), not free text retyped per
+customer, so editing a rep's phone number once updates it everywhere they're assigned. Notes are
+a **timestamped, author-attributed log** (newest first), not a shared textarea, since multiple
+staff contribute over time and must not silently overwrite each other's context.
+
+- **Sales rep** — admin assigns a rep (name, direct phone, email) to a customer; low sensitivity
+  (a business contact), one-directional admin → customer. `sales_reps` RLS lets any authenticated
+  user read it (needed for the storefront join off the customer's own session); only admins can
+  write.
+- **Internal notes** — free-text notes on a customer AND on individual orders, admin/staff only.
+  `internal_notes` has its own table and its own admin-only RLS policy (`admin_users` membership
+  check) — structurally unreachable from any customer-facing query, not just hidden in the UI.
+  Verified live: an anon Supabase client gets 0 rows from both `internal_notes` and `sales_reps`
+  (the latter requires `auth.role() = 'authenticated'`, matching the customer-facing join).
+
+**Sequencing note** (per the account_number login-break incident earlier this session):
+admin-panel's side (migration, data layer, UI) was built and confirmed against the live database
+*before* `storefront/src/lib/auth/access-state.ts`'s `customers` select was extended with the
+`sales_rep` join — same precaution as account_number, applied deliberately this time instead of
+learned the hard way.
+
+**Files**:
+- `admin-panel/scripts/supabase/015-sales-reps-and-notes.sql` — `sales_reps` table +
+  `customers.sales_rep_id` + `internal_notes` table, with the RLS policies above.
+- `admin-panel/src/data/sales-reps.ts`, `admin-panel/src/data/internal-notes.ts` — new data
+  modules (`listSalesReps`, `createSalesRep`, `listNotes`, `createNote`, `listNoteCountsFor`).
+- `admin-panel/src/data/customers.ts` — `Customer.salesRepId`/`salesRep`, joined select,
+  `updateCustomerSalesRep()`.
+- `admin-panel/src/features/customers/actions.ts` — corresponding Server Actions.
+- `admin-panel/src/app/(dashboard)/customers/page.tsx` — fetches `salesReps` + note counts
+  (defensive try/catch so the page degrades to "off" rather than breaking if the migration
+  hasn't run yet in some other environment).
+- `admin-panel/src/features/customers/components/CustomersTable.tsx` — note-count badge on the
+  collapsed row; expanded-row "Sales Rep" assign/reassign section with inline "+ New rep" form;
+  expanded-row customer-level Notes panel; per-order "Notes" toggle in the existing Orders list.
+- `storefront/src/lib/auth/access-state.ts` — `CustomerRow.sales_rep`, joined into the existing
+  `customers` select.
+- `storefront/src/app/account/page.tsx` — `SalesRepCard`: shows the rep's name with `tel:`/
+  `mailto:` links for phone/email; renders nothing if no rep is assigned yet.
+
+---
+
 ## Manual/operational steps still needed
 
+- **Run `admin-panel/scripts/supabase/015-sales-reps-and-notes.sql`** in the Supabase SQL editor
+  for any environment where it hasn't been applied yet (confirmed run and live for this session's
+  database).
 - **Run `admin-panel/scripts/supabase/014-add-account-number.sql`** in the Supabase SQL editor if
   it hasn't been (it was run once already this session — this note is for anyone re-deploying to
   a different environment, e.g. staging/production).

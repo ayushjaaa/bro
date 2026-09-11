@@ -1,15 +1,27 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Customer, OrderStatusRow } from '@/data/customers';
-import { approveCustomerAction, rejectCustomerAction, updateAccountTypeAction, getRegistrationDocumentUrlAction } from '../actions';
+import type { SalesRep } from '@/data/sales-reps';
+import type { InternalNote, NoteEntityType } from '@/data/internal-notes';
+import {
+  approveCustomerAction,
+  rejectCustomerAction,
+  updateAccountTypeAction,
+  getRegistrationDocumentUrlAction,
+  updateCustomerSalesRepAction,
+  createSalesRepAction,
+  listNotesAction,
+  createNoteAction,
+} from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 
 /** Unified expandable Customers screen (design decision: item 38) -- pending and approved rows
  * live in one table, not separate pages. Collapsed row = name + business name + the
  * status-appropriate action; expanding reveals every registration field, an account-type switch
- * for already-approved rows, and order history -- so an admin can see at a glance whether they
+ * for already-approved rows, order history, an assigned sales rep, and internal team notes on
+ * both the customer and each individual order -- so an admin can see at a glance whether they
  * ever ordered. Cart contents live on their own page (/cart) now, not nested in here -- see that
  * page's doc comment for why (this row also can't cleanly show live cart contents: they're keyed
  * by this app's internal customer id, not `shopifyCustomerId`, which is the only Shopify identifier
@@ -18,13 +30,21 @@ import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 export default function CustomersTable({
   customers,
   initialOrderStatusLog,
+  salesReps,
+  noteCounts,
 }: {
   customers: Customer[];
   initialOrderStatusLog: OrderStatusRow[];
+  salesReps: SalesRep[];
+  /** Serialized as entries, not a Map -- same reasoning as CustomerCartsPageResult's
+   * productTitles (actions.ts): keeps the Server Component -> Client Component boundary in the
+   * safest common shape. */
+  noteCounts: Array<[string, number]>;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const orderStatusLog = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
+  const noteCountMap = new Map(noteCounts);
 
   if (customers.length === 0) {
     return (
@@ -58,6 +78,8 @@ export default function CustomersTable({
                 key={c.id}
                 customer={c}
                 orders={orders}
+                salesReps={salesReps}
+                noteCount={noteCountMap.get(c.id) ?? 0}
                 expanded={expandedId === c.id}
                 onToggle={() => setExpandedId(expandedId === c.id ? null : c.id)}
               />
@@ -72,11 +94,15 @@ export default function CustomersTable({
 function CustomerRow({
   customer,
   orders,
+  salesReps,
+  noteCount,
   expanded,
   onToggle,
 }: {
   customer: Customer;
   orders: OrderStatusRow[];
+  salesReps: SalesRep[];
+  noteCount: number;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -130,7 +156,20 @@ function CustomerRow({
     <>
       <tr className="hover:bg-neutral-50 cursor-pointer" onClick={onToggle}>
         <td className="px-4 py-2.5 text-neutral-800">
-          {customer.firstName} {customer.lastName}
+          <span className="inline-flex items-center gap-1.5">
+            {customer.firstName} {customer.lastName}
+            {/* Visibility: staff shouldn't have to expand every row to know internal notes
+                exist -- only rendered when count > 0 (Highlighting: if everything's
+                highlighted, nothing is). */}
+            {noteCount > 0 && (
+              <span
+                title={`${noteCount} internal note${noteCount === 1 ? '' : 's'}`}
+                className="inline-flex items-center justify-center size-4.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold"
+              >
+                {noteCount}
+              </span>
+            )}
+          </span>
         </td>
         <td className="px-4 py-2.5 text-neutral-600">{customer.businessName ?? '—'}</td>
         <td className="px-4 py-2.5 text-neutral-600 capitalize">{customer.accountType}</td>
@@ -288,6 +327,13 @@ function CustomerRow({
               </div>
             )}
 
+            <SalesRepSection customer={customer} salesReps={salesReps} />
+
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Internal Notes</h3>
+              <NotesPanel entityType="customer" entityId={customer.id} />
+            </div>
+
             {customer.shopifyCustomerId && (
               <div className="mt-4">
                 <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">
@@ -296,14 +342,9 @@ function CustomerRow({
                 {latestByOrder.size === 0 ? (
                   <p className="text-xs text-neutral-400">No order requests yet.</p>
                 ) : (
-                  <ul className="text-xs flex flex-col gap-1 max-w-md">
+                  <ul className="text-xs flex flex-col gap-2 max-w-md">
                     {[...latestByOrder.values()].map((o) => (
-                      <li key={o.order_id} className="flex items-center justify-between text-neutral-700">
-                        <span>{o.order_id.includes('/DraftOrder/') ? 'Draft' : 'Order'} {o.order_id.split('/').pop()}</span>
-                        <span className="text-neutral-400">
-                          {o.new_status} · {new Date(o.changed_at).toLocaleString('en-CA')}
-                        </span>
-                      </li>
+                      <OrderLine key={o.order_id} order={o} />
                     ))}
                   </ul>
                 )}
@@ -316,6 +357,210 @@ function CustomerRow({
         </tr>
       )}
     </>
+  );
+}
+
+function OrderLine({ order }: { order: OrderStatusRow }) {
+  const [showNotes, setShowNotes] = useState(false);
+  return (
+    <li className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between text-neutral-700">
+        <span>{order.order_id.includes('/DraftOrder/') ? 'Draft' : 'Order'} {order.order_id.split('/').pop()}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-neutral-400">
+            {order.new_status} · {new Date(order.changed_at).toLocaleString('en-CA')}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowNotes((v) => !v)}
+            className="text-emerald-700 hover:underline font-medium"
+          >
+            Notes
+          </button>
+        </div>
+      </div>
+      {showNotes && (
+        <div className="ml-2 pl-3 border-l-2 border-neutral-200">
+          <NotesPanel entityType="order" entityId={order.order_id} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Reusable across the customer-level notes section and every per-order "Notes" toggle --
+ * newest-first log (Serial Position + Chunking: multiple staff contribute over time, a single
+ * shared textarea would let one person silently overwrite another's context), lazy-loaded only
+ * once actually shown rather than prefetched for every row/order up front. */
+function NotesPanel({ entityType, entityId }: { entityType: NoteEntityType; entityId: string }) {
+  const [notes, setNotes] = useState<InternalNote[] | null>(null);
+  const [body, setBody] = useState('');
+  const [submitting, startSubmitting] = useTransition();
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listNotesAction(entityType, entityId).then((result) => {
+      if (!cancelled) setNotes(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entityType, entityId]);
+
+  function handleAdd() {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    setError('');
+    startSubmitting(async () => {
+      const result = await createNoteAction(entityType, entityId, trimmed);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setNotes((prev) => [result.note, ...(prev ?? [])]);
+      setBody('');
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 max-w-md">
+      {notes === null ? (
+        <p className="text-xs text-neutral-400">Loading notes...</p>
+      ) : notes.length === 0 ? (
+        <p className="text-xs text-neutral-400">No notes yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+          {notes.map((note) => (
+            <li key={note.id} className="text-xs bg-white border border-neutral-200 rounded-md p-2">
+              <p className="text-neutral-800 whitespace-pre-wrap">{note.body}</p>
+              <p className="text-neutral-400 mt-1">
+                {note.createdBy} · {new Date(note.createdAt).toLocaleString('en-CA')}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2 items-end">
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Add an internal note..."
+          rows={2}
+          className="flex-1 text-xs border border-neutral-300 rounded-md p-2 resize-none"
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={submitting || !body.trim()}
+          className="text-xs font-medium px-3 py-2 rounded-md bg-neutral-800 text-white disabled:opacity-40 shrink-0"
+        >
+          {submitting ? 'Adding...' : 'Add Note'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+/** Reps are a reusable list (sales_reps table), not free-text retyped per customer -- so
+ * updating a rep's phone number here updates it everywhere they're assigned, instead of
+ * needing to edit every customer row individually. */
+function SalesRepSection({ customer, salesReps }: { customer: Customer; salesReps: SalesRep[] }) {
+  const [pending, startTransition] = useTransition();
+  const [showNewRepForm, setShowNewRepForm] = useState(false);
+  const [newRep, setNewRep] = useState({ name: '', phone: '', email: '' });
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  function handleAssign(salesRepId: string) {
+    startTransition(async () => {
+      await updateCustomerSalesRepAction(customer.id, salesRepId || null);
+      router.refresh();
+    });
+  }
+
+  function handleCreateRep() {
+    if (!newRep.name || !newRep.phone || !newRep.email) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    setError('');
+    startTransition(async () => {
+      const result = await createSalesRepAction(newRep);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await updateCustomerSalesRepAction(customer.id, result.rep.id);
+      setShowNewRepForm(false);
+      setNewRep({ name: '', phone: '', email: '' });
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="mt-4">
+      <h3 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5">Sales Rep</h3>
+      {customer.salesRep && (
+        <p className="text-sm text-neutral-800 mb-2">
+          {customer.salesRep.name} · {customer.salesRep.phone} · {customer.salesRep.email}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={customer.salesRepId ?? ''}
+          onChange={(e) => handleAssign(e.target.value)}
+          disabled={pending}
+          className="text-xs border border-neutral-300 rounded-md px-2 py-1.5"
+        >
+          <option value="">Unassigned</option>
+          {salesReps.map((rep) => (
+            <option key={rep.id} value={rep.id}>
+              {rep.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setShowNewRepForm((v) => !v)}
+          className="text-xs text-emerald-700 hover:underline"
+        >
+          + New rep
+        </button>
+      </div>
+      {showNewRepForm && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            placeholder="Name"
+            value={newRep.name}
+            onChange={(e) => setNewRep((p) => ({ ...p, name: e.target.value }))}
+            className="text-xs border border-neutral-300 rounded-md px-2 py-1.5"
+          />
+          <input
+            placeholder="Direct phone"
+            value={newRep.phone}
+            onChange={(e) => setNewRep((p) => ({ ...p, phone: e.target.value }))}
+            className="text-xs border border-neutral-300 rounded-md px-2 py-1.5"
+          />
+          <input
+            placeholder="Email"
+            value={newRep.email}
+            onChange={(e) => setNewRep((p) => ({ ...p, email: e.target.value }))}
+            className="text-xs border border-neutral-300 rounded-md px-2 py-1.5"
+          />
+          <button
+            type="button"
+            onClick={handleCreateRep}
+            disabled={pending}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-neutral-800 text-white disabled:opacity-40"
+          >
+            {pending ? 'Saving...' : 'Save & Assign'}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
   );
 }
 
