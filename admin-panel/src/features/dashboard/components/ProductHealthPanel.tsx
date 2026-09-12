@@ -1,7 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useLiveTable } from '../hooks/useLiveTable';
+import { DashCard } from './DashCard';
+import { ImageIcon, HashIcon, WarningIcon, FilterIcon, ClockIcon, LayersIcon } from '@/components/icons';
 
 const STALE_DRAFT_DAYS = 14; // default; change here if the business wants a different cutoff
 
@@ -45,10 +46,10 @@ export default function ProductHealthPanel({
 
   if (products.length === 0) {
     return (
-      <div className="rounded-xl border border-dash-card-border bg-dash-card-bg p-5 text-sm text-dash-text-muted">
+      <DashCard className="p-5 text-sm text-dash-text-muted">
         No catalog health data yet — this fills in once products are created/edited (or after
         running <code className="text-xs">npm run shopify:backfill-product-health-snapshot</code>).
-      </div>
+      </DashCard>
     );
   }
 
@@ -74,80 +75,79 @@ export default function ProductHealthPanel({
   const emptyBrands = allBrands.filter((b) => !usedBrandIds.has(b.id));
   const emptySubcategories = allSubcategories.filter((s) => !usedSubcategoryIds.has(s.id));
 
-  const recentlyUpdated = [...products].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 6);
-
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MiniStat label="Missing Image" value={missingImage.length} />
-        <MiniStat label="Missing SKU" value={missingSku.length} />
-        <MiniStat label="Price Anomalies" value={priceAnomaly.length} />
-        <MiniStat label="Duplicate SKUs" value={duplicateSkus.length} />
-        <MiniStat label="Missing Required Filter" value={missingRequiredFilter.length} />
-        <MiniStat label="Stale Drafts" value={staleDrafts.length} sub={`${STALE_DRAFT_DAYS}+ days`} />
-        <MiniStat label="Empty Brands" value={emptyBrands.length} />
-        <MiniStat label="Empty Sub-categories" value={emptySubcategories.length} />
+        <MiniStat icon={ImageIcon} label="Missing Image" value={missingImage.length} />
+        <MiniStat icon={HashIcon} label="Missing SKU" value={missingSku.length} />
+        <MiniStat icon={WarningIcon} label="Price Anomalies" value={priceAnomaly.length} />
+        <MiniStat icon={HashIcon} label="Duplicate SKUs" value={duplicateSkus.length} />
+        <MiniStat icon={FilterIcon} label="Missing Required Filter" value={missingRequiredFilter.length} />
+        <MiniStat
+          icon={ClockIcon}
+          label="Stale Drafts"
+          value={staleDrafts.length}
+          statusLabel={staleDrafts.length > 0 ? `${STALE_DRAFT_DAYS}+ days` : undefined}
+        />
+        <MiniStat icon={LayersIcon} label="Empty Brands" value={emptyBrands.length} />
+        <MiniStat icon={LayersIcon} label="Empty Sub-categories" value={emptySubcategories.length} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="rounded-xl border border-dash-card-border bg-dash-card-bg p-5">
-          <h2 className="text-sm font-semibold text-neutral-700 mb-3">Status Breakdown</h2>
-          <div className="flex flex-col gap-2">
-            {(['ACTIVE', 'DRAFT', 'ARCHIVED'] as const).map((status) => (
-              <div key={status} className="flex items-center gap-3">
-                <span className="text-xs text-neutral-500 w-20 shrink-0">{status}</span>
-                <div className="flex-1 h-2.5 rounded-full bg-neutral-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-dash-info"
-                    style={{ width: `${(statusCounts[status] / products.length) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-neutral-800 w-8 text-right">{statusCounts[status]}</span>
+      <DashCard className="p-5">
+        <h2 className="text-sm font-bold text-dash-text-ink mb-3">Status Breakdown</h2>
+        <div className="flex flex-col gap-2">
+          {(['ACTIVE', 'DRAFT', 'ARCHIVED'] as const).map((status) => (
+            <div key={status} className="flex items-center gap-3">
+              <span className="text-xs text-dash-text-muted w-20 shrink-0">{status}</span>
+              <div className="flex-1 h-2.5 rounded-full bg-neutral-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-dash-info"
+                  style={{ width: `${(statusCounts[status] / products.length) * 100}%` }}
+                />
               </div>
-            ))}
-          </div>
+              <span className="text-sm font-semibold text-dash-text-ink w-8 text-right">{statusCounts[status]}</span>
+            </div>
+          ))}
         </div>
-
-        <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
-          <h2 className="text-sm font-semibold text-neutral-700 px-5 pt-5 pb-2">Recently Updated</h2>
-          <ul>
-            {recentlyUpdated.map((p) => {
-              const numericId = p.product_id.split('/').pop();
-              return (
-                <li key={p.product_id} className="border-t border-neutral-50">
-                  <Link href={`/products/${numericId}`} className="flex items-center justify-between px-5 py-2.5 text-sm hover:bg-neutral-50">
-                    <div>
-                      <span className="text-neutral-800">{p.title}</span>
-                      <span
-                        className={`ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                          p.status === 'ACTIVE'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : p.status === 'DRAFT'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-neutral-100 text-neutral-500'
-                        }`}
-                      >
-                        {p.status}
-                      </span>
-                    </div>
-                    <span className="text-xs text-dash-text-muted">{p.variant_count} Flavours</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </div>
+      </DashCard>
     </div>
   );
 }
 
-function MiniStat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+/** Same icon-chip -> label -> number -> status-pill skeleton as `StatTile` in
+ * LiveDashboardStats.tsx, applied identically here (Uniform Connectedness/Similarity)
+ * rather than a slightly-different secondary-tile treatment. */
+function MiniStat({
+  icon: Icon,
+  label,
+  value,
+  statusLabel,
+}: {
+  icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement;
+  label: string;
+  value: number;
+  statusLabel?: string;
+}) {
+  const tone = value > 0 ? 'warning' : 'success';
+  const toneClass = tone === 'warning' ? 'text-dash-warning' : 'text-dash-success';
+  const chipBgClass = tone === 'warning' ? 'bg-dash-warning/10' : 'bg-dash-success/10';
+  const pillClass =
+    tone === 'warning'
+      ? 'bg-dash-pill-warning-bg text-dash-pill-warning-text'
+      : 'bg-dash-pill-success-bg text-dash-pill-success-text';
+
   return (
-    <div className="rounded-xl border border-dash-card-border bg-dash-card-bg p-4">
-      <div className="text-xs text-dash-text-muted">{label}</div>
-      <div className={`text-xl font-semibold mt-1 ${value > 0 ? 'text-dash-warning' : 'text-dash-success'}`}>{value}</div>
-      {sub && <div className="text-[11px] text-dash-text-muted mt-0.5">{sub}</div>}
-    </div>
+    <DashCard className="p-4">
+      <div className="flex items-start justify-between">
+        <span className="text-xs font-semibold text-dash-text-muted">{label}</span>
+        <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${chipBgClass}`}>
+          <Icon className={`size-3.5 ${toneClass}`} />
+        </div>
+      </div>
+      <div className={`text-xl font-extrabold mt-2.5 ${toneClass}`}>{value}</div>
+      <span className={`inline-block mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${pillClass}`}>
+        {statusLabel ?? (value > 0 ? `${value} found` : 'All clear')}
+      </span>
+    </DashCard>
   );
 }

@@ -1,18 +1,23 @@
-import Link from 'next/link';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
 import { listProductLines } from '@/data/products';
 import { requireAdmin } from '@/data/admin-auth';
 import { checkWebhookHealth } from '@/data/webhook-health';
+import DashboardHero from '@/features/dashboard/components/DashboardHero';
 import LiveDashboardStats, { type FunnelStage } from '@/features/dashboard/components/LiveDashboardStats';
+import CatalogStatCards from '@/features/dashboard/components/CatalogStatCards';
+import AttentionAndPublishedRate from '@/features/dashboard/components/AttentionAndPublishedRate';
 import ProductHealthPanel, {
   type ProductHealthRow,
   type VariantSkuRow,
 } from '@/features/dashboard/components/ProductHealthPanel';
+import RecentlyUpdatedCard from '@/features/dashboard/components/RecentlyUpdatedCard';
 import WebhookHealthBadge from '@/features/dashboard/components/WebhookHealthBadge';
 import ConversionFunnel from '@/features/dashboard/components/ConversionFunnel';
+import IncompleteProductLinesCard from '@/features/dashboard/components/IncompleteProductLinesCard';
 import { getFunnelStats } from '@/data/funnel';
 import { buildAttentionData } from '@/features/dashboard/lib/attention';
+import { ScrollReveal } from '@/components/ScrollReveal';
 
 function getReadOnlyClient() {
   // Both tables allow public SELECT via RLS (see 003/004 migrations) -- service role is used here
@@ -57,90 +62,84 @@ export default async function OverviewPage() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto p-6 flex flex-col gap-5">
-      <div className="flex justify-end">
-        <WebhookHealthBadge initial={webhookHealth} />
-      </div>
+    // Warm page background scoped to this page's own wrapper (not the shared (dashboard)
+    // layout), matching the approved Admin Dashboard.dc.html mockup -- other not-yet-redesigned
+    // pages (Customers, Cart, Products) keep the default background until their own pass.
+    // No horizontal/top padding here -- DashboardHero needs to bleed edge-to-edge across the
+    // full page width (matching the mockup's full-bleed gradient), so padding is applied only
+    // to the content wrapper below it, not this outer shell.
+    <div className="-m-6 min-h-full bg-dash-page-bg pb-6">
+      <DashboardHero adminEmail={admin.email} initialInventoryRows={initialInventoryRows} />
 
-      <LiveDashboardStats
-        adminEmail={admin.email}
-        initialInventoryRows={initialInventoryRows}
-        attentionLookup={attentionLookup}
-        funnelStages={funnelStages}
-        publishedCount={publishedCount}
-        publishableCount={publishable.length}
-        incomplete={incomplete.map((p) => ({ id: p.id, title: p.title }))}
-        unpublished={unpublished.map((p) => ({ id: p.id, title: p.title, variantCount: p.variantCount }))}
-      />
+      <div className="max-w-7xl mx-auto px-4 flex flex-col gap-5">
+        {/* Overview + Conversion Funnel/2x2 stat cards -- pulled up together as ONE block to
+           overlap the hero's bottom edge, so the hero's gradient shows through the grid gaps
+           between cards (matching the reference exactly, where both rows sit on the hero, not
+           just the first one). */}
+        <div className="-mt-16 flex flex-col gap-5">
+          <LiveDashboardStats
+            funnelStages={funnelStages}
+            publishedCount={publishedCount}
+            publishableCount={publishable.length}
+          />
 
-      <ProductHealthPanel
-        initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]}
-        initialSkuIndex={(skuIndexRows ?? []) as VariantSkuRow[]}
-        allBrands={brands.map((b) => ({ id: b.id, name: b.name }))}
-        allSubcategories={subcategories.map((s) => ({ id: s.id, name: s.name }))}
-      />
-
-      <ConversionFunnel stats={funnelStats} />
-
-      {/* Incomplete Product Lines -- 0 flavours, not sellable yet (§0a) */}
-      <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
-        <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-          <span className="text-sm font-medium text-neutral-700">
-            ⚠ Incomplete Product Lines — 0 flavours
-          </span>
-          <span className="text-xs text-dash-text-muted">{incomplete.length}</span>
-        </div>
-        {incomplete.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-dash-text-muted text-center">
-            None — every Product Line has at least one Flavour.
-          </p>
-        ) : (
-          <ul>
-            {incomplete.map((p) => {
-              const numericId = p.id.split('/').pop();
-              return (
-                <li key={p.id} className="border-b border-neutral-50 last:border-0">
-                  <Link
-                    href={`/products/${numericId}/variants`}
-                    className="flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50"
-                  >
-                    <span className="font-medium text-neutral-800">{p.title}</span>
-                    <span className="text-dash-warning text-xs font-medium">+ Add Flavours</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {/* Ready-but-not-live Product Lines -- has flavours, never published (§0a fact 5) */}
-      {unpublished.length > 0 && (
-        <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
-          <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-            <span className="text-sm font-medium text-neutral-700">○ Ready but not published</span>
-            <span className="text-xs text-dash-text-muted">{unpublished.length}</span>
+          {/* Conversion Funnel | 2x2 stat cards -- matches the mockup's second grid row
+             (Conversion Funnel | 2x2 category cards), same left-wider/right-narrower ratio. */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
+            <div className="lg:col-span-3">
+              <ConversionFunnel stats={funnelStats} />
+            </div>
+            <div className="lg:col-span-2">
+              <CatalogStatCards
+                initialInventoryRows={initialInventoryRows}
+                attentionLookup={attentionLookup}
+                incomplete={incomplete.map((p) => ({ id: p.id, title: p.title }))}
+                unpublished={unpublished.map((p) => ({ id: p.id, title: p.title, variantCount: p.variantCount }))}
+              />
+            </div>
           </div>
-          <ul>
-            {unpublished.map((p) => {
-              const numericId = p.id.split('/').pop();
-              return (
-                <li key={p.id} className="border-b border-neutral-50 last:border-0">
-                  <Link
-                    href={`/products/${numericId}`}
-                    className="flex items-center justify-between px-4 py-3 text-sm hover:bg-neutral-50"
-                  >
-                    <span className="font-medium text-neutral-800">{p.title}</span>
-                    <span className="text-dash-text-muted text-xs">
-                      {p.variantCount} flavour{p.variantCount === 1 ? '' : 's'} — view to publish
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
         </div>
-      )}
+
+        <div className="flex justify-end mb-3">
+          <WebhookHealthBadge initial={webhookHealth} />
+        </div>
+
+        {/* Below here is off-screen on load for most viewports -- each section fades up once as
+           the admin scrolls to it (ScrollReveal), rather than everything animating at once on
+           mount. Kept to section-level wrapping only (not per-card/per-row) so it reads as the
+           page settling in, not a distracting cascade. */}
+        <ScrollReveal>
+          {/* Stock | Ready to Publish | Published Rate -- "things needing admin action right
+             now," grouped in one area instead of Ready-to-Publish sitting in its own card
+             further down the page. */}
+          <AttentionAndPublishedRate
+            initialInventoryRows={initialInventoryRows}
+            attentionLookup={attentionLookup}
+            publishedCount={publishedCount}
+            publishableCount={publishable.length}
+            unpublished={unpublished.map((p) => ({ id: p.id, title: p.title, variantCount: p.variantCount }))}
+          />
+        </ScrollReveal>
+
+        <ScrollReveal>
+          <RecentlyUpdatedCard initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]} />
+        </ScrollReveal>
+
+        {/* Everything below here is domain-specific content the mockup doesn't cover --
+           kept after the mockup-matched sections rather than interleaved with them. */}
+        <ScrollReveal>
+          <ProductHealthPanel
+            initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]}
+            initialSkuIndex={(skuIndexRows ?? []) as VariantSkuRow[]}
+            allBrands={brands.map((b) => ({ id: b.id, name: b.name }))}
+            allSubcategories={subcategories.map((s) => ({ id: s.id, name: s.name }))}
+          />
+        </ScrollReveal>
+
+        <ScrollReveal>
+          <IncompleteProductLinesCard incomplete={incomplete.map((p) => ({ id: p.id, title: p.title }))} />
+        </ScrollReveal>
+      </div>
     </div>
   );
 }

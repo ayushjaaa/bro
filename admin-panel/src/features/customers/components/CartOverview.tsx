@@ -2,9 +2,36 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { CartSnapshotRow, CartEvent, CustomerCartSummary } from '@/data/customers';
+import type { VariantDetail } from '@/data/products';
 import { getCustomerCartsPageAction } from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+/** Real Intl-based currency formatting, not a manual "$" + toFixed(2) -- correct thousands
+ * separators and always exactly 2 decimal places regardless of what Shopify's price string
+ * looks like. */
+function formatMoney(amount: number, currencyCode: string): string {
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: currencyCode }).format(amount);
+}
+
+/** Sum of price × quantity across a customer's cart lines -- `null` if any line's price hasn't
+ * resolved yet (e.g. the variant details fetch for this page is still catching up), so the UI
+ * can show "calculating…" instead of a silently wrong partial total. Assumes a single currency
+ * across all lines (true for this store), using whichever line resolves first. */
+function computeCartTotal(
+  cartItems: CartSnapshotRow[],
+  variantDetailById: Map<string, VariantDetail>
+): { amount: number; currencyCode: string } | null {
+  let amount = 0;
+  let currencyCode: string | null = null;
+  for (const item of cartItems) {
+    const detail = variantDetailById.get(item.variant_id);
+    if (!detail) return null;
+    amount += Number(detail.price) * item.quantity;
+    currencyCode ??= detail.currencyCode;
+  }
+  return { amount, currencyCode: currencyCode ?? 'CAD' };
+}
 
 type CartEventRow = {
   id: string;
@@ -39,7 +66,8 @@ function toEventRow(e: CartEvent): CartEventRow {
 
 /** Product cell shows both the human-readable title AND the raw Shopify product id -- the id
  * alone isn't identifiable at a glance, but an admin cross-referencing against Shopify admin
- * still needs it, so this doesn't hide one in favor of the other. */
+ * still needs it, so this doesn't hide one in favor of the other. Used for the Activity feed,
+ * which only ever has a product-level id (see `CartEventRow`), not a variant. */
 function ProductLabel({ productId, productTitleById }: { productId: string; productTitleById: Map<string, string> }) {
   const numericId = productId.split('/').pop();
   const title = productTitleById.get(productId);
@@ -47,6 +75,34 @@ function ProductLabel({ productId, productTitleById }: { productId: string; prod
     <span>
       {title ?? `Product ${numericId}`}
       <span className="text-neutral-400"> · #{numericId}</span>
+    </span>
+  );
+}
+
+/** Cart-line label: shows what was actually added (parent product + specific flavour/variant)
+ * plus its price -- a customer can only ever add a real variant to their cart, so this is the
+ * one that answers "what product, exactly, and at what price," not just the product line. */
+function CartLineLabel({
+  productId,
+  variantId,
+  productTitleById,
+  variantDetailById,
+}: {
+  productId: string;
+  variantId: string;
+  productTitleById: Map<string, string>;
+  variantDetailById: Map<string, VariantDetail>;
+}) {
+  const numericId = productId.split('/').pop();
+  const detail = variantDetailById.get(variantId);
+  const productTitle = detail?.productTitle ?? productTitleById.get(productId) ?? `Product ${numericId}`;
+
+  return (
+    <span className="min-w-0 truncate">
+      {productTitle}
+      {detail?.variantTitle && detail.variantTitle !== 'Default Title' && (
+        <span className="text-neutral-500"> — {detail.variantTitle}</span>
+      )}
     </span>
   );
 }
@@ -77,6 +133,7 @@ export default function CartOverview({
   initialItems,
   initialCartActivity,
   initialProductTitleById,
+  initialVariantDetailById,
 }: {
   initialCustomers: CustomerCartSummary[];
   initialTotalCount: number;
@@ -84,6 +141,7 @@ export default function CartOverview({
   initialItems: CartSnapshotRow[];
   initialCartActivity: CartEvent[];
   initialProductTitleById: Map<string, string>;
+  initialVariantDetailById: Map<string, VariantDetail>;
 }) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -92,6 +150,7 @@ export default function CartOverview({
   const [totalItems, setTotalItems] = useState(initialTotalItems);
   const [items, setItems] = useState(initialItems);
   const [productTitleById, setProductTitleById] = useState(initialProductTitleById);
+  const [variantDetailById, setVariantDetailById] = useState(initialVariantDetailById);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -103,6 +162,10 @@ export default function CartOverview({
   useEffect(() => {
     productTitleByIdRef.current = productTitleById;
   }, [productTitleById]);
+  const variantDetailByIdRef = useRef(variantDetailById);
+  useEffect(() => {
+    variantDetailByIdRef.current = variantDetailById;
+  }, [variantDetailById]);
 
   async function fetchPage(nextPage: number, nextQuery: string) {
     setIsLoading(true);
@@ -111,6 +174,7 @@ export default function CartOverview({
         search: nextQuery,
         page: nextPage,
         pageSize: PAGE_SIZE,
+        knownVariantDetails: [...variantDetailByIdRef.current.entries()],
         knownProductTitles: [...productTitleByIdRef.current.entries()],
       });
       setCustomers(result.customers);
@@ -121,6 +185,13 @@ export default function CartOverview({
         setProductTitleById((prev) => {
           const next = new Map(prev);
           for (const [id, title] of result.productTitles) next.set(id, title);
+          return next;
+        });
+      }
+      if (result.variantDetails.length > 0) {
+        setVariantDetailById((prev) => {
+          const next = new Map(prev);
+          for (const [id, detail] of result.variantDetails) next.set(id, detail);
           return next;
         });
       }
@@ -240,6 +311,7 @@ export default function CartOverview({
             const customerItems = [...(byCustomer.get(customer.customerId) ?? [])].sort((a, b) =>
               b.updated_at.localeCompare(a.updated_at)
             );
+            const total = computeCartTotal(customerItems, variantDetailById);
             return (
               <button
                 type="button"
@@ -262,15 +334,32 @@ export default function CartOverview({
                   </span>
                 </div>
                 <ul className="mt-2 text-xs flex flex-col gap-1">
-                  {customerItems.map((item) => (
-                    <li key={item.variant_id} className="flex items-center justify-between text-neutral-700">
-                      <ProductLabel productId={item.product_id} productTitleById={productTitleById} />
-                      <span className="text-neutral-400 shrink-0 ml-2">
-                        ×{item.quantity} · {new Date(item.updated_at).toLocaleString('en-CA')}
-                      </span>
-                    </li>
-                  ))}
+                  {customerItems.map((item) => {
+                    const detail = variantDetailById.get(item.variant_id);
+                    return (
+                      <li key={item.variant_id} className="flex items-center justify-between gap-2 text-neutral-700">
+                        <CartLineLabel
+                          productId={item.product_id}
+                          variantId={item.variant_id}
+                          productTitleById={productTitleById}
+                          variantDetailById={variantDetailById}
+                        />
+                        <span className="text-neutral-400 shrink-0 ml-2 whitespace-nowrap">
+                          ×{item.quantity}
+                          {detail && <> · {formatMoney(Number(detail.price) * item.quantity, detail.currencyCode)}</>}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
+                {/* Real total, not just an item count -- computed from resolved prices, shown
+                   only once every line's price is known so it's never a silently wrong partial
+                   sum. */}
+                <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center justify-end">
+                  <span className="text-xs font-semibold text-neutral-800">
+                    Total: {total ? formatMoney(total.amount, total.currencyCode) : 'calculating…'}
+                  </span>
+                </div>
               </button>
             );
           })}
@@ -313,6 +402,7 @@ export default function CartOverview({
             .filter((e) => e.customer_id === selectedCustomer.customerId)
             .sort((a, b) => b.event_at.localeCompare(a.event_at))}
           productTitleById={productTitleById}
+          variantDetailById={variantDetailById}
           onClose={() => setSelectedCustomerId(null)}
         />
       )}
@@ -329,14 +419,17 @@ function CustomerActivityModal({
   cartItems,
   activity,
   productTitleById,
+  variantDetailById,
   onClose,
 }: {
   customer: CustomerCartSummary;
   cartItems: CartSnapshotRow[];
   activity: CartEventRow[];
   productTitleById: Map<string, string>;
+  variantDetailById: Map<string, VariantDetail>;
   onClose: () => void;
 }) {
+  const total = computeCartTotal(cartItems, variantDetailById);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -373,16 +466,32 @@ function CustomerActivityModal({
           {cartItems.length === 0 ? (
             <p className="text-xs text-neutral-400">Cart is empty.</p>
           ) : (
-            <ul className="text-xs flex flex-col gap-1 mb-4">
-              {cartItems.map((item) => (
-                <li key={item.variant_id} className="flex items-center justify-between text-neutral-700">
-                  <ProductLabel productId={item.product_id} productTitleById={productTitleById} />
-                  <span className="text-neutral-400 shrink-0 ml-2">
-                    ×{item.quantity} · {new Date(item.updated_at).toLocaleString('en-CA')}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="text-xs flex flex-col gap-1">
+                {cartItems.map((item) => {
+                  const detail = variantDetailById.get(item.variant_id);
+                  return (
+                    <li key={item.variant_id} className="flex items-center justify-between gap-2 text-neutral-700">
+                      <CartLineLabel
+                        productId={item.product_id}
+                        variantId={item.variant_id}
+                        productTitleById={productTitleById}
+                        variantDetailById={variantDetailById}
+                      />
+                      <span className="text-neutral-400 shrink-0 ml-2 whitespace-nowrap">
+                        ×{item.quantity}
+                        {detail && <> · {formatMoney(Number(detail.price) * item.quantity, detail.currencyCode)}</>}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-2 pt-2 border-t border-neutral-200 flex items-center justify-end mb-4">
+                <span className="text-sm font-semibold text-neutral-800">
+                  Total: {total ? formatMoney(total.amount, total.currencyCode) : 'calculating…'}
+                </span>
+              </div>
+            </>
           )}
 
           <h4 className="text-xs font-semibold text-neutral-500 uppercase mb-1.5 mt-4">

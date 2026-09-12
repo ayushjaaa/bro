@@ -1,5 +1,5 @@
 import { listCustomerCartsPage, listCartSnapshotForCustomers, listCartActivity } from '@/data/customers';
-import { listProductLines, getProductTitlesByIds } from '@/data/products';
+import { listProductLines, getProductTitlesByIds, getVariantDetailsByIds } from '@/data/products';
 import CartOverview, { PAGE_SIZE } from '@/features/customers/components/CartOverview';
 
 /**
@@ -39,6 +39,11 @@ export default async function CartPage() {
     for (const [id, title] of resolved) productTitleById.set(id, title);
   }
 
+  // Flavour name + price per line, keyed by variant_id -- resolved for every item on this
+  // initial page so the cart list and subtotal are correct on first render, not just after a
+  // client refetch.
+  const variantDetailById = await getVariantDetailsByIds(items.map((i) => i.variant_id));
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -57,6 +62,7 @@ export default async function CartPage() {
           initialItems={items}
           initialCartActivity={cartActivity}
           initialProductTitleById={productTitleById}
+          initialVariantDetailById={variantDetailById}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import TopBar from '@/components/TopBar';
 import Sidebar from '@/components/Sidebar';
+import { DashboardShellAnimator } from '@/components/DashboardShellAnimator';
 import { requireAdmin } from '@/data/admin-auth';
 
 /**
@@ -18,12 +19,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="min-h-full h-full flex flex-col bg-neutral-50 text-neutral-900">
+    <DashboardShellAnimator>
       <TopBar email={email} />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <main className="flex-1 min-w-0 overflow-y-auto p-6">{children}</main>
       </div>
-    </div>
+    </DashboardShellAnimator>
   );
 }

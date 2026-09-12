@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useLiveInventoryTable, type InventorySnapshotRow } from '../hooks/useLiveInventoryTable';
 import type { AttentionItem } from './LiveDashboardStats';
+import { DashCard, DashCardHeader } from './DashCard';
 
 const LOW_STOCK_THRESHOLD = 10;
 
@@ -26,7 +27,7 @@ export default function AttentionStockList({
 
   if (outOfStock.length === 0 && lowStock.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-400">
+      <div className="rounded-lg border border-dashed border-dash-card-border bg-dash-card-bg p-8 text-center text-sm text-dash-text-muted">
         Nothing needs attention — every Flavour is stocked above {LOW_STOCK_THRESHOLD} units.
       </div>
     );
@@ -59,29 +60,26 @@ function AttentionSection({
   if (items.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-dash-card-border bg-dash-card-bg overflow-hidden">
-      <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-        <span className="text-sm font-medium text-neutral-700">{title}</span>
-        <span className="text-xs text-dash-text-muted">{items.length}</span>
-      </div>
+    <DashCard overflowHidden>
+      <DashCardHeader title={title} count={items.length} />
       <ul>
         {items.map((item) => {
           const qty = liveQuantities.get(item.inventoryItemId) ?? 0;
           const numericId = item.productId.split('/').pop();
           return (
-            <li key={item.inventoryItemId} className="border-b border-neutral-50 last:border-0">
+            <li key={item.inventoryItemId} className="border-b border-dash-divider last:border-0">
               <Link
                 href={`/products/${numericId}/edit-flavours`}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-neutral-50"
               >
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imageUrl} alt="" className="w-9 h-9 rounded object-cover border border-neutral-200" />
+                  <img src={item.imageUrl} alt="" className="w-9 h-9 rounded-lg object-cover border border-neutral-200" />
                 ) : (
-                  <div className="w-9 h-9 rounded bg-neutral-100 border border-neutral-200" />
+                  <div className="w-9 h-9 rounded-lg bg-neutral-100 border border-neutral-200" />
                 )}
                 <div className="flex-1">
-                  <div className="text-neutral-800 font-medium">{item.productTitle}</div>
+                  <div className="text-dash-text-ink font-medium">{item.productTitle}</div>
                   <div className="text-xs text-dash-text-muted">{item.flavourTitle}</div>
                 </div>
                 <span className={`text-xs font-semibold ${tone === 'danger' ? 'text-dash-danger' : 'text-dash-warning'}`}>
@@ -92,6 +90,6 @@ function AttentionSection({
           );
         })}
       </ul>
-    </div>
+    </DashCard>
   );
 }

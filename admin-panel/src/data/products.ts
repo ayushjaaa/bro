@@ -226,6 +226,55 @@ export async function getProductTitlesByIds(ids: string[]): Promise<Map<string, 
   return map;
 }
 
+export type VariantDetail = {
+  variantTitle: string;
+  productTitle: string;
+  price: string;
+  currencyCode: string;
+};
+
+/** Resolves cart/order variant GIDs (`cart_snapshot.variant_id`) to their flavour name, parent
+ * product title, and current price -- same "resolve exactly what's referenced, bypass any
+ * paginated list" shape as `getProductTitlesByIds` above, since a cart can reference a variant
+ * that's outside any list's current page (or since deleted/archived). Returns entries only for
+ * variants that still resolve. */
+export async function getVariantDetailsByIds(variantIds: string[]): Promise<Map<string, VariantDetail>> {
+  await requireAdmin();
+  const uniqueIds = [...new Set(variantIds)];
+  if (uniqueIds.length === 0) return new Map();
+
+  const data = await shopifyAdminRequest<any>(
+    /* GraphQL */ `
+      query VariantDetailsByIds($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on ProductVariant {
+            id
+            title
+            price
+            product {
+              title
+            }
+          }
+        }
+      }
+    `,
+    { ids: uniqueIds }
+  );
+
+  const map = new Map<string, VariantDetail>();
+  for (const node of data.nodes ?? []) {
+    if (node?.id) {
+      map.set(node.id, {
+        variantTitle: node.title ?? '',
+        productTitle: node.product?.title ?? 'Unknown product',
+        price: node.price ?? '0.00',
+        currencyCode: 'CAD',
+      });
+    }
+  }
+  return map;
+}
+
 export type ProductLineDetail = {
   id: string;
   title: string;

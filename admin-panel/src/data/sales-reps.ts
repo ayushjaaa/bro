@@ -39,3 +39,17 @@ export async function createSalesRep(input: { name: string; phone: string; email
   if (error || !data) throw new Error(error?.message ?? 'Failed to create sales rep');
   return toSalesRep(data);
 }
+
+/** Updates a rep in place -- since customers reference reps by id (`customers.sales_rep_id`),
+ * editing a rep's phone/email here updates it everywhere they're assigned, no per-customer
+ * edits needed. */
+export async function updateSalesRep(
+  id: string,
+  input: { name: string; phone: string; email: string }
+): Promise<SalesRep> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.from('sales_reps').update(input).eq('id', id).select('*').single();
+  if (error || !data) throw new Error(error?.message ?? 'Failed to update sales rep');
+  return toSalesRep(data);
+}

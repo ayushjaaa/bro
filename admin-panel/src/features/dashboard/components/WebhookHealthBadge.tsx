@@ -23,14 +23,17 @@ export default function WebhookHealthBadge({ initial }: { initial: WebhookHealth
     return () => clearInterval(intervalId);
   }, []);
 
+  const pillClass = health.healthy
+    ? 'bg-dash-pill-success-bg text-dash-pill-success-text border-dash-pill-success-text/20'
+    : 'bg-dash-pill-danger-bg text-dash-pill-danger-text border-dash-pill-danger-text/20';
+  const dotClass = health.healthy ? 'bg-dash-success' : 'bg-dash-danger';
+
   return (
-    <div className="flex items-center gap-1.5 text-xs">
-      <span className={`w-2 h-2 rounded-full ${health.healthy ? 'bg-dash-success' : 'bg-dash-danger'}`} />
-      <span className={health.healthy ? 'text-dash-success' : 'text-dash-danger'}>
-        {health.healthy
-          ? 'Live sync connected'
-          : `Live sync disconnected (${health.missingTopics.length} webhook${health.missingTopics.length === 1 ? '' : 's'} missing)`}
-      </span>
+    <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold ${pillClass}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+      {health.healthy
+        ? 'Live sync connected'
+        : `Live sync disconnected (${health.missingTopics.length} webhook${health.missingTopics.length === 1 ? '' : 's'} missing)`}
     </div>
   );
 }

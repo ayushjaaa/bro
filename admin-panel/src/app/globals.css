@@ -4,28 +4,77 @@
   --background: #ffffff;
   --foreground: #171717;
 
-  /* Dashboard theme -- single source of truth for the redesigned Dashboard page
+  /* Real brand colors -- exact values pulled from public/logoGemin.svg (the same asset the
+     storefront's own Logo.tsx renders and TopBar.tsx now uses), mirroring the storefront's own
+     --color-brand-purple-* tokens (storefront/src/styles/color-tokens.css) so both apps carry
+     one identity instead of the admin panel's old generic emerald accent. */
+  --brand-purple-deep: #6b3aac;
+  --brand-purple-bright: #cc66ff;
+  --brand-purple-accent: #a855f7;
+
+  /* Dashboard theme -- single source of truth for the Dashboard page
      (src/app/(dashboard)/page.tsx + src/features/dashboard/**). Change a color here and every
      dashboard widget that references it updates together -- nothing hardcodes a hex value
-     directly in a component. */
-  --dash-hero-from: #ea580c; /* hero gradient card, top-left */
-  --dash-hero-to: #7c2d12; /* hero gradient card, bottom-right */
+     directly in a component. Re-themed to the brand purple (was a warm orange matched to an
+     earlier mockup) -- structure/layout untouched, only the hue changes. */
+  --dash-page-bg: #f4f1f8;
+  --dash-hero-from: var(--brand-purple-bright); /* hero gradient, top-right glow */
+  --dash-hero-to: var(--brand-purple-deep); /* hero gradient, bottom-left */
   --dash-card-bg: #ffffff;
-  --dash-card-border: #e5e7eb;
-  --dash-text-muted: #6b7280;
+  --dash-card-border: rgba(90, 50, 130, 0.1);
+  /* Exact warm text-color scale pulled from Admin Dashboard.dc.html -- the mockup uses 4
+     distinct grays, not just an "ink/muted" pair, and each has a specific role. Using the
+     wrong tier (e.g. muted where the mockup uses the darker label tone) is what flattened the
+     hierarchy before this fix -- every text color below must trace to one of these exact
+     literal values from the mockup, never a plain Tailwind neutral-*. */
+  --dash-text-ink: #17120e; /* primary: headings, big numbers, card titles */
+  --dash-text-label: #5d534b; /* bold small labels under the taxonomy bars */
+  --dash-text-caption: #7d736a; /* funnel step labels */
+  --dash-text-link: #8a7f76; /* "View All" links, secondary glyphs */
+  --dash-text-muted: #a89e95; /* captions, sub-values ("across N product lines") */
+  --dash-text-faint: #b6aca3; /* de-emphasized fragments (cents, unit suffixes) */
+  --dash-tooltip-bg: #241d33;
 
-  /* Funnel stage colors (Categories -> Sub-categories -> Brands -> Product Lines -> Flavours) */
-  --dash-funnel-1: #2563eb;
-  --dash-funnel-2: #a855f7;
-  --dash-funnel-3: #ec4899;
-  --dash-funnel-4: #f97316;
-  --dash-funnel-5: #10b981;
+  /* Funnel/taxonomy stage colors (Categories -> Sub-categories -> Brands -> Product Lines ->
+     Flavours), purple palette progressing light-to-dark, same structure as before (light ->
+     brand-accent -> brand-deep) just re-hued. */
+  --dash-funnel-1: #e9d5ff;
+  --dash-funnel-2: #d8b4fe;
+  --dash-funnel-3: #c084fc;
+  --dash-funnel-4: var(--brand-purple-accent);
+  --dash-funnel-5: #8b3fd1;
+  /* Conversion funnel needs a 6th stop (Registered -> Approved -> First Login -> In Cart ->
+     Requested -> Confirmed) -- extends the same ramp one step darker. */
+  --dash-funnel-6: var(--brand-purple-deep);
 
   /* Status/semantic colors reused across warning tiles and badges */
   --dash-danger: #dc2626;
   --dash-warning: #d97706;
   --dash-success: #059669;
   --dash-info: #0284c7;
+
+  /* Row/list dividers -- one place for every card's internal hairline. */
+  --dash-divider: rgba(90, 50, 130, 0.08);
+
+  /* PublishedRing's SVG track. */
+  --dash-ring-track: #ece7f5;
+  --dash-ring-text: #17120e;
+
+  /* Status pill colors -- same visual colors as plain Tailwind emerald/amber/neutral, now
+     swappable in one place. */
+  --dash-pill-success-bg: #eaf6ee;
+  --dash-pill-success-text: #1f7a45;
+  --dash-pill-warning-bg: #fdf6ec;
+  --dash-pill-warning-text: #8a5a04;
+  --dash-pill-neutral-bg: #f4f1ee;
+  --dash-pill-neutral-text: #6a6058;
+  --dash-pill-danger-bg: #fbeae5;
+  --dash-pill-danger-text: #c2410c;
+  --dash-pill-info-bg: #eaf1fb;
+  --dash-pill-info-text: #1d4ed8;
+
+  /* Soft card elevation -- replaces flat border-only cards with a subtle floating look. */
+  --dash-card-shadow: 0 12px 30px rgba(70, 30, 120, 0.1);
 }
 
 @theme inline {
@@ -34,20 +83,45 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  --color-brand-purple-deep: var(--brand-purple-deep);
+  --color-brand-purple-bright: var(--brand-purple-bright);
+  --color-brand-purple-accent: var(--brand-purple-accent);
+
+  --color-dash-page-bg: var(--dash-page-bg);
   --color-dash-hero-from: var(--dash-hero-from);
   --color-dash-hero-to: var(--dash-hero-to);
   --color-dash-card-bg: var(--dash-card-bg);
   --color-dash-card-border: var(--dash-card-border);
+  --color-dash-text-ink: var(--dash-text-ink);
+  --color-dash-text-label: var(--dash-text-label);
+  --color-dash-text-caption: var(--dash-text-caption);
+  --color-dash-text-link: var(--dash-text-link);
   --color-dash-text-muted: var(--dash-text-muted);
+  --color-dash-text-faint: var(--dash-text-faint);
+  --color-dash-tooltip-bg: var(--dash-tooltip-bg);
   --color-dash-funnel-1: var(--dash-funnel-1);
   --color-dash-funnel-2: var(--dash-funnel-2);
   --color-dash-funnel-3: var(--dash-funnel-3);
   --color-dash-funnel-4: var(--dash-funnel-4);
   --color-dash-funnel-5: var(--dash-funnel-5);
+  --color-dash-funnel-6: var(--dash-funnel-6);
   --color-dash-danger: var(--dash-danger);
   --color-dash-warning: var(--dash-warning);
   --color-dash-success: var(--dash-success);
   --color-dash-info: var(--dash-info);
+  --color-dash-divider: var(--dash-divider);
+  --color-dash-ring-track: var(--dash-ring-track);
+  --color-dash-ring-text: var(--dash-ring-text);
+  --color-dash-pill-success-bg: var(--dash-pill-success-bg);
+  --color-dash-pill-success-text: var(--dash-pill-success-text);
+  --color-dash-pill-warning-bg: var(--dash-pill-warning-bg);
+  --color-dash-pill-warning-text: var(--dash-pill-warning-text);
+  --color-dash-pill-neutral-bg: var(--dash-pill-neutral-bg);
+  --color-dash-pill-neutral-text: var(--dash-pill-neutral-text);
+  --color-dash-pill-danger-bg: var(--dash-pill-danger-bg);
+  --color-dash-pill-danger-text: var(--dash-pill-danger-text);
+  --color-dash-pill-info-bg: var(--dash-pill-info-bg);
+  --color-dash-pill-info-text: var(--dash-pill-info-text);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,4 +135,102 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Overview taxonomy cards -- a subtle staggered entrance, purely decorative (no data
+   implication, unlike the tooltips/wave graphs which are tied to real numbers). */
+@keyframes dash-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dashboard shell entrance -- plays once, right after login (see DashboardShellAnimator.tsx),
+   never on ordinary in-app navigation between pages. */
+@keyframes shell-fade-down {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes shell-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes shell-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+[data-shell-animate] > header {
+  animation: shell-fade-down 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Sidebar itself doesn't move -- only its nav items stagger in one by one, top to bottom
+   (industry-standard nav-reveal pattern), so the item order/spacing stays stable to the eye.
+   Durations/delays are deliberately generous (not snappy) -- this only plays once, right after
+   login, so it's fine for it to be slow enough to actually register as a sequence. */
+[data-shell-animate] aside nav > a {
+  opacity: 0;
+  animation: shell-slide-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-shell-animate] aside nav > a:nth-child(1) { animation-delay: 0.25s; }
+[data-shell-animate] aside nav > a:nth-child(2) { animation-delay: 0.37s; }
+[data-shell-animate] aside nav > a:nth-child(3) { animation-delay: 0.49s; }
+[data-shell-animate] aside nav > a:nth-child(4) { animation-delay: 0.61s; }
+[data-shell-animate] aside nav > a:nth-child(5) { animation-delay: 0.73s; }
+[data-shell-animate] aside nav > a:nth-child(6) { animation-delay: 0.85s; }
+[data-shell-animate] aside nav > a:nth-child(7) { animation-delay: 0.97s; }
+[data-shell-animate] aside nav > a:nth-child(n + 8) { animation-delay: 1.09s; }
+/* The Dashboard page's own visible-on-load content reveals card by card, top to bottom, not as
+   one or two flat blocks: Hero -> Overview card -> Conversion Funnel -> the 4 catalog stat tiles
+   -> webhook badge. Sections further down the Dashboard are wrapped in ScrollReveal (see
+   ScrollReveal.tsx) and stay purely scroll-triggered, not part of this login sequence. Selector
+   depth here matches (dashboard)/page.tsx's fixed wrapper structure:
+   main > div(page outer) > [Hero, div.content > [div.-mt-16 > [Overview, div.grid > [Funnel,
+   CatalogStatCards]], div.webhook-row, ...ScrollReveal sections]]. */
+[data-shell-animate] main > div > :nth-child(1) {
+  opacity: 0;
+  animation: shell-fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+[data-shell-animate] main > div > div > div:first-child > :nth-child(1) {
+  opacity: 0;
+  animation: shell-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+}
+[data-shell-animate] main > div > div > div:first-child > div:nth-child(2) > :nth-child(1) {
+  opacity: 0;
+  animation: shell-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+}
+[data-shell-animate] main > div > div > div:first-child > div:nth-child(2) > :nth-child(2) {
+  opacity: 0;
+  animation: shell-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.65s both;
+}
+[data-shell-animate] main > div > div > div:nth-child(2) {
+  opacity: 0;
+  animation: shell-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
+}
+/* Pages other than the Dashboard don't have this wrapper shape -- fall back to one plain fade for
+   whatever their top-level content is. */
+[data-shell-animate] main:not(:has(> div > div > div)) > * {
+  opacity: 0;
+  animation: shell-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
 }

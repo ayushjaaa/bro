@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0}
+body{background:#efece8;font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#c2410c;text-decoration:none}
+a:hover{color:#9a2f08}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#efece8;padding:0 0 28px">
+
+  <div style="position:relative;background:radial-gradient(115% 130% at 78% 8%, #ff8a3d 0%, #fb6415 32%, #e8410a 62%, #b3220a 100%);padding:22px 30px 0;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(60% 80% at 12% 100%, rgba(255,255,255,.16), rgba(255,255,255,0) 70%);pointer-events:none"></div>
+
+    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1320px;margin:0 auto">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);display:grid;place-items:center">
+          <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid #fff"></div>
+        </div>
+      </div>
+
+      <nav style="display:flex;align-items:center;gap:4px;padding:5px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(8px)">
+        <a href="#" style="padding:8px 18px;border-radius:999px;background:#fff;color:#b3220a;font-size:13px;font-weight:700;box-shadow:0 2px 8px rgba(90,20,0,.18)">Dashboard</a>
+        <a href="#" style="padding:8px 16px;border-radius:999px;color:rgba(255,255,255,.88);font-size:13px;font-weight:500">Loans</a>
+        <a href="#" style="padding:8px 16px;border-radius:999px;color:rgba(255,255,255,.88);font-size:13px;font-weight:500">Deposits</a>
+        <a href="#" style="padding:8px 16px;border-radius:999px;color:rgba(255,255,255,.88);font-size:13px;font-weight:500">Documents</a>
+        <a href="#" style="padding:8px 16px;border-radius:999px;color:rgba(255,255,255,.88);font-size:13px;font-weight:500">Reports</a>
+      </nav>
+
+      <div style="display:flex;align-items:center;gap:10px">
+        <button style="width:36px;height:36px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.26);color:#fff;font-size:15px;cursor:pointer;display:grid;place-items:center;position:relative">
+          <span style="display:block;width:13px;height:13px;border:2px solid #fff;border-radius:5px 5px 3px 3px;border-bottom-color:transparent"></span>
+          <span style="position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:999px;background:#fff;border:2px solid #e8410a"></span>
+        </button>
+        <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(140deg,#2b2b2b,#0f0f0f);border:1px solid rgba(255,255,255,.2);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:700">N</div>
+      </div>
+    </div>
+
+    <div style="position:relative;max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.85fr);gap:32px;align-items:end;padding:46px 0 96px">
+      <div>
+        <p style="margin:0 0 14px;color:rgba(255,255,255,.82);font-size:13.5px;font-weight:500">Track your balance, recent activity, and financial goals</p>
+        <h1 style="margin:0;color:#fff;font-size:clamp(34px,4.6vw,58px);line-height:1.02;font-weight:800;letter-spacing:-.02em;text-wrap:pretty">Welcome Back, Nixtio!</h1>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:28px">
+          <button style="display:flex;align-items:center;gap:9px;padding:12px 26px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);color:#fff;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">
+            <span style="width:16px;height:16px;border-radius:5px;background:rgba(255,255,255,.35);display:grid;place-items:center;font-size:11px;line-height:1">↓</span>Deposit
+          </button>
+          <button style="display:flex;align-items:center;gap:9px;padding:12px 26px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.16);backdrop-filter:blur(6px);color:#fff;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">
+            <span style="width:16px;height:16px;border-radius:5px;background:rgba(255,255,255,.35);display:grid;place-items:center;font-size:11px;line-height:1">↑</span>Withdraw
+          </button>
+        </div>
+      </div>
+
+      <div style="border-radius:22px;padding:22px 24px;background:linear-gradient(150deg,rgba(255,255,255,.28),rgba(255,255,255,.08));border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(14px);box-shadow:0 20px 50px rgba(120,30,0,.22)">
+        <div style="display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,.9);font-size:12.5px;font-weight:600">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="letter-spacing:.18em">••••</span><span>9286</span>
+          </div>
+          <span style="color:rgba(255,255,255,.72)">08 / 32</span>
+          <span style="font-size:15px;font-weight:800;font-style:italic;letter-spacing:.04em">VISA</span>
+        </div>
+        <div style="margin-top:26px;color:#fff;font-weight:800;letter-spacing:-.02em;font-size:clamp(28px,3.2vw,40px);line-height:1">$12,680<span style="opacity:.6">.42</span></div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.9);font-size:12px;font-weight:600">
+          <span style="display:grid;place-items:center;width:16px;height:16px;border-radius:999px;background:rgba(255,255,255,.24);font-size:9px">↑</span>
+          2.46% from last month
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1320px;margin:-72px auto 0;padding:0 30px;position:relative;display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,1fr);gap:16px;align-items:start">
+
+    <section style="grid-column:1 / -1;background:#fff;border:1px solid rgba(20,10,0,.07);border-radius:20px;padding:22px 24px;box-shadow:0 12px 30px rgba(80,40,10,.07)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <h2 style="margin:0;font-size:14.5px;font-weight:700;color:#17120e">Overview</h2>
+        <button style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;border:1px solid rgba(20,10,0,.1);background:#faf8f6;color:#3a312a;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Catalog <span style="font-size:9px;opacity:.6">▼</span></button>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:baseline;gap:10px">
+        <span style="color:#17120e;font-weight:800;letter-spacing:-.02em;font-size:clamp(26px,2.6vw,34px)">2,431<span style="color:#b6aca3"> flavours</span></span>
+        <span style="font-size:11px;font-weight:500;color:#a89e95">across 24 product lines</span>
+      </div>
+
+      <div style="position:relative;margin-top:18px;display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px">
+        <div style="display:flex;flex-direction:column;justify-content:space-between;font-size:9.5px;color:#b0a69d;font-family:'JetBrains Mono',monospace;padding-bottom:20px">
+          <span>3k</span><span>1k</span><span>300</span><span>100</span><span>30</span><span>10</span>
+        </div>
+        <div>
+          <div style="position:relative;height:150px;display:flex;align-items:flex-end;gap:26px;padding:0 8px;border-bottom:1px solid rgba(20,10,0,.08)">
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none">
+              <div style="border-top:1px dashed rgba(20,10,0,.07)"></div>
+              <div style="border-top:1px dashed rgba(20,10,0,.07)"></div>
+              <div style="border-top:1px dashed rgba(20,10,0,.07)"></div>
+              <div style="border-top:1px dashed rgba(20,10,0,.07)"></div>
+              <div style="border-top:1px dashed rgba(20,10,0,.07)"></div>
+            </div>
+            <sc-for list="{{ taxonomy }}" as="t" hint-placeholder-count="5">
+              <div style="flex:1 1 0;min-width:0;display:flex;justify-content:center;align-items:flex-end;height:100%">
+                <div style="width:100%;max-width:64px;border-radius:6px 6px 0 0;height:{{ t.h }};background:{{ t.fill }}"></div>
+              </div>
+            </sc-for>
+            <div style="position:absolute;left:50%;top:-6px;transform:translateX(-50%);display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:14px;background:#141210;color:#fff;box-shadow:0 14px 28px rgba(20,10,0,.28);white-space:nowrap">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:15px;font-weight:800;letter-spacing:-.01em">160 brands</span>
+                <span style="padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.14);font-size:9.5px;font-weight:700;color:#ffb489">134 empty</span>
+              </div>
+              <span style="font-size:9.5px;color:rgba(255,255,255,.6);font-weight:500">26 with products linked</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:26px;padding:0 8px;margin-top:9px">
+            <sc-for list="{{ taxonomy }}" as="t" hint-placeholder-count="5">
+              <div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center">
+                <span style="font-size:10.5px;font-weight:700;color:#5d534b">{{ t.label }}</span>
+                <span style="font-size:9.5px;font-weight:500;color:#a89e95">{{ t.value }} · {{ t.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="background:#fff;border:1px solid rgba(20,10,0,.07);border-radius:20px;padding:22px 24px 16px;box-shadow:0 12px 30px rgba(80,40,10,.07)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <h2 style="margin:0;font-size:14.5px;font-weight:700;color:#17120e">Conversion Funnel</h2>
+        <span style="display:none"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;border:1px solid rgba(20,10,0,.1);background:#faf8f6;color:#3a312a;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Last 30 days <span style="font-size:9px;opacity:.6">▼</span></button>
+          <button style="width:30px;height:30px;border-radius:999px;border:1px solid rgba(20,10,0,.1);background:#faf8f6;color:#3a312a;font-size:12px;cursor:pointer">↻</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;display:flex;align-items:baseline;gap:10px">
+        <span style="color:#17120e;font-weight:800;letter-spacing:-.02em;font-size:clamp(26px,2.6vw,34px)">12.5<span style="color:#b6aca3">%</span></span>
+        <span style="display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#eaf6ee;color:#1f7a45;font-size:10.5px;font-weight:700">▲ 2.46%</span>
+        <span style="font-size:11px;font-weight:500;color:#a89e95">8 registered → 1 confirmed</span>
+      </div>
+
+      <div style="margin-top:18px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;height:118px">
+        <sc-for list="{{ funnel }}" as="step" hint-placeholder-count="6">
+          <div style="position:relative;height:100%;overflow:hidden">
+            <div style="position:absolute;inset:0;background:{{ step.tint }};clip-path:{{ step.clip }}"></div>
+            <div style="position:absolute;inset:0;clip-path:{{ step.clip }};background-image:radial-gradient({{ step.fill }} 1.6px, transparent 1.7px);background-size:12px 12px;background-position:3px 3px;opacity:.85"></div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;margin-top:10px">
+        <sc-for list="{{ funnel }}" as="step" hint-placeholder-count="6">
+          <div style="padding:0 3px;display:flex;flex-direction:column;gap:3px">
+            <span style="font-size:9.5px;font-weight:600;color:#7d736a;line-height:1.25">{{ step.label }}</span>
+            <span style="display:flex;align-items:baseline;gap:5px">
+              <span style="font-size:15px;font-weight:800;color:#17120e;line-height:1">{{ step.value }}</span>
+              <span style="font-size:9px;font-weight:700;color:#a89e95">{{ step.rate }}</span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="margin-top:14px;display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:12px;background:#fdf6ec;border:1px solid rgba(224,161,6,.25)">
+        <span style="flex:none;width:18px;height:18px;border-radius:6px;background:#fbe6bd;color:#8a5a04;display:grid;place-items:center;font-size:11px;font-weight:800">!</span>
+        <span style="font-size:11.5px;font-weight:600;color:#6b4a06">Biggest leak: First login → In cart drops 3 of 6 users (50%)</span>
+      </div>
+    </section>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="4">
+        <div style="background:#fff;border:1px solid rgba(20,10,0,.07);border-radius:20px;padding:20px;box-shadow:0 12px 30px rgba(80,40,10,.06);display:flex;flex-direction:column;gap:16px;min-height:118px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+            <span style="font-size:13px;font-weight:700;color:#17120e;line-height:1.25">{{ cat.name }}</span>
+            <span style="width:24px;height:24px;border-radius:8px;border:1px solid rgba(20,10,0,.1);display:grid;place-items:center;font-size:11px;color:#8a7f76">{{ cat.glyph }}</span>
+          </div>
+          <div>
+            <div style="display:flex;align-items:baseline;color:#17120e;font-weight:800;letter-spacing:-.02em;font-size:clamp(22px,2.2vw,30px);line-height:1">{{ cat.whole }}<span style="color:#b6aca3">{{ cat.cents }}</span></div>
+            <div style="margin-top:9px;display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#d84315">▼ {{ cat.change }} <span style="color:#a89e95;font-weight:500">from last month</span></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <section style="background:#fff;border:1px solid rgba(20,10,0,.07);border-radius:20px;padding:22px 24px;box-shadow:0 12px 30px rgba(80,40,10,.07)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <h2 style="margin:0;font-size:14.5px;font-weight:700;color:#17120e">Recent Transactions</h2>
+        <a href="#" style="font-size:11.5px;font-weight:600;color:#8a7f76">View All</a>
+      </div>
+      <div style="margin-top:16px;display:flex;flex-direction:column">
+        <sc-for list="{{ transactions }}" as="tx" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:14px;padding:13px 0;border-top:1px solid rgba(20,10,0,.06)">
+            <div style="display:flex;align-items:center;gap:12px;min-width:0">
+              <span style="width:34px;height:34px;border-radius:10px;background:{{ tx.tint }};display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff">{{ tx.initial }}</span>
+              <span style="min-width:0">
+                <span style="display:block;font-size:12.5px;font-weight:700;color:#17120e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tx.name }}</span>
+                <span style="display:block;font-size:10.5px;color:#a89e95;font-weight:500;margin-top:2px">{{ tx.when }}</span>
+              </span>
+            </div>
+            <span style="padding:4px 10px;border-radius:999px;background:{{ tx.statusBg }};color:{{ tx.statusFg }};font-size:10px;font-weight:700;white-space:nowrap">{{ tx.status }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#b0a69d">{{ tx.id }}</span>
+            <span style="font-size:13px;font-weight:800;color:{{ tx.amountColor }};white-space:nowrap">{{ tx.amount }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="background:#fff;border:1px solid rgba(20,10,0,.07);border-radius:20px;padding:22px 24px;box-shadow:0 12px 30px rgba(80,40,10,.07)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <h2 style="margin:0;font-size:14.5px;font-weight:700;color:#17120e">Investment Performance</h2>
+        <a href="#" style="font-size:11.5px;font-weight:600;color:#8a7f76">View All</a>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:baseline;color:#17120e;font-weight:800;letter-spacing:-.02em;font-size:clamp(24px,2.4vw,32px)">$1500<span style="color:#b6aca3">.00</span></div>
+      <div style="position:relative;margin-top:18px;height:104px">
+        <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:6px">
+          <sc-for list="{{ invest }}" as="col" hint-placeholder-count="7">
+            <div style="flex:1 1 0;border-radius:6px 6px 0 0;height:{{ col.h }};background:{{ col.fill }}"></div>
+          </sc-for>
+        </div>
+        <div style="position:absolute;right:26%;top:-6px;display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;background:#141210;color:#fff;font-size:10.5px;font-weight:700;box-shadow:0 10px 22px rgba(20,10,0,.26)">▲ 10%</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#a89e95;font-weight:600">
+        <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#f4642a&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#f4642a&quot;,&quot;#2563eb&quot;,&quot;#16a34a&quot;,&quot;#7c3aed&quot;],&quot;section&quot;:&quot;Theme&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? "#f4642a";
+    const n = 48, peak = 27;
+    const bars = [];
+    for (let i = 0; i < n; i++) {
+      const s = Math.sin(i * 1.7) * 0.5 + Math.sin(i * 0.42) * 0.32 + Math.cos(i * 0.19) * 0.2;
+      let v = 0.36 + (s + 1) / 2 * 0.5;
+      if (i >= peak - 1 && i <= peak + 1) v = 0.88 + (i === peak ? 0.1 : 0);
+      bars.push({
+        h: Math.round(v * 100) + "%",
+        fill: i >= peak - 1 && i <= peak + 1 ? "#1d1a17" : "rgba(20,12,6,.16)"
+      });
+    }
+    const iv = [0.42, 0.58, 0.5, 0.72, 0.63, 0.95, 0.55];
+    const invest = iv.map((v, i) => ({
+      h: Math.round(v * 100) + "%",
+      fill: i === 5 ? accent : "rgba(20,12,6,.10)"
+    }));
+    const funnelRaw = [
+      ["Registered", 8, "entry", "#f9b98f", "#fdf0e7"],
+      ["Approved", 6, "−2", "#f79a63", "#fdeade"],
+      ["First login", 6, "−0", "#f4642a", "#fce3d4"],
+      ["In cart", 3, "−3", "#e8410a", "#fbd9c9"],
+      ["Requested", 1, "−2", "#c2410c", "#f7d2c1"],
+      ["Confirmed", 1, "−0", "#8a2c06", "#f2cbb8"]
+    ];
+    const fmax = 8, floor = 0.16;
+    const fr = (v) => Math.max(floor, v / fmax);
+    const funnel = funnelRaw.map(([label, value, rate, fill, tint], i) => {
+      const nextV = funnelRaw[i + 1] ? funnelRaw[i + 1][1] : value;
+      const a = ((1 - fr(value)) / 2 * 100).toFixed(1);
+      const b = ((1 - fr(nextV)) / 2 * 100).toFixed(1);
+      return {
+        label, value, rate, fill, tint,
+        clip: "polygon(0% " + a + "%, 100% " + b + "%, 100% " + (100 - b) + "%, 0% " + (100 - a) + "%)"
+      };
+    });
+
+    const taxRaw = [
+      ["Categories", 14, "#f9b98f", "all populated"],
+      ["Sub-categories", 86, "#f79a63", "53 empty"],
+      ["Brands", 160, "#f4642a", "134 empty"],
+      ["Product Lines", 24, "#e8410a", "21 to publish"],
+      ["Flavours", 2431, "#c2410c", "3 active lines"]
+    ];
+    const lo = Math.log(10), hi = Math.log(3000);
+    const taxonomy = taxRaw.map(([label, n, fill, note]) => ({
+      label, fill, note,
+      value: n.toLocaleString(),
+      h: Math.round(Math.min(100, Math.max(10, (Math.log(n) - lo) / (hi - lo) * 100))) + "%"
+    }));
+
+    return {
+      bars, invest, funnel, taxonomy,
+      categories: [
+        { name: "Groceries", glyph: "▤", whole: "$604", cents: ".36", change: "2.46%" },
+        { name: "Clothes and Shoes", glyph: "▧", whole: "$296", cents: ".65", change: "1.64%" },
+        { name: "Cafes and Restaurants", glyph: "▣", whole: "$206", cents: ".48", change: "3.18%" },
+        { name: "Sport", glyph: "◈", whole: "$182", cents: ".44", change: "0.82%" }
+      ],
+      transactions: [
+        { initial: "A", tint: "#e0350c", name: "Adobe Creative Cloud", when: "Today, 09:40", status: "in progress", statusBg: "#fff1e4", statusFg: "#c2410c", id: "2847", amount: "-$59.99", amountColor: "#d8341a" },
+        { initial: "F", tint: "#1d1a17", name: "Figma Professional", when: "Yesterday, 16:12", status: "completed", statusBg: "#eaf6ee", statusFg: "#1f7a45", id: "2846", amount: "-$15.00", amountColor: "#17120e" },
+        { initial: "P", tint: "#8a7f76", name: "Payroll — September", when: "Sep 8, 08:00", status: "completed", statusBg: "#eaf6ee", statusFg: "#1f7a45", id: "2831", amount: "+$4,200.00", amountColor: "#1f7a45" },
+        { initial: "V", tint: "#c2410c", name: "Vendor Refund", when: "Sep 5, 11:26", status: "pending", statusBg: "#f4f1ee", statusFg: "#6a6058", id: "2822", amount: "+$128.40", amountColor: "#1f7a45" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
