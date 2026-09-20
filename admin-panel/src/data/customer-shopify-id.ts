@@ -36,3 +36,60 @@ export async function getShopifyCustomerIdForCustomer(customerId: string): Promi
   if (error || !data) return null;
   return data.shopify_customer_id;
 }
+
+export interface CustomerOrderContactInfo {
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  shipLine1: string | null;
+  shipLine2: string | null;
+  shipPostalCode: string | null;
+  /** "<W|R>-<PROVINCE>-<YY>-<SEQ>" (014 migration), e.g. "W-ON-26-0142" -- assigned at approval,
+   * never a Shopify field at all (purely this app's own identifier), so unlike the fields above
+   * this is never a PII-restriction backfill, just data that only ever lived here. Included so
+   * the invoice page can build a filename that's actually unique per customer+order instead of
+   * relying on the order name alone (which two different Shopify stores, or two draft orders far
+   * apart in time, could otherwise collide on). */
+  accountNumber: string | null;
+}
+
+/**
+ * Backfill source for the exact fields Shopify's Protected Customer Data plan restriction blocks
+ * on a DraftOrder read (see isProtectedCustomerDataError in admin-client.core.ts): customer
+ * name/email/phone and the precise street address/postal code. This app already collected all of
+ * it directly from the customer at registration (008 migration) -- reading it back from our own
+ * Supabase row is not a workaround-quality substitute, it's the same data, just sourced from where
+ * we already have it instead of re-asking Shopify for something Shopify won't currently hand back.
+ * Returns all-null (never throws) if the row is missing, same "report, don't blow up" posture as
+ * getShopifyCustomerIdForCustomer above.
+ */
+export async function getCustomerOrderContactInfo(customerId: string): Promise<CustomerOrderContactInfo> {
+  const empty: CustomerOrderContactInfo = {
+    firstName: null,
+    lastName: null,
+    email: null,
+    phone: null,
+    shipLine1: null,
+    shipLine2: null,
+    shipPostalCode: null,
+    accountNumber: null,
+  };
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from('customers')
+    .select('first_name, last_name, email, phone, ship_line1, ship_line2, ship_postal_code, account_number')
+    .eq('id', customerId)
+    .maybeSingle();
+  if (error || !data) return empty;
+  return {
+    firstName: data.first_name ?? null,
+    lastName: data.last_name ?? null,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
+    shipLine1: data.ship_line1 ?? null,
+    shipLine2: data.ship_line2 ?? null,
+    shipPostalCode: data.ship_postal_code ?? null,
+    accountNumber: data.account_number ?? null,
+  };
+}

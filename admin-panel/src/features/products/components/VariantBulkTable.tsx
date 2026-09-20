@@ -10,6 +10,7 @@ type Row = {
   description: string;
   price: string;
   compareAtPrice: string;
+  retailPrice: string;
   sku: string;
   quantity: string;
   image: File | null;
@@ -22,6 +23,7 @@ const BLANK_ROW: Omit<Row, 'id'> = {
   description: '',
   price: '',
   compareAtPrice: '',
+  retailPrice: '',
   sku: '',
   quantity: '',
   image: null,
@@ -40,6 +42,7 @@ function isRowTouched(row: Row): boolean {
     row.description.trim() !== '' ||
     row.price.trim() !== '' ||
     row.compareAtPrice.trim() !== '' ||
+    row.retailPrice.trim() !== '' ||
     row.sku.trim() !== '' ||
     row.quantity.trim() !== '' ||
     row.image !== null
@@ -84,7 +87,24 @@ function validateRow(row: Row): RowErrors {
     }
   }
 
+  // Retail Price is optional (missing = retail customers fall back to Wholesale Price) -- only a
+  // malformed number blocks submission here. "Retail should be >= Wholesale" is a soft warning
+  // (see rowRetailWarning below), not blocked, since a legitimate reason to deviate could exist.
+  if (row.retailPrice.trim() && !Number.isFinite(Number(row.retailPrice))) {
+    errors.retailPrice = 'Invalid number';
+  }
+
   return errors;
+}
+
+/** Non-blocking warning: retail price should normally be at or above wholesale, but this doesn't
+ * stop the row from being saved (e.g. a legitimate clearance/parity-priced item). */
+function rowRetailWarning(row: Row): string | null {
+  if (!row.retailPrice.trim() || !row.price.trim()) return null;
+  const retail = Number(row.retailPrice);
+  const wholesale = Number(row.price);
+  if (!Number.isFinite(retail) || !Number.isFinite(wholesale)) return null;
+  return retail < wholesale ? 'Below Wholesale' : null;
 }
 
 const inputClass = (hasError: boolean, locked: boolean) =>
@@ -178,6 +198,7 @@ export default function VariantBulkTable({
         description: String(n),
         price: bulkPrice,
         compareAtPrice: '0',
+        retailPrice: '',
         sku: `${numericId}-${n}`,
         quantity: '2',
         image: null,
@@ -214,6 +235,7 @@ export default function VariantBulkTable({
       formData.set(`row:${i}:sku`, row.sku);
       formData.set(`row:${i}:quantity`, row.quantity);
       if (row.compareAtPrice) formData.set(`row:${i}:compareAtPrice`, row.compareAtPrice);
+      if (row.retailPrice) formData.set(`row:${i}:retailPrice`, row.retailPrice);
       if (row.image) formData.set(`row:${i}:image`, row.image);
     });
 
@@ -247,8 +269,9 @@ export default function VariantBulkTable({
             <tr>
               <th className="text-left px-3 py-2 font-medium">Flavour</th>
               <th className="text-left px-3 py-2 font-medium">Description</th>
-              <th className="text-left px-3 py-2 font-medium">Price</th>
+              <th className="text-left px-3 py-2 font-medium">Wholesale Price</th>
               <th className="text-left px-3 py-2 font-medium">Compare-at</th>
+              <th className="text-left px-3 py-2 font-medium">Retail Price</th>
               <th className="text-left px-3 py-2 font-medium">Quantity</th>
               <th className="text-left px-3 py-2 font-medium">SKU</th>
               <th className="text-left px-3 py-2 font-medium">Image</th>
@@ -308,6 +331,21 @@ export default function VariantBulkTable({
                     />
                     {showErrors && errors.compareAtPrice && (
                       <p className="text-[10px] text-red-600 mt-0.5">{errors.compareAtPrice}</p>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <input
+                      value={row.retailPrice}
+                      onChange={(e) => updateRow(row.id, { retailPrice: e.target.value })}
+                      placeholder="0.00"
+                      disabled={locked}
+                      className={`w-16 ${inputClass(showErrors && !!errors.retailPrice, locked)}`}
+                    />
+                    {showErrors && errors.retailPrice && (
+                      <p className="text-[10px] text-red-600 mt-0.5">{errors.retailPrice}</p>
+                    )}
+                    {!showErrors && !locked && rowRetailWarning(row) && (
+                      <p className="text-[10px] text-amber-600 mt-0.5">{rowRetailWarning(row)}</p>
                     )}
                   </td>
                   <td className="px-2 py-1.5 align-top">

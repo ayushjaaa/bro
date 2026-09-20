@@ -16,8 +16,12 @@ import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
 export type VariantRow = {
   flavourName: string;
   description: string;
+  /** Shopify's native price field -- represents this business's wholesale/distributor price. */
   price: string;
   compareAtPrice?: string;
+  /** Stored as the `custom.retail_price` variant metafield (Storefront-API-visible). Missing =
+   * retail customers fall back to `price` (wholesale). */
+  retailPrice?: string;
   sku?: string;
   quantity?: string;
   image?: File;
@@ -30,6 +34,32 @@ const BATCH_SIZE = 100;
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
 function isValidMoney(value: string | undefined): boolean {
   return value === undefined || MONEY_RE.test(value.trim());
+}
+
+// `money`-typed metafields must be written with the shop's own currency code -- Shopify rejects
+// any other currency_code outright. Different stores run different currencies (verified: the
+// migration's old store was USD, the new one is CAD), so this must be fetched live rather than
+// hardcoded. Cached in-process since it never changes for the lifetime of a running server.
+let cachedShopCurrency: string | null = null;
+async function getShopCurrency(): Promise<string> {
+  if (cachedShopCurrency) return cachedShopCurrency;
+  const data = await shopifyAdminRequest<{ shop: { currencyCode: string } }>(
+    '{ shop { currencyCode } }'
+  );
+  cachedShopCurrency = data.shop.currencyCode;
+  return cachedShopCurrency;
+}
+
+/** `money`-typed metafields require this JSON shape, not a plain number. */
+async function retailPriceMetafield(value: string | undefined) {
+  if (!value) return null;
+  const currencyCode = await getShopCurrency();
+  return {
+    namespace: 'custom',
+    key: 'retail_price',
+    type: 'money',
+    value: JSON.stringify({ amount: value, currency_code: currencyCode }),
+  };
 }
 
 // strategy: REMOVE_STANDALONE_VARIANT -- not DEFAULT. DEFAULT only auto-deletes Shopify's own
@@ -106,6 +136,8 @@ async function buildVariantInput(
       value: row.description,
     },
   ];
+  const retailMetafield = await retailPriceMetafield(row.retailPrice);
+  if (retailMetafield) metafields.push(retailMetafield);
 
   const input: Record<string, unknown> = {
     optionValues: [{ name: row.flavourName, optionName: 'Flavor' }],
@@ -138,6 +170,7 @@ export type VariantUpdateRow = {
   description: string;
   price: string;
   compareAtPrice?: string;
+  retailPrice?: string;
   sku?: string;
   quantity?: string;
   /** The quantity Shopify had on record when this row was loaded, before any edit -- required as
@@ -171,7 +204,8 @@ export async function bulkCreateVariants(
     // Reject non-numeric price/compareAtPrice before they ever reach Shopify -- the API's own
     // "invalid money" error doesn't say which row caused it, so catch it here with a clear message.
     const batchRows = allBatchRows.filter((row) => {
-      const valid = isValidMoney(row.price) && isValidMoney(row.compareAtPrice);
+      const valid =
+        isValidMoney(row.price) && isValidMoney(row.compareAtPrice) && isValidMoney(row.retailPrice);
       if (!valid) {
         result.failed += 1;
         result.errors.push({
@@ -284,9 +318,11 @@ export async function updateVariants(
 
   const result: BulkCreateResult = { created: 0, failed: 0, errors: [] };
 
-  // Same "invalid money" guard as bulkCreateVariants -- catch a bad price/compareAtPrice here
-  // with a row-identifying message instead of letting Shopify's opaque error surface.
-  const invalidRows = rows.filter((row) => !isValidMoney(row.price) || !isValidMoney(row.compareAtPrice));
+  // Same "invalid money" guard as bulkCreateVariants -- catch a bad price/compareAtPrice/retailPrice
+  // here with a row-identifying message instead of letting Shopify's opaque error surface.
+  const invalidRows = rows.filter(
+    (row) => !isValidMoney(row.price) || !isValidMoney(row.compareAtPrice) || !isValidMoney(row.retailPrice)
+  );
   for (const row of invalidRows) {
     result.failed += 1;
     result.errors.push({
@@ -294,25 +330,31 @@ export async function updateVariants(
       message: `Row ${row.id}: price must be a plain number (e.g. "12.99"), got "${row.price}"`,
     });
   }
-  const validRows = rows.filter((row) => isValidMoney(row.price) && isValidMoney(row.compareAtPrice));
+  const validRows = rows.filter(
+    (row) => isValidMoney(row.price) && isValidMoney(row.compareAtPrice) && isValidMoney(row.retailPrice)
+  );
 
-  const variants = validRows.map((row) => {
+  const variants = await Promise.all(validRows.map(async (row) => {
+    const metafields = [
+      {
+        namespace: 'custom',
+        key: 'flavour_description',
+        type: 'multi_line_text_field',
+        value: row.description,
+      },
+    ];
+    const retailMetafield = await retailPriceMetafield(row.retailPrice);
+    if (retailMetafield) metafields.push(retailMetafield);
+
     const input: Record<string, unknown> = {
       id: row.id,
       price: row.price,
-      metafields: [
-        {
-          namespace: 'custom',
-          key: 'flavour_description',
-          type: 'multi_line_text_field',
-          value: row.description,
-        },
-      ],
+      metafields,
     };
     if (row.compareAtPrice) input.compareAtPrice = row.compareAtPrice;
     if (row.sku) input.inventoryItem = { sku: row.sku };
     return input;
-  });
+  }));
 
   if (validRows.length > 0) {
     try {

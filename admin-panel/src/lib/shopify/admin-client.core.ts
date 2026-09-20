@@ -7,9 +7,15 @@
 function assertShopifyEnv() {
   const missing: string[] = [];
   if (!process.env.SHOPIFY_STORE_DOMAIN) missing.push('SHOPIFY_STORE_DOMAIN');
-  if (!process.env.SHOPIFY_CLIENT_ID) missing.push('SHOPIFY_CLIENT_ID');
-  if (!process.env.SHOPIFY_CLIENT_SECRET) missing.push('SHOPIFY_CLIENT_SECRET');
   if (!process.env.SHOPIFY_API_VERSION) missing.push('SHOPIFY_API_VERSION');
+  // Two supported auth modes: a static Admin API access token (custom apps installed directly
+  // from the store admin -- these don't support the client_credentials grant at all, and calling
+  // it returns "shop_not_permitted"), or the client_credentials OAuth grant (Partner-managed apps
+  // in the same org as the store). Prefer the static token when present.
+  if (!process.env.SHOPIFY_ADMIN_ACCESS_TOKEN) {
+    if (!process.env.SHOPIFY_CLIENT_ID) missing.push('SHOPIFY_CLIENT_ID');
+    if (!process.env.SHOPIFY_CLIENT_SECRET) missing.push('SHOPIFY_CLIENT_SECRET');
+  }
   if (missing.length > 0) {
     throw new Error(
       `Missing required Shopify env var(s): ${missing.join(', ')}. Check .env.local (see .env.example).`
@@ -17,9 +23,10 @@ function assertShopifyEnv() {
   }
   return {
     domain: process.env.SHOPIFY_STORE_DOMAIN!,
-    clientId: process.env.SHOPIFY_CLIENT_ID!,
-    clientSecret: process.env.SHOPIFY_CLIENT_SECRET!,
+    clientId: process.env.SHOPIFY_CLIENT_ID,
+    clientSecret: process.env.SHOPIFY_CLIENT_SECRET,
     apiVersion: process.env.SHOPIFY_API_VERSION!,
+    staticAccessToken: process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
   };
 }
 
@@ -46,7 +53,9 @@ let cachedToken: CachedToken | null = null;
  * https://shopify.dev/docs/apps/build/dev-dashboard/get-api-access-tokens
  */
 async function getAccessToken(): Promise<string> {
-  const { domain, clientId, clientSecret } = assertShopifyEnv();
+  const { domain, clientId, clientSecret, staticAccessToken } = assertShopifyEnv();
+
+  if (staticAccessToken) return staticAccessToken;
 
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.token;
@@ -57,8 +66,8 @@ async function getAccessToken(): Promise<string> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: clientId,
-      client_secret: clientSecret,
+      client_id: clientId!,
+      client_secret: clientSecret!,
     }),
     cache: 'no-store',
   });
@@ -83,15 +92,34 @@ interface GraphQLResponse<TData> {
   errors?: unknown;
 }
 
-/**
- * The single entry point for calling Shopify's Admin GraphQL API. Every current and future
- * milestone (metaobjects now; Draft Orders, customer tagging, bulk ops later) should import
- * this instead of hand-rolling fetch calls.
- */
-export async function shopifyAdminRequest<TData, TVariables = Record<string, unknown>>(
+interface GraphQLErrorEntry {
+  message: string;
+  extensions?: { code?: string };
+}
+
+/** Live-verified 2026-09-18 against this store's app: requesting `email`/`phone`/`shippingAddress.
+ * address1`/`.address2`/`.zip`/`customer.firstName`/`.lastName` on a DraftOrder returns Shopify's
+ * standard `errors` array with `extensions.code: "ACCESS_DENIED"` for EACH blocked field
+ * individually, alongside a fully-populated `data` for every other field in the same response
+ * (Shopify's GraphQL responses can carry both `errors` and partial `data` together -- this is not
+ * a total request failure). Confirmed a Shopify PLAN-tier gate (Protected Customer Data requires
+ * the Shopify/Advanced/Plus plan -- this store's own app configuration screen offers only an
+ * "Upgrade plan" button, no request-access flow), not something resolvable by requesting different
+ * scopes. */
+function isProtectedCustomerDataError(error: unknown): error is GraphQLErrorEntry {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'extensions' in error &&
+    (error as GraphQLErrorEntry).extensions?.code === 'ACCESS_DENIED' &&
+    /Customer object/i.test((error as GraphQLErrorEntry).message ?? '')
+  );
+}
+
+async function rawShopifyAdminRequest<TData, TVariables = Record<string, unknown>>(
   query: string,
   variables?: TVariables
-): Promise<TData> {
+): Promise<GraphQLResponse<TData>> {
   const { domain, apiVersion } = assertShopifyEnv();
   const accessToken = await getAccessToken();
 
@@ -112,10 +140,51 @@ export async function shopifyAdminRequest<TData, TVariables = Record<string, unk
     );
   }
 
-  const result = (await response.json()) as GraphQLResponse<TData>;
+  return (await response.json()) as GraphQLResponse<TData>;
+}
+
+/**
+ * The single entry point for calling Shopify's Admin GraphQL API. Every current and future
+ * milestone (metaobjects now; Draft Orders, customer tagging, bulk ops later) should import
+ * this instead of hand-rolling fetch calls.
+ */
+export async function shopifyAdminRequest<TData, TVariables = Record<string, unknown>>(
+  query: string,
+  variables?: TVariables
+): Promise<TData> {
+  const result = await rawShopifyAdminRequest<TData, TVariables>(query, variables);
 
   if (result.errors) {
     throw new ShopifyAdminApiError('Shopify Admin API returned GraphQL errors', result.errors);
+  }
+  if (result.data === undefined) {
+    throw new ShopifyAdminApiError('Shopify Admin API response had no data field', result);
+  }
+
+  return result.data;
+}
+
+/**
+ * Same as `shopifyAdminRequest`, except it does NOT throw when every error in the response is the
+ * store's Protected Customer Data plan restriction (see `isProtectedCustomerDataError`) -- those
+ * specific fields come back `null` in `data` (Shopify's own behavior, not something this function
+ * fabricates), and the caller is expected to backfill them from elsewhere (e.g. this app's own
+ * Supabase `customers` table) rather than lose the entire response over it. Any OTHER error still
+ * throws exactly like `shopifyAdminRequest` -- this only tolerates the one specific, known,
+ * structural gap, never surprises.
+ */
+export async function shopifyAdminRequestAllowingPiiGaps<TData, TVariables = Record<string, unknown>>(
+  query: string,
+  variables?: TVariables
+): Promise<TData> {
+  const result = await rawShopifyAdminRequest<TData, TVariables>(query, variables);
+
+  if (result.errors) {
+    const errorList = Array.isArray(result.errors) ? result.errors : [result.errors];
+    const unexpected = errorList.filter((e) => !isProtectedCustomerDataError(e));
+    if (unexpected.length > 0) {
+      throw new ShopifyAdminApiError('Shopify Admin API returned GraphQL errors', result.errors);
+    }
   }
   if (result.data === undefined) {
     throw new ShopifyAdminApiError('Shopify Admin API response had no data field', result);

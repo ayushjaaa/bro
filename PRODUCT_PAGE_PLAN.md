@@ -19,7 +19,7 @@ the other.
 
 ## 2. The real taxonomy (source of truth) — flat 2 levels
 
-Confirmed from `admin-panel/scripts/shopify/seed-real-taxonomy.ts` and
+Confirmed from `admin-panel/scripts/shopify/seed-testing-taxonomy.ts` and
 `seed-real-filters.ts` — this is what's actually seeded into Shopify metaobjects via the admin
 panel, and is the ground truth the PLP sidebar's *data* should match:
 

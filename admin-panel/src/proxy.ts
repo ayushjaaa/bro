@@ -92,14 +92,36 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data } = await supabase.auth.getClaims();
+  // getClaims() can hit the network (refreshing an expired access token, or verifying against
+  // the Auth server), so it can fail transiently the same way the admin_users lookup below can.
+  // "AuthSessionMissingError" means there's genuinely no session; anything else gets one retry
+  // before being treated as a real "not logged in" — same fix as requireAdmin() in admin-auth.ts.
+  let email: string | undefined;
+  let claimsCheckFailed = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.auth.getClaims();
+    if (!error && data?.claims?.email) {
+      email = data.claims.email as string;
+      claimsCheckFailed = false;
+      break;
+    }
+    if (error?.name === 'AuthSessionMissingError') {
+      break;
+    }
+    claimsCheckFailed = true;
+  }
 
   const isPublicPath =
     PUBLIC_PATHS.includes(request.nextUrl.pathname) ||
     PUBLIC_PATH_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
 
   if (!isPublicPath && isKnownProtectedPath(request.nextUrl.pathname)) {
-    const email = data?.claims?.email as string | undefined;
+    // A failed claims check (network/service hiccup) is not proof of "not logged in" — don't
+    // redirect here. This is only a UX-layer check anyway (see file header): layout.tsx's own
+    // requireAdmin() call is the real security boundary and will make the authoritative call.
+    if (claimsCheckFailed) {
+      return response;
+    }
 
     if (!email) {
       return NextResponse.redirect(new URL('/login', request.url));
@@ -112,11 +134,35 @@ export async function proxy(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-    const { data: adminRow } = await service
-      .from('admin_users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
+
+    // One retry for a transient failure (network blip, connection pool exhaustion, cold start)
+    // before giving up — a query error is NOT the same thing as "no matching admin row", and must
+    // never be treated as one. Conflating the two here previously caused valid sessions to be
+    // bounced to /login whenever this lookup merely failed to run, not when it genuinely found no
+    // admin row (auto-logout bug, fixed here).
+    let adminRow: { id: string } | null = null;
+    let lookupFailed = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data, error } = await service
+        .from('admin_users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (!error) {
+        adminRow = data;
+        lookupFailed = false;
+        break;
+      }
+      lookupFailed = true;
+    }
+
+    // If the lookup itself never succeeded, we genuinely don't know whether this user is an
+    // admin — that's a service problem, not proof they're unauthorized, so don't redirect to
+    // /login here. This is only a UX-layer check anyway (see file header): layout.tsx's own
+    // requireAdmin() call is the real security boundary and will make the authoritative call.
+    if (lookupFailed) {
+      return response;
+    }
 
     if (!adminRow) {
       return NextResponse.redirect(new URL('/login', request.url));

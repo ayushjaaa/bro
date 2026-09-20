@@ -14,20 +14,34 @@ function formatMoney(amount: number, currencyCode: string): string {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency: currencyCode }).format(amount);
 }
 
-/** Sum of price × quantity across a customer's cart lines -- `null` if any line's price hasn't
- * resolved yet (e.g. the variant details fetch for this page is still catching up), so the UI
- * can show "calculating…" instead of a silently wrong partial total. Assumes a single currency
- * across all lines (true for this store), using whichever line resolves first. */
+/** The one price-tier resolution rule (dual-pricing feature) -- `price` is Shopify's native field
+ * (wholesale/distributor pricing for this business), `retailPrice` comes from the
+ * `custom.retail_price` variant metafield. Missing retail price falls back to the native/wholesale
+ * price. Kept local to this component (rather than shared with the storefront app) since the two
+ * are separate deployments with no shared package today -- this codebase already duplicates infra
+ * code across both (e.g. admin-client.core.ts) rather than forcing a shared-package refactor. */
+function resolveVariantPrice(detail: VariantDetail, accountType: 'retail' | 'wholesale'): number {
+  const wholesale = Number(detail.price);
+  if (accountType !== 'retail') return wholesale;
+  return detail.retailPrice ? Number(detail.retailPrice) : wholesale;
+}
+
+/** Sum of price × quantity across a customer's cart lines, priced at THAT customer's own account
+ * type -- `null` if any line's price hasn't resolved yet (e.g. the variant details fetch for this
+ * page is still catching up), so the UI can show "calculating…" instead of a silently wrong
+ * partial total. Assumes a single currency across all lines (true for this store), using whichever
+ * line resolves first. */
 function computeCartTotal(
   cartItems: CartSnapshotRow[],
-  variantDetailById: Map<string, VariantDetail>
+  variantDetailById: Map<string, VariantDetail>,
+  accountType: 'retail' | 'wholesale'
 ): { amount: number; currencyCode: string } | null {
   let amount = 0;
   let currencyCode: string | null = null;
   for (const item of cartItems) {
     const detail = variantDetailById.get(item.variant_id);
     if (!detail) return null;
-    amount += Number(detail.price) * item.quantity;
+    amount += resolveVariantPrice(detail, accountType) * item.quantity;
     currencyCode ??= detail.currencyCode;
   }
   return { amount, currencyCode: currencyCode ?? 'CAD' };
@@ -311,7 +325,7 @@ export default function CartOverview({
             const customerItems = [...(byCustomer.get(customer.customerId) ?? [])].sort((a, b) =>
               b.updated_at.localeCompare(a.updated_at)
             );
-            const total = computeCartTotal(customerItems, variantDetailById);
+            const total = computeCartTotal(customerItems, variantDetailById, customer.accountType);
             return (
               <button
                 type="button"
@@ -346,7 +360,16 @@ export default function CartOverview({
                         />
                         <span className="text-neutral-400 shrink-0 ml-2 whitespace-nowrap">
                           ×{item.quantity}
-                          {detail && <> · {formatMoney(Number(detail.price) * item.quantity, detail.currencyCode)}</>}
+                          {detail && (
+                            <>
+                              {' '}
+                              ·{' '}
+                              {formatMoney(
+                                resolveVariantPrice(detail, customer.accountType) * item.quantity,
+                                detail.currencyCode
+                              )}
+                            </>
+                          )}
                         </span>
                       </li>
                     );
@@ -429,7 +452,7 @@ function CustomerActivityModal({
   variantDetailById: Map<string, VariantDetail>;
   onClose: () => void;
 }) {
-  const total = computeCartTotal(cartItems, variantDetailById);
+  const total = computeCartTotal(cartItems, variantDetailById, customer.accountType);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -480,7 +503,16 @@ function CustomerActivityModal({
                       />
                       <span className="text-neutral-400 shrink-0 ml-2 whitespace-nowrap">
                         ×{item.quantity}
-                        {detail && <> · {formatMoney(Number(detail.price) * item.quantity, detail.currencyCode)}</>}
+                        {detail && (
+                          <>
+                            {' '}
+                            ·{' '}
+                            {formatMoney(
+                              resolveVariantPrice(detail, customer.accountType) * item.quantity,
+                              detail.currencyCode
+                            )}
+                          </>
+                        )}
                       </span>
                     </li>
                   );

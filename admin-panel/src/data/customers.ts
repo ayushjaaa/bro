@@ -252,6 +252,7 @@ export type CustomerCartSummary = {
   lastName: string;
   businessName: string | null;
   email: string;
+  accountType: 'retail' | 'wholesale';
   itemCount: number;
   lastUpdated: string;
 };
@@ -289,6 +290,7 @@ export async function listCustomerCartsPage(params: {
       lastName: r.last_name,
       businessName: r.business_name,
       email: r.email,
+      accountType: r.account_type,
       itemCount: Number(r.item_count),
       lastUpdated: r.last_updated,
     })),

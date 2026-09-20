@@ -19,6 +19,7 @@ const LIST_QUERY = /* GraphQL */ `
       nodes {
         variants(first: 250) {
           nodes {
+            id
             inventoryItem {
               id
             }
@@ -36,17 +37,20 @@ async function main() {
   );
 
   const data = await shopifyAdminRequest<any>(LIST_QUERY);
-  const inventoryItemIds: string[] = data.products.nodes.flatMap((p: any) =>
-    p.variants.nodes.map((v: any) => v.inventoryItem?.id).filter(Boolean)
+  const items: Array<{ inventoryItemId: string; variantId: string | null }> = data.products.nodes.flatMap(
+    (p: any) =>
+      p.variants.nodes
+        .filter((v: any) => v.inventoryItem?.id)
+        .map((v: any) => ({ inventoryItemId: v.inventoryItem.id, variantId: v.id ?? null }))
   );
 
-  console.log(`Found ${inventoryItemIds.length} inventory items. Backfilling...`);
+  console.log(`Found ${items.length} inventory items. Backfilling...`);
 
   let ok = 0;
   let skipped = 0;
   const now = new Date().toISOString();
 
-  for (const inventoryItemId of inventoryItemIds) {
+  for (const { inventoryItemId, variantId } of items) {
     const QUERY = /* GraphQL */ `
       query($id: ID!, $loc: ID!) {
         inventoryItem(id: $id) { inventoryLevel(locationId: $loc) { quantities(names: ["available"]) { quantity } } }
@@ -67,6 +71,7 @@ async function main() {
         quantity,
         shopify_updated_at: now,
         updated_at: now,
+        variant_id: variantId,
       },
       { onConflict: 'inventory_item_id' }
     );

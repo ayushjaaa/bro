@@ -11,6 +11,15 @@ function getServiceRoleClient() {
 }
 
 /**
+ * Thrown when the admin_users lookup itself couldn't be completed (DB/network failure) —
+ * distinct from a genuine "not an admin" result. Callers must NOT treat this the same as an
+ * unauthenticated/unauthorized user (e.g. must not redirect to /login on it): the session is
+ * still valid, we simply failed to verify authorization and should say so, not silently log the
+ * user out.
+ */
+export class AdminCheckUnavailableError extends Error {}
+
+/**
  * DECISIONS.md item 44a-i — the real admin-authorization check. Every data/*.ts function must
  * call this first, before touching Shopify or returning any data.
  *
@@ -19,30 +28,68 @@ function getServiceRoleClient() {
  *    never trusts user metadata or a JWT claim the user could have set themselves.
  *
  * Throws if either check fails — callers should let this propagate (Server Action returns an
- * error to the client) rather than swallow it.
+ * error to the client) rather than swallow it. Throws AdminCheckUnavailableError specifically
+ * when getClaims() or the admin_users lookup query itself errored (retried once first) rather
+ * than genuinely finding no session / no matching admin — callers should handle that case
+ * separately from a real unauthorized/unauthenticated result (see class doc above).
  */
 export async function requireAdmin(): Promise<{ email: string; id: string }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getClaims();
 
-  if (error || !data?.claims?.email) {
-    throw new Error('Unauthorized — not logged in');
+  // getClaims() isn't a pure local check — it can hit the network (refreshing an expired access
+  // token, or verifying against the Auth server) and so can fail transiently the same way the
+  // admin_users lookup below can. "AuthSessionMissingError" means there's genuinely no session
+  // and should NOT be retried; anything else (a fetch/network failure) gets one retry before
+  // being treated as a real problem, not immediately as "not logged in".
+  let claimsEmail: string | undefined;
+  let claimsSub: string | undefined;
+  let claimsCheckFailed = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.auth.getClaims();
+    if (!error && data?.claims?.email) {
+      claimsEmail = data.claims.email as string;
+      claimsSub = data.claims.sub as string;
+      claimsCheckFailed = false;
+      break;
+    }
+    if (error?.name === 'AuthSessionMissingError') {
+      throw new Error('Unauthorized — not logged in');
+    }
+    claimsCheckFailed = true;
   }
 
-  const email = data.claims.email as string;
+  if (claimsCheckFailed || !claimsEmail) {
+    throw new AdminCheckUnavailableError('Could not verify session — try again');
+  }
+
+  const email = claimsEmail;
   const service = getServiceRoleClient();
 
-  const { data: adminRow } = await service
-    .from('admin_users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
+  let adminRow: { id: string } | null = null;
+  let lookupFailed = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: row, error: lookupError } = await service
+      .from('admin_users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (!lookupError) {
+      adminRow = row;
+      lookupFailed = false;
+      break;
+    }
+    lookupFailed = true;
+  }
+
+  if (lookupFailed) {
+    throw new AdminCheckUnavailableError('Could not verify admin status — try again');
+  }
 
   if (!adminRow) {
     throw new Error('Forbidden — not an admin');
   }
 
-  return { email, id: data.claims.sub as string };
+  return { email, id: claimsSub as string };
 }
 
 /** DAL — the actual sign-out call. Server Actions call this, never Supabase directly. */

@@ -15,6 +15,7 @@ import RecentlyUpdatedCard from '@/features/dashboard/components/RecentlyUpdated
 import WebhookHealthBadge from '@/features/dashboard/components/WebhookHealthBadge';
 import ConversionFunnel from '@/features/dashboard/components/ConversionFunnel';
 import IncompleteProductLinesCard from '@/features/dashboard/components/IncompleteProductLinesCard';
+import MissingRetailPriceCard from '@/features/dashboard/components/MissingRetailPriceCard';
 import { getFunnelStats } from '@/data/funnel';
 import { buildAttentionData } from '@/features/dashboard/lib/attention';
 import { ScrollReveal } from '@/components/ScrollReveal';
@@ -52,6 +53,9 @@ export default async function OverviewPage() {
   const publishedCount = publishable.filter((p) => p.isPublished).length;
 
   const { initialInventoryRows, attentionLookup } = buildAttentionData(products);
+  const missingRetailPrice = products
+    .filter((p) => p.missingRetailPriceVariants.length > 0)
+    .map((p) => ({ id: p.id, title: p.title, missingCount: p.missingRetailPriceVariants.length }));
 
   const funnelStages: FunnelStage[] = [
     { label: 'Categories', value: categories.length, colorVar: '--dash-funnel-1' },
@@ -138,6 +142,10 @@ export default async function OverviewPage() {
 
         <ScrollReveal>
           <IncompleteProductLinesCard incomplete={incomplete.map((p) => ({ id: p.id, title: p.title }))} />
+        </ScrollReveal>
+
+        <ScrollReveal>
+          <MissingRetailPriceCard products={missingRetailPrice} />
         </ScrollReveal>
       </div>
     </div>

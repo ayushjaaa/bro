@@ -29,6 +29,7 @@ const GET_INVENTORY_LEVEL_QUERY = /* GraphQL */ `
         }
       }
       variant {
+        id
         product {
           handle
         }
@@ -40,6 +41,7 @@ const GET_INVENTORY_LEVEL_QUERY = /* GraphQL */ `
 export type InventoryLevelResult = {
   quantity: number;
   handle: string | null;
+  variantId: string | null;
 };
 
 export async function getCurrentAvailableQuantity(
@@ -57,6 +59,7 @@ export async function getCurrentAvailableQuantity(
     return {
       quantity: available.quantity,
       handle: data.inventoryItem?.variant?.product?.handle ?? null,
+      variantId: data.inventoryItem?.variant?.id ?? null,
     };
   } catch (err) {
     console.error(

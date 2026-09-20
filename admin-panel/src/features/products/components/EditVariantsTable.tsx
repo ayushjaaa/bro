@@ -13,6 +13,7 @@ type Row = {
   description: string;
   price: string;
   compareAtPrice: string;
+  retailPrice: string;
   sku: string;
   quantity: string;
   /** The quantity Shopify had when this row loaded -- sent as `changeFromQuantity` so
@@ -28,11 +29,22 @@ export type EditableVariant = {
   title: string;
   price: string;
   compareAtPrice: string | null;
+  retailPrice: string | null;
   sku: string | null;
   quantity: number;
   isActivatedAtLocation: boolean;
   flavourDescription: string | null;
 };
+
+/** Non-blocking warning, mirrors VariantBulkTable's rowRetailWarning -- retail should normally be
+ * at or above wholesale, but a legitimate reason to deviate (e.g. clearance) could exist. */
+function rowRetailWarning(row: Row): string | null {
+  if (!row.retailPrice.trim() || !row.price.trim()) return null;
+  const retail = Number(row.retailPrice);
+  const wholesale = Number(row.price);
+  if (!Number.isFinite(retail) || !Number.isFinite(wholesale)) return null;
+  return retail < wholesale ? 'Below Wholesale' : null;
+}
 
 /** Edit existing Flavours -- one table serves both a single-Flavour edit (per-row "Save") and a
  * bulk edit ("Save All Changes"), since updateVariantsAction accepts one row or many the same
@@ -55,6 +67,7 @@ export default function EditVariantsTable({
       description: v.flavourDescription ?? '',
       price: v.price,
       compareAtPrice: v.compareAtPrice ?? '',
+      retailPrice: v.retailPrice ?? '',
       sku: v.sku ?? '',
       quantity: String(v.quantity),
       originalQuantity: v.quantity,
@@ -97,6 +110,7 @@ export default function EditVariantsTable({
       formData.set(`row:${i}:description`, row.description);
       formData.set(`row:${i}:price`, row.price);
       if (row.compareAtPrice) formData.set(`row:${i}:compareAtPrice`, row.compareAtPrice);
+      if (row.retailPrice) formData.set(`row:${i}:retailPrice`, row.retailPrice);
       if (row.sku) formData.set(`row:${i}:sku`, row.sku);
       formData.set(`row:${i}:quantity`, row.quantity);
       formData.set(`row:${i}:currentQuantity`, String(row.originalQuantity));
@@ -160,8 +174,9 @@ export default function EditVariantsTable({
             <tr>
               <th className="text-left px-3 py-2 font-medium">Flavour</th>
               <th className="text-left px-3 py-2 font-medium">Description</th>
-              <th className="text-left px-3 py-2 font-medium">Price</th>
+              <th className="text-left px-3 py-2 font-medium">Wholesale Price</th>
               <th className="text-left px-3 py-2 font-medium">Compare-at</th>
+              <th className="text-left px-3 py-2 font-medium">Retail Price</th>
               <th className="text-left px-3 py-2 font-medium">Quantity</th>
               <th className="text-left px-3 py-2 font-medium">SKU</th>
               <th className="text-left px-3 py-2 font-medium"></th>
@@ -192,6 +207,17 @@ export default function EditVariantsTable({
                     placeholder="0.00"
                     className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
                   />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input
+                    value={row.retailPrice}
+                    onChange={(e) => updateRow(i, { retailPrice: e.target.value })}
+                    placeholder="0.00"
+                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
+                  />
+                  {rowRetailWarning(row) && (
+                    <p className="text-[10px] text-amber-600 mt-0.5">{rowRetailWarning(row)}</p>
+                  )}
                 </td>
                 <td className="px-2 py-1.5">
                   <input

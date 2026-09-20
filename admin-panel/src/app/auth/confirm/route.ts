@@ -1,4 +1,7 @@
 import { type EmailOtpType } from '@supabase/supabase-js';
+
+// The only link types Supabase issues that this route is meant to confirm.
+const OTP_TYPES = ['invite', 'magiclink', 'recovery', 'signup', 'email', 'email_change'] as const;
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -17,8 +20,13 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const token_hash = searchParams.get('token_hash');
-  const type = searchParams.get('type') as EmailOtpType | null;
-  const next = searchParams.get('next') ?? '/';
+  const rawType = searchParams.get('type');
+  const type = (OTP_TYPES as readonly string[]).includes(rawType ?? '') ? (rawType as EmailOtpType) : null;
+  // `next` must stay ON this site: a relative path only. `new URL('https://evil.example', base)` would
+  // otherwise happily redirect a freshly signed-in admin off-site (and `//evil.example` is
+  // protocol-relative), so anything not starting with a single "/" falls back to the home page.
+  const rawNext = searchParams.get('next') ?? '/';
+  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\') ? rawNext : '/';
 
   if (token_hash && type) {
     const supabase = await createSupabaseServerClient();

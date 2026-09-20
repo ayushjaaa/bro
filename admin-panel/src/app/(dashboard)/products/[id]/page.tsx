@@ -175,7 +175,8 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
                 <tr>
                   <th className="text-left py-1.5 pr-3 font-medium">Image</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Flavour</th>
-                  <th className="text-left py-1.5 pr-3 font-medium">Price</th>
+                  <th className="text-left py-1.5 pr-3 font-medium">Wholesale</th>
+                  <th className="text-left py-1.5 pr-3 font-medium">Retail</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Stock</th>
                   <th className="text-left py-1.5 pr-3 font-medium">SKU</th>
                 </tr>
@@ -193,6 +194,15 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
                     </td>
                     <td className="py-1.5 pr-3 text-neutral-800">{v.title}</td>
                     <td className="py-1.5 pr-3 text-neutral-600">${v.price}</td>
+                    <td className="py-1.5 pr-3">
+                      {v.retailPrice ? (
+                        <span className="text-neutral-600">${v.retailPrice}</span>
+                      ) : (
+                        <span className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 text-xs">
+                          not set
+                        </span>
+                      )}
+                    </td>
                     <td className="py-1.5 pr-3">
                       <LiveVariantStock inventoryItemId={v.inventoryItemId} quantity={v.quantity} />
                     </td>

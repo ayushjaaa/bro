@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest, after } from 'next/server';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
 import { getCurrentAvailableQuantity } from '@/lib/shopify/inventory-webhook-queries';
@@ -22,7 +22,7 @@ const webhookDedup = new WebhookIdDedup();
 // never permanently missed. This is throttle-with-trailing-call, not naive debounce-and-forget.
 const DEBOUNCE_WINDOW_MS = 2000;
 const lastQueriedAt = new Map<string, number>(); // inventoryItemId -> ms epoch of last re-query
-const pendingTrailing = new Map<string, { timer: NodeJS.Timeout; latestUpdatedAt: string }>();
+const pendingTrailing = new Map<string, { latestUpdatedAt: string }>();
 
 function getServiceRoleClient() {
   return createServiceRoleClient(
@@ -31,18 +31,35 @@ function getServiceRoleClient() {
   );
 }
 
+// One retry with a short fixed backoff -- covers the transient network blips actually observed in
+// production against this store (a `fetch failed`/`ETIMEDOUT` calling Shopify's Admin API), which
+// otherwise silently drop the whole reconcile since nothing else re-attempts THIS specific call.
+async function getCurrentAvailableQuantityWithRetry(inventoryItemId: string) {
+  const first = await getCurrentAvailableQuantity(inventoryItemId, INVENTORY_LOCATION_ID);
+  if (first !== null) return first;
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return getCurrentAvailableQuantity(inventoryItemId, INVENTORY_LOCATION_ID);
+}
+
 /** Re-queries Shopify and, if usable, conditionally writes it to Supabase (both the raw snapshot
  * and the store-wide aggregates, kept consistent in one atomic call). Shared by both the
  * immediate path and the trailing-check path. `orderingTimestamp` is only ever used for ordering
  * (never for the quantity itself -- that always comes from a fresh Shopify query, per the "never
  * trust the payload" rule, since Shopify has a documented bug where the payload's own `available`
- * can be wrong when several items change close together). */
-async function reconcileOneItem(inventoryItemId: string, orderingTimestamp: string) {
+ * can be wrong when several items change close together).
+ *
+ * Returns whether the reconcile actually landed in Supabase -- the immediate/leading-edge caller
+ * uses this to decide whether Shopify should be told to retry the whole webhook delivery (see
+ * POST below). Live-verified 2026-09-18: both the Shopify re-query and the Supabase write can fail
+ * with a transient network error (`fetch failed` / `ETIMEDOUT` to Shopify, `SocketError: other
+ * side closed` to Supabase) -- before this, such a failure was silently swallowed (the route
+ * always told Shopify `200 OK` regardless), so a stock change with no FOLLOW-UP change on the same
+ * item could stay wrong in Supabase indefinitely. */
+async function reconcileOneItem(inventoryItemId: string, orderingTimestamp: string): Promise<boolean> {
   lastQueriedAt.set(inventoryItemId, Date.now());
 
-  const result = await getCurrentAvailableQuantity(inventoryItemId, INVENTORY_LOCATION_ID);
-  if (result === null) return; // Shopify query failed -- safe to drop; a later webhook, the
-  // 5-min client-side reconciliation poll, or a plain page load will pick up the true value.
+  const result = await getCurrentAvailableQuantityWithRetry(inventoryItemId);
+  if (result === null) return false;
 
   const supabase = getServiceRoleClient();
   const { error } = await supabase.rpc('sync_inventory_and_aggregates', {
@@ -50,12 +67,17 @@ async function reconcileOneItem(inventoryItemId: string, orderingTimestamp: stri
     p_location_id: INVENTORY_LOCATION_ID,
     p_quantity: result.quantity,
     p_shopify_updated_at: orderingTimestamp,
+    p_variant_id: result.variantId,
   });
-  if (error) console.error('[inventory-webhook] Supabase sync failed:', error);
+  if (error) {
+    console.error('[inventory-webhook] Supabase sync failed:', error);
+    return false;
+  }
 
   if (result.handle) {
     void notifyStorefrontRevalidate(result.handle);
   }
+  return true;
 }
 
 // Fire-and-forget: the storefront's cache being briefly stale is never a correctness problem
@@ -90,14 +112,21 @@ async function notifyStorefrontRevalidate(handle: string) {
   }
 }
 
-function scheduleOrRunReconcile(inventoryItemId: string, updatedAt: string) {
+/**
+ * Leading edge (nothing in-flight recently for this item): returns the in-flight reconcile promise
+ * so the caller can await it and tell Shopify the truth. Inside the debounce window: schedules
+ * exactly one trailing check via `after()` (Next's "run this after the response is sent, but keep
+ * the function alive until it finishes" primitive -- a bare `setTimeout` here would risk never
+ * firing at all once a serverless function's execution is frozen/recycled post-response) and
+ * returns `null`, since a burst of several deliveries collapses into one trailing check that isn't
+ * tied to any single delivery's own success/failure.
+ */
+function scheduleOrRunReconcile(inventoryItemId: string, updatedAt: string): Promise<boolean> | null {
   const last = lastQueriedAt.get(inventoryItemId) ?? 0;
   const elapsed = Date.now() - last;
 
   if (elapsed >= DEBOUNCE_WINDOW_MS) {
-    // Leading edge: nothing in-flight recently for this item -- query immediately.
-    void reconcileOneItem(inventoryItemId, updatedAt);
-    return;
+    return reconcileOneItem(inventoryItemId, updatedAt);
   }
 
   // Inside the debounce window: don't query again now, but guarantee exactly one trailing check
@@ -105,16 +134,18 @@ function scheduleOrRunReconcile(inventoryItemId: string, updatedAt: string) {
   const existing = pendingTrailing.get(inventoryItemId);
   if (existing) {
     if (updatedAt > existing.latestUpdatedAt) existing.latestUpdatedAt = updatedAt;
-    return; // a trailing check is already scheduled -- do not schedule a second one
+    return null; // a trailing check is already scheduled -- do not schedule a second one
   }
 
   const remaining = DEBOUNCE_WINDOW_MS - elapsed;
-  const timer = setTimeout(() => {
+  pendingTrailing.set(inventoryItemId, { latestUpdatedAt: updatedAt });
+  after(async () => {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
     const pending = pendingTrailing.get(inventoryItemId);
     pendingTrailing.delete(inventoryItemId);
-    void reconcileOneItem(inventoryItemId, pending?.latestUpdatedAt ?? updatedAt);
-  }, remaining);
-  pendingTrailing.set(inventoryItemId, { timer, latestUpdatedAt: updatedAt });
+    await reconcileOneItem(inventoryItemId, pending?.latestUpdatedAt ?? updatedAt);
+  });
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -161,10 +192,23 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Per-item debounce+trailing, then (if not deferred) the Shopify re-query + Supabase write
-    //    happen inside scheduleOrRunReconcile/reconcileOneItem. Not awaited here -- a slow
-    //    Shopify response must never risk Shopify's 5s delivery timeout.
+    //    happen inside scheduleOrRunReconcile/reconcileOneItem. A deferred (debounced) call
+    //    returns null immediately -- an in-progress burst-collapse isn't tied to this one
+    //    delivery's outcome, so this response is still fast, same as before.
     const inventoryItemGid = `gid://shopify/InventoryItem/${payload.inventory_item_id}`;
-    scheduleOrRunReconcile(inventoryItemGid, payload.updated_at);
+    const immediateReconcile = scheduleOrRunReconcile(inventoryItemGid, payload.updated_at);
+
+    if (immediateReconcile !== null) {
+      // Leading-edge call: DOES get awaited here (unlike before) so a genuine failure can tell
+      // Shopify to retry via its own webhook redelivery, instead of silently succeeding while
+      // Supabase stays stale. Normally fast (tens to low hundreds of ms, per production logs);
+      // worst case (a real network timeout) makes this response itself slow, which Shopify treats
+      // as a failed delivery anyway -- so either path converges on "Shopify knows to retry".
+      const succeeded = await immediateReconcile;
+      if (!succeeded) {
+        return NextResponse.json({ ok: false, error: 'reconcile failed, please retry' }, { status: 503 });
+      }
+    }
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

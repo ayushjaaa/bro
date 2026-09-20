@@ -1,5 +1,5 @@
 import 'server-only';
-import { shopifyAdminRequest } from './admin-client';
+import { shopifyAdminRequest, shopifyAdminRequestAllowingPiiGaps } from './admin-client';
 
 const LIST_DRAFT_ORDERS_BY_CUSTOMER_QUERY = /* GraphQL */ `
   query ListDraftOrdersByCustomer($query: String!) {
@@ -142,6 +142,10 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
     country: string | null;
   } | null;
   customerName: string | null;
+  /** "<W|R>-<PROVINCE>-<YY>-<SEQ>" -- never a Shopify field, this app's own identifier, always
+   * attached by the route (customer-order-detail/route.ts) from Supabase, not part of the
+   * Shopify query at all. Null until the route fills it in. */
+  accountNumber: string | null;
   lineItems: CustomerOrderLineItem[];
 }
 
@@ -162,7 +166,14 @@ export async function getDraftOrderDetail(
     throw new Error(`getDraftOrderDetail: unexpected DraftOrder GID shape: ${orderId}`);
   }
 
-  const data = await shopifyAdminRequest<any>(GET_DRAFT_ORDER_DETAIL_QUERY, { id: orderId });
+  // Allowing, not the plain shopifyAdminRequest -- this store's Shopify plan blocks reading
+  // email/phone/shippingAddress.address1/.address2/.zip/customer.firstName/.lastName (Protected
+  // Customer Data requires the Shopify/Advanced/Plus plan; live-verified 2026-09-18, see
+  // isProtectedCustomerDataError's doc comment in admin-client.core.ts). Those specific fields
+  // come back `null` below -- the caller (customer-order-detail route) backfills them from this
+  // app's own Supabase `customers` table instead of losing the whole order (line items, price,
+  // status) over 7 blocked fields.
+  const data = await shopifyAdminRequestAllowingPiiGaps<any>(GET_DRAFT_ORDER_DETAIL_QUERY, { id: orderId });
   const order = data.draftOrder;
   if (!order || order.customer?.id !== shopifyCustomerId) {
     return null;
@@ -186,6 +197,7 @@ export async function getDraftOrderDetail(
           : null,
     shippingAddress: order.shippingAddress,
     customerName: [order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(' ') || null,
+    accountNumber: null, // always filled in by the route, from Supabase -- never a Shopify field
     lineItems: order.lineItems.nodes.map((li: any) => ({
       name: li.name,
       variantTitle: li.variantTitle,

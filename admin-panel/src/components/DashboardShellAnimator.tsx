@@ -30,7 +30,11 @@ export function DashboardShellAnimator({ children }: { children: React.ReactNode
   }, [shouldAnimate]);
 
   return (
-    <div className="min-h-full h-full flex flex-col bg-neutral-50 text-neutral-900" data-shell-animate={shouldAnimate || undefined}>
+    <div
+      className="min-h-full h-full flex flex-col bg-neutral-50 text-neutral-900"
+      data-shell-animate={shouldAnimate || undefined}
+      suppressHydrationWarning
+    >
       {children}
     </div>
   );

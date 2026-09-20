@@ -56,6 +56,10 @@ export type ProductLineSummary = {
    * alone can't be patched incrementally from a single-item webhook update without this
    * breakdown -- and so the Dashboard's Out-of-Stock/Low-Stock widgets can name which Flavour. */
   variantStock: Array<{ inventoryItemId: string | null; quantity: number; title: string }>;
+  /** Variants missing the `custom.retail_price` metafield -- backs the dashboard's "Missing
+   * Retail Price" attention card (dual-pricing feature). These variants still sell fine (retail
+   * customers fall back to the native/wholesale price), this just flags the gap for the admin. */
+  missingRetailPriceVariants: Array<{ id: string; title: string }>;
 };
 
 const LIST_PRODUCT_LINES_QUERY = /* GraphQL */ `
@@ -91,9 +95,14 @@ const LIST_PRODUCT_LINES_QUERY = /* GraphQL */ `
         }
         variants(first: 250) {
           nodes {
+            id
+            title
             inventoryQuantity
             inventoryItem {
               id
+            }
+            retailPriceField: metafield(namespace: "custom", key: "retail_price") {
+              value
             }
           }
         }
@@ -151,11 +160,14 @@ function toProductLineSummary(n: any): ProductLineSummary {
     totalInventory: n.totalInventory ?? 0,
     minPrice: n.priceRangeV2?.minVariantPrice?.amount ?? '0.0',
     maxPrice: n.priceRangeV2?.maxVariantPrice?.amount ?? '0.0',
-    currencyCode: n.priceRangeV2?.minVariantPrice?.currencyCode ?? 'USD',
+    currencyCode: n.priceRangeV2?.minVariantPrice?.currencyCode ?? 'CAD',
     variantStock: (n.variants?.nodes ?? []).map((v: any) => ({
       inventoryItemId: v.inventoryItem?.id ?? null,
       quantity: v.inventoryQuantity ?? 0,
     })),
+    missingRetailPriceVariants: (n.variants?.nodes ?? [])
+      .filter((v: any) => !v.retailPriceField?.value)
+      .map((v: any) => ({ id: v.id, title: v.title })),
   };
 }
 
@@ -229,7 +241,11 @@ export async function getProductTitlesByIds(ids: string[]): Promise<Map<string, 
 export type VariantDetail = {
   variantTitle: string;
   productTitle: string;
+  /** Native Shopify price -- wholesale/distributor pricing for this business. */
   price: string;
+  /** From the `custom.retail_price` variant metafield. Null = not set (retail customers fall
+   * back to `price`/wholesale) -- see `resolveVariantPrice` in CartOverview.tsx. */
+  retailPrice: string | null;
   currencyCode: string;
 };
 
@@ -246,11 +262,17 @@ export async function getVariantDetailsByIds(variantIds: string[]): Promise<Map<
   const data = await shopifyAdminRequest<any>(
     /* GraphQL */ `
       query VariantDetailsByIds($ids: [ID!]!) {
+        shop {
+          currencyCode
+        }
         nodes(ids: $ids) {
           ... on ProductVariant {
             id
             title
             price
+            retailPriceField: metafield(namespace: "custom", key: "retail_price") {
+              value
+            }
             product {
               title
             }
@@ -264,11 +286,20 @@ export async function getVariantDetailsByIds(variantIds: string[]): Promise<Map<
   const map = new Map<string, VariantDetail>();
   for (const node of data.nodes ?? []) {
     if (node?.id) {
+      let retailPrice: string | null = null;
+      if (node.retailPriceField?.value) {
+        try {
+          retailPrice = JSON.parse(node.retailPriceField.value).amount ?? null;
+        } catch {
+          retailPrice = null;
+        }
+      }
       map.set(node.id, {
         variantTitle: node.title ?? '',
         productTitle: node.product?.title ?? 'Unknown product',
         price: node.price ?? '0.00',
-        currencyCode: 'CAD',
+        retailPrice,
+        currencyCode: data.shop?.currencyCode ?? 'CAD',
       });
     }
   }
@@ -292,8 +323,12 @@ export type ProductLineDetail = {
   variants: Array<{
     id: string;
     title: string;
+    /** Native Shopify price -- represents wholesale/distributor pricing for this business. */
     price: string;
     compareAtPrice: string | null;
+    /** From the `custom.retail_price` variant metafield. Null = not set (retail customers fall
+     * back to `price`/wholesale). */
+    retailPrice: string | null;
     sku: string | null;
     quantity: number;
     inventoryItemId: string | null;
@@ -452,16 +487,29 @@ export async function getProductLine(id: string): Promise<ProductLineDetail | nu
     totalInventory: p.totalInventory ?? 0,
     minPrice: p.priceRangeV2?.minVariantPrice?.amount ?? '0.0',
     maxPrice: p.priceRangeV2?.maxVariantPrice?.amount ?? '0.0',
-    currencyCode: p.priceRangeV2?.minVariantPrice?.currencyCode ?? 'USD',
+    currencyCode: p.priceRangeV2?.minVariantPrice?.currencyCode ?? 'CAD',
     variants: (p.variants?.nodes ?? []).map((v: any) => {
       const vFields = v.metafields?.nodes ?? [];
       const flavourDescription =
         vFields.find((f: any) => f.namespace === 'custom' && f.key === 'flavour_description')?.value ?? null;
+      const retailPriceRaw =
+        vFields.find((f: any) => f.namespace === 'custom' && f.key === 'retail_price')?.value ?? null;
+      // `money`-typed metafields store JSON ({"amount": "...", "currency_code": "..."}), not a bare
+      // number -- swallow a malformed value rather than let a JSON.parse throw crash this page.
+      let retailPrice: string | null = null;
+      if (retailPriceRaw) {
+        try {
+          retailPrice = JSON.parse(retailPriceRaw).amount ?? null;
+        } catch {
+          retailPrice = null;
+        }
+      }
       return {
         id: v.id,
         title: v.title,
         price: v.price,
         compareAtPrice: v.compareAtPrice ?? null,
+        retailPrice,
         sku: v.sku ?? null,
         quantity: v.inventoryQuantity ?? 0,
         inventoryItemId: v.inventoryItem?.id ?? null,

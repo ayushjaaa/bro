@@ -16,7 +16,7 @@
  *   Butane) get a separate metaobject entry per sub-category -- Brand's parent is always exactly
  *   one Sub-category, duplicate names across branches are expected, not a bug.
  *
- * Run: npm run shopify:seed-real-taxonomy
+ * Run: npm run shopify:seed-testing-taxonomy
  */
 import { shopifyAdminRequest, assertNoUserErrors } from '../../src/lib/shopify/admin-client.core';
 

@@ -1,6 +1,7 @@
 import 'server-only';
 import { shopifyAdminRequest, assertNoUserErrors } from './admin-client';
 import { getShopifyCustomerIdForCustomer } from '@/data/customer-shopify-id';
+import { getAccountTypeForCustomer } from '@/data/customer-account-type';
 
 /**
  * Draft Order creation for the storefront's custom checkout (Part 1 of the checkout/dashboard
@@ -24,6 +25,35 @@ const CREATE_DRAFT_ORDER_MUTATION = /* GraphQL */ `
       userErrors {
         field
         message
+      }
+    }
+  }
+`;
+
+// `money`-typed metafields (custom.retail_price) store their own currency_code, but the shop's
+// own currency is fetched here too for the fallback path (no retail_price set -> use the
+// variant's native price, which VARIANT_PRICES_QUERY returns as a bare string with no currency).
+let cachedShopCurrency: string | null = null;
+async function getShopCurrency(): Promise<string> {
+  if (cachedShopCurrency) return cachedShopCurrency;
+  const data = await shopifyAdminRequest<{ shop: { currencyCode: string } }>('{ shop { currencyCode } }');
+  cachedShopCurrency = data.shop.currencyCode;
+  return cachedShopCurrency;
+}
+
+// Only ever run for a `retail` customer (see createDraftOrder) -- a `wholesale` customer needs no
+// override at all, since Shopify's native price already IS the wholesale price. Fetches fresh at
+// order-creation time, never reusing anything the storefront might have shown, so a stale/cached
+// display price can never leak into what's actually charged.
+const VARIANT_PRICES_QUERY = /* GraphQL */ `
+  query VariantPricesForDraftOrder($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        price
+        retailPriceField: metafield(namespace: "custom", key: "retail_price") {
+          value
+        }
       }
     }
   }
@@ -95,8 +125,54 @@ export async function createDraftOrder(
       : []),
   ];
 
+  // Dual-pricing trust boundary: the storefront never sends a price (see CreateDraftOrderInput --
+  // there's no price field on DraftOrderLineItem), so the actual charged price is decided entirely
+  // here, from account_type looked up fresh via this customer's own Supabase id -- never from
+  // anything client-supplied. A `wholesale` customer (or a lookup failure -- safe default) needs
+  // no extra work at all: Shopify's native price already IS the wholesale price, so lineItems are
+  // built exactly as before, with no override and no extra Admin API call. Only a confirmed
+  // `retail` customer triggers the extra price-resolution work below.
+  const accountType = await getAccountTypeForCustomer(input.customerId);
+
+  let lineItems: Array<{ variantId: string; quantity: number; priceOverride?: { amount: string; currencyCode: string } }> =
+    input.lineItems.map((li) => ({ variantId: li.variantId, quantity: li.quantity }));
+
+  if (accountType === 'retail') {
+    const variantIds = [...new Set(input.lineItems.map((li) => li.variantId))];
+    const priceData = await shopifyAdminRequest<{
+      nodes: Array<{ id: string; price: string; retailPriceField: { value: string } | null } | null>;
+    }>(VARIANT_PRICES_QUERY, { ids: variantIds });
+
+    const currencyCode = await getShopCurrency();
+    const resolvedPriceByVariantId = new Map<string, string>();
+    for (const node of priceData.nodes) {
+      if (!node?.id) continue;
+      let retailPrice: string | null = null;
+      if (node.retailPriceField?.value) {
+        try {
+          retailPrice = JSON.parse(node.retailPriceField.value).amount ?? null;
+        } catch {
+          retailPrice = null;
+        }
+      }
+      // Missing retail price -> fall back to the native (wholesale) price, same rule as every
+      // other display surface (storefront product/cart, admin's own Cart page).
+      resolvedPriceByVariantId.set(node.id, retailPrice ?? node.price);
+    }
+
+    lineItems = input.lineItems.map((li) => {
+      const resolvedPrice = resolvedPriceByVariantId.get(li.variantId);
+      // A variant that failed to resolve (deleted, bad id) is left with no override -- Shopify's
+      // own error handling for an invalid variantId still applies; we simply don't compound that
+      // with a guessed price.
+      return resolvedPrice
+        ? { variantId: li.variantId, quantity: li.quantity, priceOverride: { amount: resolvedPrice, currencyCode } }
+        : { variantId: li.variantId, quantity: li.quantity };
+    });
+  }
+
   const draftOrderInput: Record<string, unknown> = {
-    lineItems: input.lineItems.map((li) => ({ variantId: li.variantId, quantity: li.quantity })),
+    lineItems,
     email: input.email,
     customAttributes,
   };
@@ -156,6 +232,13 @@ export async function createDraftOrder(
     if (!draftOrder) return { ok: false, error: 'draftOrderCreate returned no draft order and no userErrors' };
     return { ok: true, draftOrderId: draftOrder.id, name: draftOrder.name };
   } catch (err) {
+    // ShopifyAdminApiError's `.errors` carries the actual userErrors array (field + message per
+    // entry) -- assertNoUserErrors' thrown message alone ("draftOrderCreate returned userErrors")
+    // is useless for debugging without it, so always log the full detail server-side even though
+    // the HTTP response back to the storefront stays a short message.
+    if (err && typeof err === 'object' && 'errors' in err) {
+      console.error('[createDraftOrder] Shopify userErrors:', JSON.stringify((err as { errors: unknown }).errors, null, 2));
+    }
     return { ok: false, error: err instanceof Error ? err.message : 'createDraftOrder failed' };
   }
 }
