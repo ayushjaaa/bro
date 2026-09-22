@@ -1,4 +1,5 @@
 import { type EmailOtpType } from '@supabase/supabase-js';
+import { safeRelativePath } from '@/lib/safe-redirect';
 
 // The only link types Supabase issues that this route is meant to confirm.
 const OTP_TYPES = ['invite', 'magiclink', 'recovery', 'signup', 'email', 'email_change'] as const;
@@ -22,17 +23,22 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get('token_hash');
   const rawType = searchParams.get('type');
   const type = (OTP_TYPES as readonly string[]).includes(rawType ?? '') ? (rawType as EmailOtpType) : null;
-  // `next` must stay ON this site: a relative path only. `new URL('https://evil.example', base)` would
-  // otherwise happily redirect a freshly signed-in admin off-site (and `//evil.example` is
-  // protocol-relative), so anything not starting with a single "/" falls back to the home page.
-  const rawNext = searchParams.get('next') ?? '/';
-  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\') ? rawNext : '/';
+  // `next` must stay on this site (relative path only) -- see lib/safe-redirect.ts.
+  const next = safeRelativePath(searchParams.get('next'));
 
   if (token_hash && type) {
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+    // B6: this is the entry point for invite links and password-reset emails -- a thrown
+    // exception (not just a returned `error`) here must still fall through to the existing
+    // invalid-link redirect, not Next's raw error page, since that would strand a first-time
+    // admin clicking a legitimate link with no recoverable path.
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+      if (!error) {
+        return NextResponse.redirect(new URL(next, request.url));
+      }
+    } catch (err) {
+      console.error('[auth/confirm] unexpected error:', err);
     }
   }
 

@@ -25,7 +25,19 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await signIn(email, password);
+    // B4: signIn() is now itself wrapped in try/catch (B3), so it shouldn't throw in practice --
+    // this call site is guarded too as defense in depth, since an uncaught rejection here would
+    // otherwise leave `loading` stuck true forever (it's only reset in the `!result.ok` branch
+    // below) and freeze the submit button/inputs indefinitely.
+    let result;
+    try {
+      result = await signIn(email, password);
+    } catch (err) {
+      console.error('[login] unexpected error:', err);
+      setLoading(false);
+      setError('Something went wrong — please try again.');
+      return;
+    }
 
     if (!result.ok) {
       setLoading(false);
@@ -33,11 +45,36 @@ export default function LoginPage() {
       return;
     }
 
+    // The intro (success overlay + dashboard entrance animation) is only for a user's very first
+    // login on this browser. The "seen" flag lives in localStorage (survives sign-out and browser
+    // restarts) and is keyed by email so a different account still gets its own first-login intro.
+    const seenKey = `gd-admin-intro-seen:${email.trim().toLowerCase()}`;
+    let isFirstLogin = true;
+    try {
+      isFirstLogin = window.localStorage.getItem(seenKey) !== '1';
+      if (isFirstLogin) window.localStorage.setItem(seenKey, '1');
+    } catch {
+      // Storage blocked (private mode etc.) -- fall back to showing the intro rather than failing.
+    }
+
+    if (!isFirstLogin) {
+      router.push('/');
+      router.refresh();
+      return;
+    }
+
     setRedirecting(true);
     // Read by DashboardShellAnimator once, right after this navigation lands -- makes the
     // sidebar/topbar/content entrance animation play only for this first load, not on every
-    // later in-app page visit.
-    window.sessionStorage.setItem('gd-admin-just-logged-in', '1');
+    // later in-app page visit. B5: wrapped in try/catch (same pattern as the localStorage access
+    // above) -- in private/incognito mode, a storage-disabled policy, or a full quota, this can
+    // throw; unguarded, that would abort BEFORE the setTimeout below is ever scheduled, stranding
+    // the user on this success screen with no way forward except a manual reload.
+    try {
+      window.sessionStorage.setItem('gd-admin-just-logged-in', '1');
+    } catch {
+      // Entrance animation just won't play this once -- not worth failing the login over.
+    }
     setTimeout(() => {
       router.push('/');
       router.refresh();

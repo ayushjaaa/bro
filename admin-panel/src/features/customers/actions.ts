@@ -15,6 +15,7 @@ import {
 import { getProductTitlesByIds, getVariantDetailsByIds, type VariantDetail } from '@/data/products';
 import { listSalesReps, createSalesRep, type SalesRep } from '@/data/sales-reps';
 import { listNotes, createNote, type NoteEntityType, type InternalNote } from '@/data/internal-notes';
+import { safeActionError } from '@/lib/action-errors';
 
 export async function approveCustomerAction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
@@ -52,7 +53,7 @@ export async function createSalesRepAction(input: {
     const rep = await createSalesRep(input);
     return { ok: true, rep };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create sales rep' };
+    return { ok: false, error: safeActionError(error, 'Failed to create sales rep. Please try again.', 'sales-reps:create') };
   }
 }
 
@@ -74,7 +75,7 @@ export async function createNoteAction(
     const note = await createNote(entityType, entityId, body);
     return { ok: true, note };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Failed to create note' };
+    return { ok: false, error: safeActionError(error, 'Failed to create note. Please try again.', 'internal-notes:create') };
   }
 }
 

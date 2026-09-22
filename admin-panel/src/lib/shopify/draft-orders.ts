@@ -1,7 +1,8 @@
 import 'server-only';
 import { shopifyAdminRequest, assertNoUserErrors } from './admin-client';
-import { getShopifyCustomerIdForCustomer } from '@/data/customer-shopify-id';
-import { getAccountTypeForCustomer } from '@/data/customer-account-type';
+import { getApprovedCustomerForOrder } from '@/data/customer-order-identity';
+import { findRegionMismatches, normalizeProvince, REGION_RULE_ENABLED } from '@/lib/region-rules';
+import { describeShortfalls, findStockShortfalls, type VariantStock } from '@/lib/inventory-rules';
 
 /**
  * Draft Order creation for the storefront's custom checkout (Part 1 of the checkout/dashboard
@@ -59,6 +60,25 @@ const VARIANT_PRICES_QUERY = /* GraphQL */ `
   }
 `;
 
+const VARIANT_CHECK_QUERY = /* GraphQL */ `
+  query VariantChecksForDraftOrder($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        inventoryQuantity
+        inventoryPolicy
+        inventoryItem {
+          tracked
+        }
+        product {
+          title
+          tags
+        }
+      }
+    }
+  }
+`;
+
 export type FulfillmentMethod = 'ship' | 'pickup';
 
 export interface DraftOrderLineItem {
@@ -80,7 +100,8 @@ export interface ShippingAddressInput {
 
 export interface CreateDraftOrderInput {
   lineItems: DraftOrderLineItem[];
-  email: string;
+  /** Ignored: the order's email always comes from the customer's own `customers` row. */
+  email?: string;
   fulfillmentMethod: FulfillmentMethod;
   /** Required when fulfillmentMethod is 'ship'. */
   shippingAddress?: ShippingAddressInput;
@@ -112,6 +133,8 @@ export interface CreateDraftOrderResult {
 export interface CreateDraftOrderError {
   ok: false;
   error: string;
+  /** HTTP status the route should answer with (defaults to 422). */
+  status?: 403 | 422 | 503;
 }
 
 export async function createDraftOrder(
@@ -132,48 +155,130 @@ export async function createDraftOrder(
   // no extra work at all: Shopify's native price already IS the wholesale price, so lineItems are
   // built exactly as before, with no override and no extra Admin API call. Only a confirmed
   // `retail` customer triggers the extra price-resolution work below.
-  const accountType = await getAccountTypeForCustomer(input.customerId);
+  // Identity comes from the database, never from the request body: the customer must exist and be
+  // approved, and their email / price tier / Shopify id are read from their own row.
+  let customer: Awaited<ReturnType<typeof getApprovedCustomerForOrder>>;
+  try {
+    customer = await getApprovedCustomerForOrder(input.customerId);
+  } catch (err) {
+    console.error('[createDraftOrder] customer lookup failed:', err);
+    return { ok: false, error: 'Could not verify your account. Please try again.', status: 503 };
+  }
+  if (!customer) {
+    return { ok: false, error: 'This account cannot place orders.', status: 403 };
+  }
+  const accountType = customer.accountType;
+
+  // Authoritative item checks, against live Shopify data (lib/region-rules.ts + lib/inventory-rules.ts):
+  //  * every variant must exist,
+  //  * stock: a tracked, stop-selling-when-out variant can't be ordered beyond what is available,
+  //  * shipped orders: the product's excise region must be allowed in the destination province.
+  // The storefront checks some of this first for a friendlier message, but this is the real order
+  // boundary and must not rely on that. Fails closed: if the data can't be read, no order is created.
+  const province = input.fulfillmentMethod === 'ship' ? normalizeProvince(input.shippingAddress?.provinceCode) : null;
+  if (input.fulfillmentMethod === 'ship' && !province) {
+    return { ok: false, error: 'A valid Canadian shipping province is required.' };
+  }
+  try {
+    const variantIds = [...new Set(input.lineItems.map((li) => li.variantId))];
+    const checkData = await shopifyAdminRequest<{
+      nodes: Array<{
+        id: string;
+        inventoryQuantity: number | null;
+        inventoryPolicy: 'DENY' | 'CONTINUE';
+        inventoryItem: { tracked: boolean } | null;
+        product: { title: string; tags: string[] };
+      } | null>;
+    }>(VARIANT_CHECK_QUERY, { ids: variantIds });
+    const byId = new Map(checkData.nodes.filter((n) => n?.id).map((n) => [n!.id, n!]));
+    if (variantIds.some((id) => !byId.has(id))) {
+      return { ok: false, error: 'One or more items could not be found.' };
+    }
+
+    const stock = new Map<string, VariantStock>();
+    for (const [id, v] of byId) {
+      stock.set(id, {
+        productTitle: v.product.title,
+        tracked: v.inventoryItem?.tracked ?? false,
+        policy: v.inventoryPolicy,
+        quantity: v.inventoryQuantity ?? 0,
+      });
+    }
+    const shortfalls = findStockShortfalls(input.lineItems, stock);
+    if (shortfalls.length > 0) {
+      return { ok: false, error: `Not enough stock for: ${describeShortfalls(shortfalls)}. Please lower the quantity or remove the item.` };
+    }
+
+    // Region/province shipping restriction: DISABLED by business decision (REGION_RULE_ENABLED =
+    // false in lib/region-rules.ts, 2026-09-22). A valid province is still required above for a
+    // shipped order; it is just no longer matched against each product's region- tag.
+    if (REGION_RULE_ENABLED && province) {
+      const lines = input.lineItems.map((li) => {
+        const product = byId.get(li.variantId)!.product;
+        const tag = product.tags.find((t) => t.startsWith('region-'));
+        return { name: product.title, region: tag ? tag.slice('region-'.length) : null };
+      });
+      const blocked = findRegionMismatches(lines, province);
+      if (blocked.length > 0) {
+        return {
+          ok: false,
+          error: `These items can't be shipped to the selected province: ${[...new Set(blocked.map((l) => l.name))].join(', ')}.`,
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[createDraftOrder] item check failed:', err);
+    return { ok: false, error: 'Could not verify your items right now. Please try again.', status: 503 };
+  }
 
   let lineItems: Array<{ variantId: string; quantity: number; priceOverride?: { amount: string; currencyCode: string } }> =
     input.lineItems.map((li) => ({ variantId: li.variantId, quantity: li.quantity }));
 
+  // C2: same try/catch pattern as the stock/region check block above -- an unguarded Shopify
+  // hiccup here used to propagate all the way out of the route handler uncaught, returning a raw
+  // 500 instead of this route's normal JSON error contract.
   if (accountType === 'retail') {
-    const variantIds = [...new Set(input.lineItems.map((li) => li.variantId))];
-    const priceData = await shopifyAdminRequest<{
-      nodes: Array<{ id: string; price: string; retailPriceField: { value: string } | null } | null>;
-    }>(VARIANT_PRICES_QUERY, { ids: variantIds });
+    try {
+      const variantIds = [...new Set(input.lineItems.map((li) => li.variantId))];
+      const priceData = await shopifyAdminRequest<{
+        nodes: Array<{ id: string; price: string; retailPriceField: { value: string } | null } | null>;
+      }>(VARIANT_PRICES_QUERY, { ids: variantIds });
 
-    const currencyCode = await getShopCurrency();
-    const resolvedPriceByVariantId = new Map<string, string>();
-    for (const node of priceData.nodes) {
-      if (!node?.id) continue;
-      let retailPrice: string | null = null;
-      if (node.retailPriceField?.value) {
-        try {
-          retailPrice = JSON.parse(node.retailPriceField.value).amount ?? null;
-        } catch {
-          retailPrice = null;
+      const currencyCode = await getShopCurrency();
+      const resolvedPriceByVariantId = new Map<string, string>();
+      for (const node of priceData.nodes) {
+        if (!node?.id) continue;
+        let retailPrice: string | null = null;
+        if (node.retailPriceField?.value) {
+          try {
+            retailPrice = JSON.parse(node.retailPriceField.value).amount ?? null;
+          } catch {
+            retailPrice = null;
+          }
         }
+        // Missing retail price -> fall back to the native (wholesale) price, same rule as every
+        // other display surface (storefront product/cart, admin's own Cart page).
+        resolvedPriceByVariantId.set(node.id, retailPrice ?? node.price);
       }
-      // Missing retail price -> fall back to the native (wholesale) price, same rule as every
-      // other display surface (storefront product/cart, admin's own Cart page).
-      resolvedPriceByVariantId.set(node.id, retailPrice ?? node.price);
-    }
 
-    lineItems = input.lineItems.map((li) => {
-      const resolvedPrice = resolvedPriceByVariantId.get(li.variantId);
-      // A variant that failed to resolve (deleted, bad id) is left with no override -- Shopify's
-      // own error handling for an invalid variantId still applies; we simply don't compound that
-      // with a guessed price.
-      return resolvedPrice
-        ? { variantId: li.variantId, quantity: li.quantity, priceOverride: { amount: resolvedPrice, currencyCode } }
-        : { variantId: li.variantId, quantity: li.quantity };
-    });
+      lineItems = input.lineItems.map((li) => {
+        const resolvedPrice = resolvedPriceByVariantId.get(li.variantId);
+        // A variant that failed to resolve (deleted, bad id) is left with no override -- Shopify's
+        // own error handling for an invalid variantId still applies; we simply don't compound that
+        // with a guessed price.
+        return resolvedPrice
+          ? { variantId: li.variantId, quantity: li.quantity, priceOverride: { amount: resolvedPrice, currencyCode } }
+          : { variantId: li.variantId, quantity: li.quantity };
+      });
+    } catch (err) {
+      console.error('[createDraftOrder] retail price resolution failed:', err);
+      return { ok: false, error: 'Could not verify pricing. Please try again.', status: 503 };
+    }
   }
 
   const draftOrderInput: Record<string, unknown> = {
     lineItems,
-    email: input.email,
+    email: customer.email,
     customAttributes,
   };
   if (input.note) draftOrderInput.note = input.note;
@@ -184,9 +289,8 @@ export async function createDraftOrder(
   // never blocks order creation if this lookup comes back empty, only omits the link (see
   // getShopifyCustomerIdForCustomer's own doc comment for why that should be unreachable for an
   // approved customer, but is still handled defensively rather than assumed impossible).
-  const shopifyCustomerId = await getShopifyCustomerIdForCustomer(input.customerId);
-  if (shopifyCustomerId) {
-    draftOrderInput.purchasingEntity = { customerId: shopifyCustomerId };
+  if (customer.shopifyCustomerId) {
+    draftOrderInput.purchasingEntity = { customerId: customer.shopifyCustomerId };
   }
 
   if (input.fulfillmentMethod === 'ship') {
@@ -239,6 +343,10 @@ export async function createDraftOrder(
     if (err && typeof err === 'object' && 'errors' in err) {
       console.error('[createDraftOrder] Shopify userErrors:', JSON.stringify((err as { errors: unknown }).errors, null, 2));
     }
-    return { ok: false, error: err instanceof Error ? err.message : 'createDraftOrder failed' };
+    // Detail stays in the server log; the buyer gets a generic line (Shopify's raw text is not for them).
+    const detail = err && typeof err === 'object' && 'errors' in err ? JSON.stringify((err as { errors: unknown }).errors) : '';
+    if (/discount/i.test(detail)) return { ok: false, error: 'That discount code is not valid.' };
+    console.error('[createDraftOrder] failed:', err);
+    return { ok: false, error: 'Could not place your order. Please try again.' };
   }
 }

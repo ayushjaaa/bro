@@ -39,6 +39,9 @@ export default function CustomerDrawer({
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const [accountTypeError, setAccountTypeError] = useState('');
+  const [loadingDocumentPath, setLoadingDocumentPath] = useState<string | null>(null);
+  const [documentError, setDocumentError] = useState('');
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -48,18 +51,40 @@ export default function CustomerDrawer({
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
+  // C6: previously no try/catch and no loading state -- getRegistrationDocumentUrl throws if
+  // Supabase Storage's createSignedUrl fails, so clicking the link did nothing visible at all,
+  // with no way to tell if it was working or broken.
   async function handleViewDocument(path: string) {
-    const url = await getRegistrationDocumentUrlAction(path);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    setDocumentError('');
+    setLoadingDocumentPath(path);
+    try {
+      const url = await getRegistrationDocumentUrlAction(path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('[CustomerDrawer] handleViewDocument failed:', err);
+      setDocumentError('Could not open this document. Please try again.');
+    } finally {
+      setLoadingDocumentPath(null);
+    }
   }
 
+  // C5: previously no try/catch -- a thrown error inside an async startTransition callback is not
+  // a render-phase error, so no Error Boundary catches it; it's just a silent unhandled rejection.
+  // `pending` still resolves but `router.refresh()` never runs, so the row silently keeps its old
+  // state with zero error shown to the admin.
   function handleAccountTypeChange(accountType: 'retail' | 'wholesale') {
+    setAccountTypeError('');
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set('id', customer.id);
-      formData.set('accountType', accountType);
-      await updateAccountTypeAction(formData);
-      router.refresh();
+      try {
+        const formData = new FormData();
+        formData.set('id', customer.id);
+        formData.set('accountType', accountType);
+        await updateAccountTypeAction(formData);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleAccountTypeChange failed:', err);
+        setAccountTypeError('Could not update account type. Please try again.');
+      }
     });
   }
 
@@ -120,6 +145,7 @@ export default function CustomerDrawer({
               )}
             </div>
           )}
+          {accountTypeError && <p className="text-xs text-red-600">{accountTypeError}</p>}
 
           <InfoCard title="Contact">
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
@@ -192,9 +218,10 @@ export default function CustomerDrawer({
                 <button
                   type="button"
                   onClick={() => handleViewDocument(customer.businessLicencePath!)}
-                  className="text-sm font-medium text-brand-purple-deep hover:underline"
+                  disabled={loadingDocumentPath === customer.businessLicencePath}
+                  className="text-sm font-medium text-brand-purple-deep hover:underline disabled:opacity-50 disabled:no-underline"
                 >
-                  View Business/Tax Licence
+                  {loadingDocumentPath === customer.businessLicencePath ? 'Opening…' : 'View Business/Tax Licence'}
                 </button>
               ) : (
                 <span className="text-sm text-neutral-400">No business licence uploaded</span>
@@ -203,12 +230,14 @@ export default function CustomerDrawer({
                 <button
                   type="button"
                   onClick={() => handleViewDocument(customer.specialtyLicencePath!)}
-                  className="text-sm font-medium text-brand-purple-deep hover:underline"
+                  disabled={loadingDocumentPath === customer.specialtyLicencePath}
+                  className="text-sm font-medium text-brand-purple-deep hover:underline disabled:opacity-50 disabled:no-underline"
                 >
-                  View Specialty Store Licence
+                  {loadingDocumentPath === customer.specialtyLicencePath ? 'Opening…' : 'View Specialty Store Licence'}
                 </button>
               )}
             </div>
+            {documentError && <p className="text-xs text-red-600 mt-2">{documentError}</p>}
           </InfoCard>
 
           <InfoCard title="Compliance">
@@ -305,18 +334,35 @@ function NotesPanel({
   compact?: boolean;
 }) {
   const [notes, setNotes] = useState<InternalNote[] | null>(null);
+  const [notesError, setNotesError] = useState(false);
   const [body, setBody] = useState('');
   const [submitting, startSubmitting] = useTransition();
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  function loadNotes() {
     let cancelled = false;
-    listNotesAction(entityType, entityId).then((result) => {
-      if (!cancelled) setNotes(result);
-    });
+    setNotesError(false);
+    listNotesAction(entityType, entityId)
+      .then((result) => {
+        if (!cancelled) setNotes(result);
+      })
+      .catch((err) => {
+        // C7: previously no `.catch` -- a thrown error left `notes` stuck at `null` forever
+        // (permanent "Loading notes…"), with no retry, and an unhandled promise rejection.
+        console.error('[CustomerDrawer] listNotesAction failed:', err);
+        if (!cancelled) {
+          setNotes([]);
+          setNotesError(true);
+        }
+      });
     return () => {
       cancelled = true;
     };
+  }
+
+  useEffect(() => {
+    return loadNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityType, entityId]);
 
   function handleAdd() {
@@ -338,6 +384,13 @@ function NotesPanel({
     <div className="flex flex-col gap-2.5">
       {notes === null ? (
         <p className="text-sm text-neutral-400">Loading notes…</p>
+      ) : notesError ? (
+        <p className="text-sm text-red-600">
+          Could not load notes.{' '}
+          <button type="button" onClick={loadNotes} className="font-semibold underline">
+            Retry
+          </button>
+        </p>
       ) : notes.length === 0 ? (
         <p className="text-sm text-neutral-400">No notes yet.</p>
       ) : (
@@ -386,10 +439,18 @@ function SalesRepCard({ customer, salesReps }: { customer: Customer; salesReps: 
   const [error, setError] = useState('');
   const router = useRouter();
 
+  // C5: previously no try/catch -- same silent-unhandled-rejection-inside-startTransition gap as
+  // handleAccountTypeChange above.
   function handleAssign(salesRepId: string) {
+    setError('');
     startTransition(async () => {
-      await updateCustomerSalesRepAction(customer.id, salesRepId || null);
-      router.refresh();
+      try {
+        await updateCustomerSalesRepAction(customer.id, salesRepId || null);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleAssign failed:', err);
+        setError('Could not assign the rep. Please try again.');
+      }
     });
   }
 
@@ -405,10 +466,21 @@ function SalesRepCard({ customer, salesReps }: { customer: Customer; salesReps: 
         setError(result.error);
         return;
       }
-      await updateCustomerSalesRepAction(customer.id, result.rep.id);
-      setShowNewRepForm(false);
-      setNewRep({ name: '', phone: '', email: '' });
-      router.refresh();
+      // C4: the rep row now exists in Shopify/Supabase (create succeeded) -- if THIS second call
+      // throws, previously the form stayed open with no error shown, and the admin (seeing
+      // nothing happen) would likely click "Save & Assign" again and create a duplicate rep.
+      try {
+        await updateCustomerSalesRepAction(customer.id, result.rep.id);
+        setShowNewRepForm(false);
+        setNewRep({ name: '', phone: '', email: '' });
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleCreateRep assign step failed:', err);
+        setError(`"${result.rep.name}" was created but could not be assigned — please assign manually from the dropdown above.`);
+        // The rep row itself was created successfully -- refresh so it shows up in the "Assigned
+        // rep" dropdown for manual assignment, matching the error message above.
+        router.refresh();
+      }
     });
   }
 

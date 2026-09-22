@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductLine } from '@/data/products';
+import { sanitizeProductHtml } from '@/lib/sanitize-html';
 import { listFilterDefinitions } from '@/data/filters';
 import { REGIONS } from '@/lib/regions';
 import PublishButton from '@/features/products/components/PublishButton';
@@ -133,7 +134,7 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
               <h2 className="text-sm font-semibold text-neutral-700 mt-4 mb-2">Description</h2>
               <div
                 className="text-sm text-neutral-600 prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeProductHtml(product.descriptionHtml) }}
               />
             </>
           )}

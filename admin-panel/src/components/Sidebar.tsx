@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, BoxIcon, WarningIcon, LayersIcon, UsersIcon, UserIcon, CartIcon } from './icons';
+import { HomeIcon, BoxIcon, WarningIcon, LayersIcon, UsersIcon, UserIcon, CartIcon, ActivityIcon } from './icons';
 
 /**
  * 4 sections, per the UX pass in ADMIN_PANEL_IMPLEMENTATION.md §4 — Chunking (4±1 ideal group
@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/customers', label: 'Customers', icon: UsersIcon },
   { href: '/sales-reps', label: 'Sales Reps', icon: UserIcon },
   { href: '/cart', label: 'Cart', icon: CartIcon },
+  { href: '/activity', label: 'Activity', icon: ActivityIcon },
 ];
 
 export default function Sidebar() {

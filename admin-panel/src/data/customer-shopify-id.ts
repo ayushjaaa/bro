@@ -13,11 +13,17 @@ function getServiceRoleClient() {
  * Resolves this app's own Supabase `customers.id` to the Shopify Customer GID
  * (`customers.shopify_customer_id`) written once at approval time (see `approveCustomer()` in
  * `data/customers.ts`, via `findOrCreateShopifyCustomer()`). Returns `null` if the row doesn't
- * exist or the column is somehow unset -- should not happen for an approved customer, since the
- * same request that flips a row to `approved` also resolves this value, but this must never throw
- * for that case, just report it, so callers can decide what "no linked Shopify customer yet"
- * means for their own flow (e.g. a Draft Order still gets created without `purchasingEntity`
- * rather than blocking a purchase, and an order-history lookup just returns an empty list).
+ * exist, isn't `approved`, or the column is somehow unset -- should not happen for an approved
+ * customer, since the same request that flips a row to `approved` also resolves this value, but
+ * this must never throw for that case, just report it, so callers can decide what "no linked
+ * Shopify customer yet" means for their own flow (e.g. a Draft Order still gets created without
+ * `purchasingEntity` rather than blocking a purchase, and an order-history lookup just returns an
+ * empty list).
+ *
+ * The `status = 'approved'` check is explicit here (project rule: any function that returns a
+ * customer's own data must verify approved+logged-in itself, never rely on an upstream caller or
+ * an incidental column-null coincidence) -- previously this relied only on `shopify_customer_id`
+ * happening to be null before approval, which is not a guarantee against a future code path.
  *
  * Deliberately does NOT call `requireAdmin()`, unlike every other function in `data/customers.ts`
  * -- this is called from internal-secret-gated API routes (storefront-to-admin-panel calls), which
@@ -30,10 +36,10 @@ export async function getShopifyCustomerIdForCustomer(customerId: string): Promi
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('customers')
-    .select('shopify_customer_id')
+    .select('shopify_customer_id, status')
     .eq('id', customerId)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error || !data || data.status !== 'approved') return null;
   return data.shopify_customer_id;
 }
 
@@ -61,8 +67,10 @@ export interface CustomerOrderContactInfo {
  * it directly from the customer at registration (008 migration) -- reading it back from our own
  * Supabase row is not a workaround-quality substitute, it's the same data, just sourced from where
  * we already have it instead of re-asking Shopify for something Shopify won't currently hand back.
- * Returns all-null (never throws) if the row is missing, same "report, don't blow up" posture as
- * getShopifyCustomerIdForCustomer above.
+ * Returns all-null (never throws) if the row is missing or not `approved`, same "report, don't
+ * blow up" posture as `getShopifyCustomerIdForCustomer` above -- same explicit approval check for
+ * the same reason (project rule: this function returns a customer's own PII, so it verifies
+ * approved itself rather than trusting the caller).
  */
 export async function getCustomerOrderContactInfo(customerId: string): Promise<CustomerOrderContactInfo> {
   const empty: CustomerOrderContactInfo = {
@@ -78,10 +86,10 @@ export async function getCustomerOrderContactInfo(customerId: string): Promise<C
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('customers')
-    .select('first_name, last_name, email, phone, ship_line1, ship_line2, ship_postal_code, account_number')
+    .select('first_name, last_name, email, phone, ship_line1, ship_line2, ship_postal_code, account_number, status')
     .eq('id', customerId)
     .maybeSingle();
-  if (error || !data) return empty;
+  if (error || !data || data.status !== 'approved') return empty;
   return {
     firstName: data.first_name ?? null,
     lastName: data.last_name ?? null,

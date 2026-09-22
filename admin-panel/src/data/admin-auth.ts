@@ -55,6 +55,12 @@ export async function requireAdmin(): Promise<{ email: string; id: string }> {
     if (error?.name === 'AuthSessionMissingError') {
       throw new Error('Unauthorized — not logged in');
     }
+    // With no session at all, current supabase-js returns { data: null, error: null } (not an error).
+    // That is "not logged in", NOT a transient failure -- treating it as one showed a logged-out (or
+    // expired-session) visitor a "couldn't verify your session" page instead of sending them to /login.
+    if (!error && !data) {
+      throw new Error('Unauthorized — not logged in');
+    }
     claimsCheckFailed = true;
   }
 
@@ -63,6 +69,7 @@ export async function requireAdmin(): Promise<{ email: string; id: string }> {
   }
 
   const email = claimsEmail;
+  const userId = claimsSub as string;
   const service = getServiceRoleClient();
 
   let adminRow: { id: string } | null = null;
@@ -71,7 +78,9 @@ export async function requireAdmin(): Promise<{ email: string; id: string }> {
     const { data: row, error: lookupError } = await service
       .from('admin_users')
       .select('id')
-      .eq('email', email)
+      // By the Auth user id (`sub`), never by email: an email claim is not proof of who holds it
+      // while sign-up is open (see 024/025). The id can't be chosen by a visitor.
+      .eq('user_id', userId)
       .maybeSingle();
     if (!lookupError) {
       adminRow = row;

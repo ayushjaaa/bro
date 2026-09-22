@@ -3,6 +3,8 @@ import { shopifyAdminRequest, assertNoUserErrors } from '@/lib/shopify/admin-cli
 import { uploadImageFile } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
 import { createSubcategoryCollection, setMegaMenuMetafields } from '@/lib/shopify/collection-helpers.core';
+import { validateTaxonomyEntryInput } from '@/lib/taxonomy-input';
+import { SafeActionError } from '@/lib/action-errors';
 
 export type TaxonomyEntry = {
   id: string;
@@ -138,6 +140,8 @@ export async function createCategory(input: {
   image?: File;
 }): Promise<TaxonomyEntry> {
   await requireAdmin();
+  const invalid = validateTaxonomyEntryInput(input);
+  if (invalid) throw new SafeActionError(invalid);
   const fields = [{ key: 'name', value: input.name }];
   if (input.description) fields.push({ key: 'description', value: input.description });
   if (input.image) fields.push({ key: 'image', value: await uploadImageFile(input.image) });
@@ -158,6 +162,8 @@ export async function createSubcategory(input: {
   menuSortOrder?: number;
 }): Promise<TaxonomyEntry> {
   await requireAdmin();
+  const invalid = validateTaxonomyEntryInput(input);
+  if (invalid) throw new SafeActionError(invalid);
   const fields = [
     { key: 'name', value: input.name },
     { key: 'category', value: input.categoryId },
@@ -203,6 +209,8 @@ export async function createBrand(input: {
   subcategoryId: string;
 }): Promise<TaxonomyEntry> {
   await requireAdmin();
+  const invalid = validateTaxonomyEntryInput(input);
+  if (invalid) throw new SafeActionError(invalid);
   const fields = [
     { key: 'name', value: input.name },
     { key: 'sub_category', value: input.subcategoryId },

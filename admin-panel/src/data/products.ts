@@ -4,6 +4,9 @@ import { uploadImageForProductMedia } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
 import { listBrands, listSubcategories } from './taxonomy';
+import { listFilterDefinitions } from './filters';
+import { validateFilterKeys } from '@/lib/product-filter-input';
+import { SafeActionError } from '@/lib/action-errors';
 
 /**
  * Product Line DAL (Flow B2, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow B2 / §3 route map). A Product
@@ -556,11 +559,23 @@ export async function createProductLine(input: {
   // `vendor` = the Brand's own name. These power fast native `products(query:...)` filtering on
   // the storefront -- the `taxonomy.brand` metafield below stays too (admin-panel dashboard reads
   // it directly), this is additive, not a replacement.
-  const [brands, subcategories] = await Promise.all([listBrands(), listSubcategories()]);
+  const [brands, subcategories, filterDefinitions] = await Promise.all([
+    listBrands(),
+    listSubcategories(),
+    listFilterDefinitions(),
+  ]);
   const brand = brands.find((b) => b.id === input.brandId);
   if (!brand) throw new Error(`Brand not found: ${input.brandId}`);
   const subcategory = subcategories.find((s) => s.id === brand.parentId);
   if (!subcategory) throw new Error(`Sub-category not found for brand "${brand.name}"`);
+
+  // Q-1: see product-filter-input.ts -- reject a forged/unknown filter key before it becomes a
+  // metafield, and never let "region" (structural) be set through this path.
+  const productFilterKeys = new Set(
+    filterDefinitions.filter((f) => f.level === 'product').map((f) => f.key)
+  );
+  const filterKeyError = validateFilterKeys(input.filterValues, productFilterKeys);
+  if (filterKeyError) throw new SafeActionError(filterKeyError);
 
   const media = input.image
     ? [{ originalSource: await uploadImageForProductMedia(input.image), mediaContentType: 'IMAGE' }]
@@ -571,36 +586,68 @@ export async function createProductLine(input: {
   // Sequential, not Promise.all -- keeps error attribution simple (which region failed) and
   // avoids uploading input.image's file data more than once concurrently for no benefit (Shopify
   // media upload is the slow step here, not worth parallelizing for a handful of regions).
-  for (const region of input.regions) {
-    const title = regionSuffixedTitle(input.title, region.label);
-    const metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [
-      { namespace: 'taxonomy', key: 'brand', type: 'metaobject_reference', value: input.brandId },
-      { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: region.value },
-    ];
-    for (const [key, value] of Object.entries(input.filterValues)) {
-      if (!value) continue;
-      metafields.push({ namespace: 'custom', key, type: 'single_line_text_field', value });
+  //
+  // A5 (PRODUCT_ERROR_HANDLING_REVIEW.md): each region creates a REAL Shopify Product. If region 2
+  // of 3 throws (network blip, rate limit, validation error), region 1's product already exists in
+  // Shopify -- letting the exception propagate raw discards `created` and leaves the admin with no
+  // way to know that orphan exists. No delete-product mutation exists anywhere in this codebase
+  // (writing one here would be a new destructive capability, out of scope for an error-handling
+  // fix) -- instead, attach whatever succeeded to a typed error so the caller can tell the admin
+  // exactly which regions exist and need manual attention.
+  try {
+    for (const region of input.regions) {
+      const title = regionSuffixedTitle(input.title, region.label);
+      const metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [
+        { namespace: 'taxonomy', key: 'brand', type: 'metaobject_reference', value: input.brandId },
+        { namespace: 'custom', key: 'region', type: 'single_line_text_field', value: region.value },
+      ];
+      for (const [key, value] of Object.entries(input.filterValues)) {
+        if (!value) continue;
+        metafields.push({ namespace: 'custom', key, type: 'single_line_text_field', value });
+      }
+
+      const data = await shopifyAdminRequest<any>(PRODUCT_CREATE_MUTATION, {
+        product: {
+          title,
+          productType: subcategory.name,
+          vendor: brand.name,
+          tags: [`region-${region.value}`],
+          productOptions: [{ name: 'Flavor', values: [{ name: 'Default' }] }],
+          metafields,
+        },
+        media,
+      });
+      assertNoUserErrors(data.productCreate.userErrors, `productCreate (${region.label})`);
+      const result = data.productCreate.product;
+      if (!result) throw new Error(`productCreate returned no product and no userErrors for ${region.label}`);
+
+      created.push({ id: result.id, title: result.title, region: region.value });
     }
-
-    const data = await shopifyAdminRequest<any>(PRODUCT_CREATE_MUTATION, {
-      product: {
-        title,
-        productType: subcategory.name,
-        vendor: brand.name,
-        tags: [`region-${region.value}`],
-        productOptions: [{ name: 'Flavor', values: [{ name: 'Default' }] }],
-        metafields,
-      },
-      media,
-    });
-    assertNoUserErrors(data.productCreate.userErrors, `productCreate (${region.label})`);
-    const result = data.productCreate.product;
-    if (!result) throw new Error(`productCreate returned no product and no userErrors for ${region.label}`);
-
-    created.push({ id: result.id, title: result.title, region: region.value });
+  } catch (err) {
+    if (created.length > 0) {
+      throw new PartialProductLineCreationError(
+        `Created ${created.length} of ${input.regions.length} region(s) before failing.`,
+        created
+      );
+    }
+    throw err;
   }
 
   return created;
+}
+
+/** A5: thrown by createProductLine when at least one region's Product was successfully created in
+ * Shopify before a later region failed -- `created` lets the caller tell the admin exactly which
+ * regions to check/clean up manually, instead of a generic "something went wrong" that hides real,
+ * live Shopify products the admin doesn't know exist yet. */
+export class PartialProductLineCreationError extends Error {
+  constructor(
+    message: string,
+    public readonly created: Array<{ id: string; title: string; region: string }>
+  ) {
+    super(message);
+    this.name = 'PartialProductLineCreationError';
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

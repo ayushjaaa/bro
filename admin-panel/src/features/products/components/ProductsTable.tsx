@@ -21,6 +21,7 @@ export default function ProductsTable({ initialPage }: { initialPage: ProductLin
   const [pageIndex, setPageIndex] = useState(0);
   const [pages, setPages] = useState<Map<number, ProductLinesPage>>(() => new Map([[0, initialPage]]));
   const [isLoading, setIsLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   const current = pages.get(pageIndex) ?? initialPage;
   const products = current.products;
@@ -35,10 +36,18 @@ export default function ProductsTable({ initialPage }: { initialPage: ProductLin
       return;
     }
     setIsLoading(true);
+    setPageError(null);
     try {
       const result = await getProductLinesPageAction({ cursor: current.endCursor, limit: PRODUCTS_PAGE_SIZE });
       setPages((prev) => new Map(prev).set(nextIndex, result));
       setPageIndex(nextIndex);
+    } catch (err) {
+      // A2: was previously a `finally` with no `catch` -- a rejection here is an unhandled
+      // rejection inside a click handler (an Error Boundary only catches render-phase errors, so
+      // it never caught this), leaving the admin with no explanation why "Next" silently did
+      // nothing.
+      console.error('[ProductsTable] failed to load next page:', err);
+      setPageError('Could not load the next page. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -129,6 +138,8 @@ export default function ProductsTable({ initialPage }: { initialPage: ProductLin
           </table>
         </div>
       )}
+
+      {pageError && <p className="text-sm text-red-600">{pageError}</p>}
 
       {(pageIndex > 0 || current.hasNextPage) && (
         <div className="flex items-center justify-between gap-3 text-sm">

@@ -9,6 +9,12 @@ import type { NextRequest } from 'next/server';
  * requireAdmin() too. Extracted here rather than duplicated per-route since a byte-identical copy
  * of a security-critical check is exactly the kind of thing that should exist in exactly one place.
  */
+/** W-2: a small, generous cap for internal routes whose body is just a couple of short fields
+ * (a customer id, an order id, an optional date range) -- refuses an oversized body before
+ * `JSON.parse` even runs, same "reject junk before it costs anything" reasoning as
+ * `draft-order-input.ts`'s `MAX_BODY_CHARS` and `applicant-cleanup.ts`'s `MAX_CLEANUP_BODY_CHARS`. */
+export const MAX_INTERNAL_JSON_BODY_CHARS = 2000;
+
 export function isInternalRequestAuthorized(
   request: NextRequest,
   envVarName = 'INTERNAL_DRAFT_ORDER_SECRET'

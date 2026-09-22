@@ -1,6 +1,9 @@
 import 'server-only';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { requireAdmin } from './admin-auth';
+import { SafeActionError } from '@/lib/action-errors';
+import { validateSalesRepInput } from '@/lib/sales-rep-input';
+export { validateSalesRepInput };
 
 function getServiceRoleClient() {
   return createServiceRoleClient(
@@ -34,6 +37,8 @@ export async function listSalesReps(): Promise<SalesRep[]> {
 
 export async function createSalesRep(input: { name: string; phone: string; email: string }): Promise<SalesRep> {
   await requireAdmin();
+  const invalid = validateSalesRepInput(input);
+  if (invalid) throw new SafeActionError(invalid);
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.from('sales_reps').insert(input).select('*').single();
   if (error || !data) throw new Error(error?.message ?? 'Failed to create sales rep');
@@ -48,6 +53,8 @@ export async function updateSalesRep(
   input: { name: string; phone: string; email: string }
 ): Promise<SalesRep> {
   await requireAdmin();
+  const invalid = validateSalesRepInput(input);
+  if (invalid) throw new SafeActionError(invalid);
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.from('sales_reps').update(input).eq('id', id).select('*').single();
   if (error || !data) throw new Error(error?.message ?? 'Failed to update sales rep');

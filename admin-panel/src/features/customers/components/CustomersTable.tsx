@@ -129,32 +129,56 @@ function CustomerTableRow({
   onSelect: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [rowError, setRowError] = useState('');
   const router = useRouter();
 
+  // C5: none of these three were wrapped in try/catch -- an awaited throw inside an async
+  // startTransition callback is NOT a render-phase error, so no Error Boundary catches it. It's
+  // just a silent unhandled rejection: `pending` still resolves to false (button re-enables) but
+  // `router.refresh()` never runs, so the row silently keeps its stale state with zero error shown
+  // -- the admin believes they approved/rejected/reassigned a customer but nothing happened.
   function handleApprove() {
     if (!confirm(`Approve ${customer.firstName} ${customer.lastName}? This grants real account access.`)) return;
+    setRowError('');
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set('id', customer.id);
-      await approveCustomerAction(formData);
-      router.refresh();
+      try {
+        const formData = new FormData();
+        formData.set('id', customer.id);
+        await approveCustomerAction(formData);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomersTable] handleApprove failed:', err);
+        setRowError('Could not approve. Please try again.');
+      }
     });
   }
 
   function handleReject() {
     if (!confirm(`Reject ${customer.firstName} ${customer.lastName}'s request?`)) return;
+    setRowError('');
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set('id', customer.id);
-      await rejectCustomerAction(formData);
-      router.refresh();
+      try {
+        const formData = new FormData();
+        formData.set('id', customer.id);
+        await rejectCustomerAction(formData);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomersTable] handleReject failed:', err);
+        setRowError('Could not reject. Please try again.');
+      }
     });
   }
 
   function handleAssignRep(salesRepId: string) {
+    setRowError('');
     startTransition(async () => {
-      await updateCustomerSalesRepAction(customer.id, salesRepId || null);
-      router.refresh();
+      try {
+        await updateCustomerSalesRepAction(customer.id, salesRepId || null);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomersTable] handleAssignRep failed:', err);
+        setRowError('Could not assign the rep. Please try again.');
+      }
     });
   }
 
@@ -239,6 +263,7 @@ function CustomerTableRow({
             View details
           </button>
         )}
+        {rowError && <p className="text-[11px] text-red-600 mt-1">{rowError}</p>}
       </td>
     </tr>
   );

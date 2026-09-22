@@ -180,3 +180,11 @@ export function CartIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function ActivityIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} {...props}>
+      <path d="M2.5 10h3l2-5.5 4 11 2-5.5h4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

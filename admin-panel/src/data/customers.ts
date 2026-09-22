@@ -119,19 +119,40 @@ function toCustomer(row: any): Customer {
   };
 }
 
-/** Lists every customer (pending, approved, rejected together) -- the unified Customers screen
- * (item 38's design) renders all of them in one table, not separate pages. Joins in the
- * assigned sales rep (015-sales-reps-and-notes.sql) -- confirmed live against the database that
+/** K1: a safety cap, not a redesign -- the Customers screen (item 38's design) intentionally
+ * renders every customer in one live table (client-side "All"/"By Rep" toggle, no search/pagination
+ * UI exists here today, unlike the /cart page's server-paginated `list_customer_carts`). Almost
+ * every column IS genuinely rendered somewhere (the detail drawer shows the full application), so
+ * narrowing the `select()` would save little -- the real risk was "no upper bound at all" as the
+ * business grows. This caps it generously (well beyond any realistic near-term customer count) so a
+ * single page load can never pull an unbounded, ever-growing table into memory; if the real customer
+ * count ever approaches this, the right next step is a proper search+pagination UI (same pattern as
+ * /cart), not raising the number. */
+export const MAX_LISTED_CUSTOMERS = 2000;
+
+/** Lists customers (pending, approved, rejected together), newest request first -- the unified
+ * Customers screen (item 38's design) renders all of them in one table, not separate pages. Joins in
+ * the assigned sales rep (015-sales-reps-and-notes.sql) -- confirmed live against the database that
  * this migration has been applied before adding the join. */
 export async function listCustomers(): Promise<Customer[]> {
   await requireAdmin();
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase
-    .from('customers')
-    .select('*, sales_reps(name, phone, email)')
-    .order('requested_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(toCustomer);
+  // K1: PostgREST's own default max-rows caps a single request at 1000 regardless of a higher
+  // `.limit()` (live-verified 2026-09-22, see lib/supabase/paginate.ts) -- must page through in
+  // batches to actually reach MAX_LISTED_CUSTOMERS once the real customer count passes 1000.
+  const rows: any[] = [];
+  for (let offset = 0; offset < MAX_LISTED_CUSTOMERS; offset += 1000) {
+    const to = Math.min(offset + 1000, MAX_LISTED_CUSTOMERS) - 1;
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*, sales_reps(name, phone, email)')
+      .order('requested_at', { ascending: false })
+      .range(offset, to);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return rows.map(toCustomer);
 }
 
 /** Approves a pending registration: finds-or-creates the matching Shopify Customer, then flips
@@ -308,15 +329,29 @@ export type OrderStatusRow = {
   changed_at: string;
 };
 
+/** K1: same safety-cap reasoning as MAX_LISTED_CUSTOMERS above -- this table accumulates faster
+ * (one row per order status change, not per customer), so a bit more headroom, but still a bounded
+ * cap rather than truly unlimited growth. Newest first, so a cap keeps the most relevant rows. */
+export const MAX_ORDER_STATUS_ROWS = 5000;
+
 /** Every logged order/draft-order status change, for the per-customer "which orders, what
  * status" detail view -- raw snake_case shape for the same useLiveTable reason as above. */
 export async function listOrderStatusLog(): Promise<OrderStatusRow[]> {
   await requireAdmin();
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase
-    .from('order_status_log')
-    .select('*')
-    .order('changed_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  // K1: same PostgREST 1000-row-per-request cap as listCustomers above -- page through in
+  // batches to actually reach MAX_ORDER_STATUS_ROWS.
+  const rows: OrderStatusRow[] = [];
+  for (let offset = 0; offset < MAX_ORDER_STATUS_ROWS; offset += 1000) {
+    const to = Math.min(offset + 1000, MAX_ORDER_STATUS_ROWS) - 1;
+    const { data, error } = await supabase
+      .from('order_status_log')
+      .select('*')
+      .order('changed_at', { ascending: false })
+      .range(offset, to);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return rows;
 }

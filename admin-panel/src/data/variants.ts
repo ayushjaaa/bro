@@ -4,6 +4,7 @@ import { shopifyAdminRequest, ShopifyAdminApiError } from '@/lib/shopify/admin-c
 import { uploadImageForProductMedia } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
+import { validateVariantRowInput, validateVariantDescription, validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
 
 /**
  * Bulk Variant Upload DAL (Flow C, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow C). Region moved to being
@@ -204,16 +205,43 @@ export async function bulkCreateVariants(
     // Reject non-numeric price/compareAtPrice before they ever reach Shopify -- the API's own
     // "invalid money" error doesn't say which row caused it, so catch it here with a clear message.
     const batchRows = allBatchRows.filter((row) => {
-      const valid =
+      const moneyValid =
         isValidMoney(row.price) && isValidMoney(row.compareAtPrice) && isValidMoney(row.retailPrice);
-      if (!valid) {
+      if (!moneyValid) {
         result.failed += 1;
         result.errors.push({
           field: null,
           message: `"${row.flavourName}": price must be a plain number (e.g. "12.99"), got "${row.price}"`,
         });
+        return false;
       }
-      return valid;
+      // Q-3: reject an empty/oversized flavour name or description before it ever reaches
+      // Shopify, same "reject junk before it's stored" treatment as N-1's other validated fields.
+      const rowInvalid = validateVariantRowInput(row);
+      if (rowInvalid) {
+        result.failed += 1;
+        result.errors.push({ field: null, message: `"${row.flavourName || '(unnamed)'}": ${rowInvalid}` });
+        return false;
+      }
+      // A3 (PRODUCT_ERROR_HANDLING_REVIEW.md): `isValidMoney` above only checks string format
+      // ("0.00" passes) -- reject a non-positive price and a non-positive/non-integer quantity
+      // here too, same thresholds as the client-side check, so a direct POST can't silently create
+      // a $0 Flavour or one with garbage/negative stock.
+      const priceError = validatePriceInput(row.price);
+      if (priceError) {
+        result.failed += 1;
+        result.errors.push({ field: null, message: `"${row.flavourName}": price ${priceError.toLowerCase()}` });
+        return false;
+      }
+      if (row.quantity !== undefined) {
+        const quantityError = validateQuantityInput(row.quantity);
+        if (quantityError) {
+          result.failed += 1;
+          result.errors.push({ field: null, message: `"${row.flavourName}": quantity ${quantityError.toLowerCase()}` });
+          return false;
+        }
+      }
+      return true;
     });
     if (batchRows.length === 0) continue;
 
@@ -320,19 +348,54 @@ export async function updateVariants(
 
   // Same "invalid money" guard as bulkCreateVariants -- catch a bad price/compareAtPrice/retailPrice
   // here with a row-identifying message instead of letting Shopify's opaque error surface.
-  const invalidRows = rows.filter(
+  const invalidMoneyRows = rows.filter(
     (row) => !isValidMoney(row.price) || !isValidMoney(row.compareAtPrice) || !isValidMoney(row.retailPrice)
   );
-  for (const row of invalidRows) {
+  for (const row of invalidMoneyRows) {
     result.failed += 1;
     result.errors.push({
       field: null,
       message: `Row ${row.id}: price must be a plain number (e.g. "12.99"), got "${row.price}"`,
     });
   }
-  const validRows = rows.filter(
+  const moneyValidRows = rows.filter(
     (row) => isValidMoney(row.price) && isValidMoney(row.compareAtPrice) && isValidMoney(row.retailPrice)
   );
+
+  // Q-3: same "reject junk before it's stored" treatment as bulkCreateVariants -- an oversized/
+  // invalid description shouldn't reach Shopify's metafield write.
+  const descriptionValidRows = moneyValidRows.filter((row) => {
+    const invalid = validateVariantDescription(row.description);
+    if (invalid) {
+      result.failed += 1;
+      result.errors.push({ field: null, message: `Row ${row.id}: ${invalid}` });
+    }
+    return !invalid;
+  });
+
+  // A3 (PRODUCT_ERROR_HANDLING_REVIEW.md): `isValidMoney` above only checks the STRING FORMAT
+  // ("0.00" passes it), and the quantity below was parsed with `parseInt(...) || 0`, silently
+  // flooring "abc"/"" to stock=0 and letting a negative string through as a truthy value straight
+  // to Shopify's inventory mutations. Client-side validation (EditVariantsTable/VariantBulkTable)
+  // can't be the only guard -- this DAL is reachable via a direct POST to updateVariantsAction
+  // regardless of what the UI enforces. Reuses the exact same thresholds as the client checks.
+  const validRows = descriptionValidRows.filter((row) => {
+    const priceError = validatePriceInput(row.price);
+    if (priceError) {
+      result.failed += 1;
+      result.errors.push({ field: null, message: `Row ${row.id}: price ${priceError.toLowerCase()}` });
+      return false;
+    }
+    if (row.quantity !== undefined) {
+      const quantityError = validateQuantityInput(row.quantity);
+      if (quantityError) {
+        result.failed += 1;
+        result.errors.push({ field: null, message: `Row ${row.id}: quantity ${quantityError.toLowerCase()}` });
+        return false;
+      }
+    }
+    return true;
+  });
 
   const variants = await Promise.all(validRows.map(async (row) => {
     const metafields = [

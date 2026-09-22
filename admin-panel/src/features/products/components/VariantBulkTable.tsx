@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { bulkCreateVariantsAction } from '../actions';
+import { validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
 
 type Row = {
   id: number;
@@ -64,25 +65,17 @@ function validateRow(row: Row): RowErrors {
   // as soon as testing is done -- the backend (data/variants.ts) already treats image as optional
   // on its own, so this was purely a frontend guard.
 
-  const price = Number(row.price);
-  if (!row.price.trim()) {
-    errors.price = 'Required';
-  } else if (!Number.isFinite(price) || price <= 0) {
-    errors.price = 'Must be > 0';
-  }
+  const priceError = validatePriceInput(row.price);
+  if (priceError) errors.price = priceError;
 
-  const quantity = Number(row.quantity);
-  if (!row.quantity.trim()) {
-    errors.quantity = 'Required';
-  } else if (!Number.isInteger(quantity) || quantity <= 0) {
-    errors.quantity = 'Must be > 0';
-  }
+  const quantityError = validateQuantityInput(row.quantity);
+  if (quantityError) errors.quantity = quantityError;
 
   if (row.compareAtPrice.trim()) {
     const compareAtPrice = Number(row.compareAtPrice);
     if (!Number.isFinite(compareAtPrice)) {
       errors.compareAtPrice = 'Invalid number';
-    } else if (!errors.price && compareAtPrice >= price) {
+    } else if (!errors.price && compareAtPrice >= Number(row.price)) {
       errors.compareAtPrice = 'Must be < Price';
     }
   }

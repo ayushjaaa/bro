@@ -2,6 +2,7 @@
 
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { LOGIN_FAILED_MESSAGE, loginErrorMessage, parseLoginInput } from '@/lib/login-input';
 
 export type LoginResult = { ok: true } | { ok: false; message: string };
 
@@ -27,29 +28,59 @@ function getServiceRoleClient() {
  * storefront's `signInWithPassword` action for `customers`/`status`.
  */
 export async function signIn(email: string, password: string): Promise<LoginResult> {
+  // B3: the whole action wrapped in try/catch -- getServiceRoleClient() (and anything else here)
+  // throws synchronously on a misconfigured env, which would otherwise take down every login
+  // attempt with a raw exception instead of a clean message.
+  try {
+    return await signInChecks(email, password);
+  } catch (err) {
+    console.error('[login] unexpected error:', err);
+    return { ok: false, message: 'Something went wrong — please try again.' };
+  }
+}
+
+async function signInChecks(email: string, password: string): Promise<LoginResult> {
+  // Reachable by a direct POST: refuse anything that is not two sane strings, with the same
+  // message as a wrong password.
+  const input = parseLoginInput(email, password);
+  if (!input) return { ok: false, message: LOGIN_FAILED_MESSAGE };
+
   const supabase = await createSupabaseServerClient();
 
-  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  const { error: signInError } = await supabase.auth.signInWithPassword(input);
   if (signInError) {
-    return { ok: false, message: signInError.message };
+    // Never echo Supabase's text; only a throttling notice differs from "wrong email or password".
+    return { ok: false, message: loginErrorMessage(signInError.code) };
   }
 
   const { data, error } = await supabase.auth.getClaims();
-  if (error || !data?.claims?.email) {
+  if (error || !data?.claims?.sub) {
     await supabase.auth.signOut();
     return { ok: false, message: 'Something went wrong — please try again.' };
   }
 
   const service = getServiceRoleClient();
-  const { data: adminRow } = await service
+  const { data: adminRow, error: adminRowError } = await service
     .from('admin_users')
     .select('id')
-    .eq('email', data.claims.email as string)
+    .eq('user_id', data.claims.sub as string)
     .maybeSingle();
+
+  // B2: a transient DB/network failure on this query is NOT the same thing as "genuinely not an
+  // admin" -- conflating the two would sign out and misleadingly tell a legitimate admin "wrong
+  // password" during a service hiccup. Matches the pattern already established by
+  // admin-auth.ts's requireAdmin() and proxy.ts, both of which distinguish "could not verify"
+  // from "verified, not an admin". Session is intentionally left alone here (not signed out) --
+  // it's a real, valid session, just unverified; the admin can simply retry.
+  if (adminRowError) {
+    return { ok: false, message: 'Could not verify admin access — please try again.' };
+  }
 
   if (!adminRow) {
     await supabase.auth.signOut();
-    return { ok: false, message: 'This account does not have admin access.' };
+    // Same message as a wrong password: a specific "no admin access" would confirm to an attacker
+    // that the email + password they tried are valid (e.g. a storefront customer's).
+    return { ok: false, message: LOGIN_FAILED_MESSAGE };
   }
 
   return { ok: true };

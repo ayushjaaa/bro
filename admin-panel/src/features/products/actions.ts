@@ -7,9 +7,11 @@ import {
   publishProductLine,
   unpublishProductLine,
   listProductLinesPage,
+  PartialProductLineCreationError,
   type ProductLinesPage,
 } from '@/data/products';
 import { REGIONS } from '@/lib/regions';
+import { SafeActionError, safeActionError } from '@/lib/action-errors';
 import {
   bulkCreateVariants,
   updateVariants,
@@ -41,13 +43,25 @@ export async function createProductLineAction(formData: FormData) {
   const checkedRegionValues = new Set(formData.getAll('regions').map(String));
   const regions = REGIONS.filter((r) => checkedRegionValues.has(r.value));
 
-  await createProductLine({
-    title: String(formData.get('title') ?? ''),
-    brandId: String(formData.get('brandId') ?? ''),
-    filterValues,
-    regions,
-    image: fileOrUndefined(formData, 'image'),
-  });
+  try {
+    await createProductLine({
+      title: String(formData.get('title') ?? ''),
+      brandId: String(formData.get('brandId') ?? ''),
+      filterValues,
+      regions,
+      image: fileOrUndefined(formData, 'image'),
+    });
+  } catch (err) {
+    // A5: a partial failure means at least one region's real Shopify product already exists --
+    // tell the admin exactly which ones, don't just say "something went wrong" and hide that.
+    if (err instanceof PartialProductLineCreationError) {
+      const regionsCreated = err.created.map((c) => c.region).join(', ');
+      throw new SafeActionError(
+        `${err.message} Regions created: ${regionsCreated}. Check the Products list and Shopify admin before retrying -- do not resubmit the whole form.`
+      );
+    }
+    throw new SafeActionError(safeActionError(err, 'Failed to create Product Line. Please try again.', 'products:create'));
+  }
 
   revalidatePath('/products');
   redirect('/products');

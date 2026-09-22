@@ -52,7 +52,6 @@ const PROTECTED_EXACT_PATHS = [
   '/',
   '/products',
   '/products/attention',
-  '/products/bulk-add',
   '/products/new',
   '/taxonomy',
   '/customers',
@@ -72,6 +71,23 @@ function isKnownProtectedPath(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
+
+  // The whole body below is wrapped in try/catch: this middleware's matcher covers nearly every
+  // route site-wide, so an unexpected throw here (a corrupted cookie breaking JWT parsing, a
+  // missing env var) would otherwise be a total-outage bug, not just a broken page. Same fail-open
+  // reasoning as the existing claimsCheckFailed/lookupFailed branches below -- (dashboard)/
+  // layout.tsx's own requireAdmin() is the real security boundary and will make the authoritative
+  // call regardless of what this middleware decides.
+  try {
+    return await proxyChecks(request, response);
+  } catch (err) {
+    console.error('[proxy] unexpected error, failing open:', err);
+    return response;
+  }
+}
+
+async function proxyChecks(request: NextRequest, initialResponse: NextResponse): Promise<NextResponse> {
+  let response = initialResponse;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -97,15 +113,22 @@ export async function proxy(request: NextRequest) {
   // "AuthSessionMissingError" means there's genuinely no session; anything else gets one retry
   // before being treated as a real "not logged in" — same fix as requireAdmin() in admin-auth.ts.
   let email: string | undefined;
+  let userId: string | undefined;
   let claimsCheckFailed = false;
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data, error } = await supabase.auth.getClaims();
     if (!error && data?.claims?.email) {
       email = data.claims.email as string;
+      userId = data.claims.sub as string;
       claimsCheckFailed = false;
       break;
     }
     if (error?.name === 'AuthSessionMissingError') {
+      break;
+    }
+    // No session at all comes back as { data: null, error: null } -- "not logged in", not a failure
+    // (otherwise a logged-out visitor is let through to the layout's "couldn't verify" page).
+    if (!error && !data) {
       break;
     }
     claimsCheckFailed = true;
@@ -123,7 +146,7 @@ export async function proxy(request: NextRequest) {
       return response;
     }
 
-    if (!email) {
+    if (!email || !userId) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
@@ -146,7 +169,7 @@ export async function proxy(request: NextRequest) {
       const { data, error } = await service
         .from('admin_users')
         .select('id')
-        .eq('email', email)
+        .eq('user_id', userId)
         .maybeSingle();
       if (!error) {
         adminRow = data;

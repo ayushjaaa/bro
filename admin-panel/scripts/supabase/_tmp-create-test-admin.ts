@@ -20,7 +20,16 @@ async function main() {
   }
   console.log(`user ready: ${email} / ${password}`);
 
-  const { error: insertError } = await supabase.from('admin_users').insert({ email });
+  // admin_users rows are keyed by Auth user id (025). createUser returns it for a new user; for an
+  // already-registered one, look it up.
+  let userId = data?.user?.id;
+  if (!userId) {
+    const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    userId = list?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id;
+  }
+  if (!userId) throw new Error(`could not find auth user id for ${email}`);
+
+  const { error: insertError } = await supabase.from('admin_users').insert({ email, user_id: userId });
   if (insertError && insertError.code !== '23505') {
     throw new Error(`admin_users insert failed: ${insertError.message}`);
   }

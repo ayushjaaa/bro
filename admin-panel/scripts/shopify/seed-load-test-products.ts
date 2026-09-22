@@ -391,7 +391,9 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, attempt = 1): P
 }
 
 function productTypeFor(item: PlanItem): string {
-  return item.product.category === 'Disposable Vape' ? 'Standard Disposable Vapes' : 'Freebase E-Liquid';
+  // Must equal the storefront sub-category NAME: the listing query is product_type:"<sub-category name>".
+  // ('Freebase E-Liquid' matched nothing -- the 406 e-liquid test products were invisible until fixed.)
+  return item.product.category === 'Disposable Vape' ? 'Disposable Vapes' : 'E-Liquids / Vape Juice';
 }
 
 function metafieldsFor(item: PlanItem): Array<{ namespace: string; key: string; type: string; value: string }> {

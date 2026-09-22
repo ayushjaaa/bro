@@ -1,16 +1,13 @@
-import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { listCategories, listSubcategories, listBrands } from '@/data/taxonomy';
 import { listProductLines } from '@/data/products';
 import { requireAdmin } from '@/data/admin-auth';
 import { checkWebhookHealth } from '@/data/webhook-health';
+import { getDashboardHealthSnapshots } from '@/data/dashboard-health';
 import DashboardHero from '@/features/dashboard/components/DashboardHero';
 import LiveDashboardStats, { type FunnelStage } from '@/features/dashboard/components/LiveDashboardStats';
 import CatalogStatCards from '@/features/dashboard/components/CatalogStatCards';
 import AttentionAndPublishedRate from '@/features/dashboard/components/AttentionAndPublishedRate';
-import ProductHealthPanel, {
-  type ProductHealthRow,
-  type VariantSkuRow,
-} from '@/features/dashboard/components/ProductHealthPanel';
+import ProductHealthPanel from '@/features/dashboard/components/ProductHealthPanel';
 import RecentlyUpdatedCard from '@/features/dashboard/components/RecentlyUpdatedCard';
 import WebhookHealthBadge from '@/features/dashboard/components/WebhookHealthBadge';
 import ConversionFunnel from '@/features/dashboard/components/ConversionFunnel';
@@ -20,31 +17,19 @@ import { getFunnelStats } from '@/data/funnel';
 import { buildAttentionData } from '@/features/dashboard/lib/attention';
 import { ScrollReveal } from '@/components/ScrollReveal';
 
-function getReadOnlyClient() {
-  // Both tables allow public SELECT via RLS (see 003/004 migrations) -- service role is used here
-  // purely for convenience in a Server Component, not because the data is sensitive.
-  return createServiceRoleClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export default async function OverviewPage() {
-  const [admin, categories, subcategories, brands, products, webhookHealth, funnelStats] = await Promise.all([
-    requireAdmin(),
-    listCategories(),
-    listSubcategories(),
-    listBrands(),
-    listProductLines(),
-    checkWebhookHealth(),
-    getFunnelStats(),
-  ]);
-
-  const supabase = getReadOnlyClient();
-  const [{ data: productHealthRows }, { data: skuIndexRows }] = await Promise.all([
-    supabase.from('product_health_snapshot').select('*'),
-    supabase.from('variant_sku_index').select('*'),
-  ]);
+  const [admin, categories, subcategories, brands, products, webhookHealth, funnelStats, dashboardHealth] =
+    await Promise.all([
+      requireAdmin(),
+      listCategories(),
+      listSubcategories(),
+      listBrands(),
+      listProductLines(),
+      checkWebhookHealth(),
+      getFunnelStats(),
+      getDashboardHealthSnapshots(),
+    ]);
+  const { productHealthRows, skuIndexRows } = dashboardHealth;
 
   const totalFlavours = products.reduce((sum, p) => sum + p.variantCount, 0);
   const incomplete = products.filter((p) => p.variantCount === 0);
@@ -126,15 +111,15 @@ export default async function OverviewPage() {
         </ScrollReveal>
 
         <ScrollReveal>
-          <RecentlyUpdatedCard initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]} />
+          <RecentlyUpdatedCard initialProductHealth={productHealthRows} />
         </ScrollReveal>
 
         {/* Everything below here is domain-specific content the mockup doesn't cover --
            kept after the mockup-matched sections rather than interleaved with them. */}
         <ScrollReveal>
           <ProductHealthPanel
-            initialProductHealth={(productHealthRows ?? []) as ProductHealthRow[]}
-            initialSkuIndex={(skuIndexRows ?? []) as VariantSkuRow[]}
+            initialProductHealth={productHealthRows}
+            initialSkuIndex={skuIndexRows}
             allBrands={brands.map((b) => ({ id: b.id, name: b.name }))}
             allSubcategories={subcategories.map((s) => ({ id: s.id, name: s.name }))}
           />

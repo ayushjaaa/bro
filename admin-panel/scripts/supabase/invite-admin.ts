@@ -59,7 +59,7 @@ async function main() {
 
   const { error: insertError } = await supabase
     .from('admin_users')
-    .insert({ email })
+    .insert({ email, user_id: data.user.id })
     .select()
     .single();
 

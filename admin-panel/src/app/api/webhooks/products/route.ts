@@ -43,6 +43,15 @@ async function handleDelete(productGid: string) {
 async function handleCreateOrUpdate(payload: RestProductPayload) {
   const productGid = `gid://shopify/Product/${payload.id}`;
 
+  // A4: a webhook payload shape Shopify changes, or a non-standard delivery, could otherwise throw
+  // TypeError deep inside this unawaited, uncaught function (this call site is `void`'d for the
+  // 5s-timeout reason above -- see POST -- so a throw here becomes a silent, unlogged unhandled
+  // rejection unless it's guarded here directly).
+  if (!Array.isArray(payload.images) || !Array.isArray(payload.variants)) {
+    console.error('[products-webhook] malformed payload, skipping:', { id: payload.id });
+    return;
+  }
+
   // Reliable directly from the payload -- no re-query needed for these.
   const hasImage = payload.images.length > 0;
   const variantCount = payload.variants.length;
@@ -118,11 +127,18 @@ export async function POST(request: NextRequest) {
     const payload = JSON.parse(rawBody);
 
     // Not awaited -- the taxonomy re-query + two Supabase writes must never risk Shopify's 5s
-    // delivery timeout (same reasoning as the inventory route's fire-and-forget reconcile).
+    // delivery timeout (same reasoning as the inventory route's fire-and-forget reconcile). A4:
+    // `.catch()` here (not a bare `void`) so a thrown exception inside either handler is at least
+    // logged instead of vanishing as a silent unhandled rejection after this route already
+    // returned 200.
     if (topic === 'products/delete') {
-      void handleDelete(`gid://shopify/Product/${payload.id}`);
+      void handleDelete(`gid://shopify/Product/${payload.id}`).catch((err) =>
+        console.error('[products-webhook] handleDelete failed:', err)
+      );
     } else {
-      void handleCreateOrUpdate(payload as RestProductPayload);
+      void handleCreateOrUpdate(payload as RestProductPayload).catch((err) =>
+        console.error('[products-webhook] handleCreateOrUpdate failed:', err)
+      );
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

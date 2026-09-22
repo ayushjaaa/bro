@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateVariantsAction } from '../actions';
 import AddStockButton from './AddStockButton';
 import { useInventorySnapshotSync } from '../hooks/useInventorySnapshotSync';
+import { validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
 
 type Row = {
   id: string;
@@ -35,6 +36,21 @@ export type EditableVariant = {
   isActivatedAtLocation: boolean;
   flavourDescription: string | null;
 };
+
+/** A3 (PRODUCT_ERROR_HANDLING_REVIEW.md): unlike VariantBulkTable, this table previously had ZERO
+ * client-side validation on Price/Quantity -- typing "abc" silently became stock=0 server-side
+ * (`parseInt(...) || 0`), and "0.00" passed the server's own `isValidMoney` check, silently
+ * zeroing a live variant's wholesale price with no guard. Reuses the exact same shared checks
+ * `VariantBulkTable.tsx` uses (`lib/variant-input.ts`) so both tables enforce one rule, not two
+ * parallel (and previously inconsistent) ones. */
+function validateRow(row: Row): { price?: string; quantity?: string } {
+  const errors: { price?: string; quantity?: string } = {};
+  const priceError = validatePriceInput(row.price);
+  if (priceError) errors.price = priceError;
+  const quantityError = validateQuantityInput(row.quantity);
+  if (quantityError) errors.quantity = quantityError;
+  return errors;
+}
 
 /** Non-blocking warning, mirrors VariantBulkTable's rowRetailWarning -- retail should normally be
  * at or above wholesale, but a legitimate reason to deviate (e.g. clearance) could exist. */
@@ -152,19 +168,23 @@ export default function EditVariantsTable({
   }
 
   function saveOneRow(row: Row) {
+    // A3: guard here too, not just via the button's `disabled` -- belt and braces against a stale
+    // render calling this directly.
+    if (Object.keys(validateRow(row)).length > 0) return;
     setPendingRowId(row.id);
     saveRows([row], new Set([row.id])).finally(() => setPendingRowId(null));
   }
 
   function saveAll() {
     const dirtyRows = rows.filter((r) => r.dirty);
-    if (dirtyRows.length === 0) return;
+    if (dirtyRows.length === 0 || dirtyRows.some((r) => Object.keys(validateRow(r)).length > 0)) return;
     startSavingAll(() => {
       saveRows(dirtyRows, new Set(dirtyRows.map((r) => r.id)));
     });
   }
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
+  const hasInvalidDirtyRow = rows.some((r) => r.dirty && Object.keys(validateRow(r)).length > 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -183,7 +203,9 @@ export default function EditVariantsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {rows.map((row, i) => (
+            {rows.map((row, i) => {
+              const rowErrors = validateRow(row);
+              return (
               <tr key={row.id} className={row.dirty ? 'bg-amber-50/40' : undefined}>
                 <td className="px-3 py-1.5 text-neutral-800">{row.title}</td>
                 <td className="px-2 py-1.5">
@@ -197,8 +219,11 @@ export default function EditVariantsTable({
                   <input
                     value={row.price}
                     onChange={(e) => updateRow(i, { price: e.target.value })}
-                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
+                    className={`w-16 rounded border px-1.5 py-1 text-xs ${
+                      rowErrors.price ? 'border-red-400' : 'border-neutral-300'
+                    }`}
                   />
+                  {rowErrors.price && <p className="text-[10px] text-red-600 mt-0.5">{rowErrors.price}</p>}
                 </td>
                 <td className="px-2 py-1.5">
                   <input
@@ -223,8 +248,13 @@ export default function EditVariantsTable({
                   <input
                     value={row.quantity}
                     onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                    className="w-16 rounded border border-neutral-300 px-1.5 py-1 text-xs"
+                    className={`w-16 rounded border px-1.5 py-1 text-xs ${
+                      rowErrors.quantity ? 'border-red-400' : 'border-neutral-300'
+                    }`}
                   />
+                  {rowErrors.quantity && (
+                    <p className="text-[10px] text-red-600 mt-0.5">{rowErrors.quantity}</p>
+                  )}
                   <div className="mt-1">
                     <AddStockButton
                       productId={productId}
@@ -254,14 +284,15 @@ export default function EditVariantsTable({
                   <button
                     type="button"
                     onClick={() => saveOneRow(row)}
-                    disabled={!row.dirty || pendingRowId === row.id}
+                    disabled={!row.dirty || pendingRowId === row.id || Object.keys(rowErrors).length > 0}
                     className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-40 disabled:no-underline"
                   >
                     {pendingRowId === row.id ? 'Saving...' : 'Save'}
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -270,12 +301,15 @@ export default function EditVariantsTable({
         <button
           type="button"
           onClick={saveAll}
-          disabled={dirtyCount === 0 || savingAll}
+          disabled={dirtyCount === 0 || savingAll || hasInvalidDirtyRow}
           className="rounded-md bg-emerald-600 text-white text-xs font-medium px-4 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
         >
           {savingAll ? 'Saving...' : `Save All Changes (${dirtyCount})`}
         </button>
         {dirtyCount === 0 && <span className="text-xs text-neutral-400">No unsaved changes.</span>}
+        {hasInvalidDirtyRow && dirtyCount > 0 && (
+          <span className="text-xs text-red-600">Fix the highlighted errors before saving.</span>
+        )}
       </div>
 
       {result && (

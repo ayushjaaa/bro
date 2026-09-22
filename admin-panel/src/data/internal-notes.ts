@@ -1,6 +1,9 @@
 import 'server-only';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { requireAdmin } from './admin-auth';
+import { SafeActionError } from '@/lib/action-errors';
+import { validateNoteBody } from '@/lib/note-input';
+export { validateNoteBody };
 
 /**
  * Staff-only notes on a customer account or an individual order -- own table
@@ -56,6 +59,8 @@ export async function listNotes(entityType: NoteEntityType, entityId: string): P
 
 export async function createNote(entityType: NoteEntityType, entityId: string, body: string): Promise<InternalNote> {
   const admin = await requireAdmin();
+  const invalid = validateNoteBody(body);
+  if (invalid) throw new SafeActionError(invalid);
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('internal_notes')

@@ -1,14 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getShopifyCustomerIdForCustomer, getCustomerOrderContactInfo } from '@/data/customer-shopify-id';
 import { getDraftOrderDetail } from '@/lib/shopify/customer-orders';
-import { isInternalRequestAuthorized } from '@/lib/internal-auth';
+import { isInternalRequestAuthorized, MAX_INTERNAL_JSON_BODY_CHARS } from '@/lib/internal-auth';
 
 // timingSafeEqual (inside isInternalRequestAuthorized) needs Node's crypto, not available on the
 // edge runtime.
 export const runtime = 'nodejs';
 
+const SECRET_ENV = 'INTERNAL_ORDER_HISTORY_SECRET';
+
 /**
  * Trusted internal endpoint -- same shared-secret pattern as the other /api/internal/* routes.
+ *
+ * W-1: uses its OWN secret (`INTERNAL_ORDER_HISTORY_SECRET`, shared with customer-orders, not
+ * with create-draft-order) -- this route returns a customer's full name/email/phone/address on
+ * top of order line items, so a leak of the draft-order secret must not also expose this.
+ *
  * Takes this app's own Supabase `customerId` (never a Shopify Customer GID) plus the Draft Order
  * GID the customer clicked in their order history, and returns that order's full detail ONLY if
  * `getDraftOrderDetail` confirms it actually belongs to them -- a 404 here covers both "no such
@@ -16,13 +23,18 @@ export const runtime = 'nodejs';
  * on why those two cases must never be distinguishable to the caller).
  */
 export async function POST(request: NextRequest) {
-  if (!isInternalRequestAuthorized(request)) {
+  if (!isInternalRequestAuthorized(request, SECRET_ENV)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  const text = await request.text();
+  if (text.length > MAX_INTERNAL_JSON_BODY_CHARS) {
+    return NextResponse.json({ error: 'request too large' }, { status: 413 });
   }
 
   let body: { customerId?: string; orderId?: string };
   try {
-    body = await request.json();
+    body = JSON.parse(text);
   } catch {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
   }
@@ -30,12 +42,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'missing required fields: customerId, orderId' }, { status: 400 });
   }
 
-  const shopifyCustomerId = await getShopifyCustomerIdForCustomer(body.customerId);
-  if (!shopifyCustomerId) {
-    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-  }
-
   try {
+    const shopifyCustomerId = await getShopifyCustomerIdForCustomer(body.customerId);
+    if (!shopifyCustomerId) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
     const order = await getDraftOrderDetail(body.orderId, shopifyCustomerId);
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
