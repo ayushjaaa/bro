@@ -65,7 +65,7 @@ ground truth, not to be re-derived from scratch each time)
 - **A3** Retail login: sees retail price (or wholesale, if `custom.retail_price` metafield is unset
   on that specific variant — verified fallback behavior, not a bug).
 - **A4** Pending/rejected `customers.status`: treated as logged out for purchase purposes (existing
-  coverage: `e2e/login-rejection.spec.ts`, `e2e/session-invalidation.spec.ts`).
+  coverage: `e2e/auth/login-rejection.spec.ts`, `e2e/auth/session-invalidation.spec.ts`).
 
 ### B. Product page (PDP)
 - **B1** Correct price shown per account type, per product (both Price Test products).

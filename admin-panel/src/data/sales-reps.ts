@@ -40,7 +40,7 @@ export async function createSalesRep(input: { name: string; phone: string; email
   const invalid = validateSalesRepInput(input);
   if (invalid) throw new SafeActionError(invalid);
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase.from('sales_reps').insert(input).select('*').single();
+  const { data, error } = await supabase.from('sales_reps').insert({ name: input.name, phone: input.phone, email: input.email }).select('*').single();
   if (error || !data) throw new Error(error?.message ?? 'Failed to create sales rep');
   return toSalesRep(data);
 }
@@ -56,7 +56,7 @@ export async function updateSalesRep(
   const invalid = validateSalesRepInput(input);
   if (invalid) throw new SafeActionError(invalid);
   const supabase = getServiceRoleClient();
-  const { data, error } = await supabase.from('sales_reps').update(input).eq('id', id).select('*').single();
+  const { data, error } = await supabase.from('sales_reps').update({ name: input.name, phone: input.phone, email: input.email }).eq('id', id).select('*').single();
   if (error || !data) throw new Error(error?.message ?? 'Failed to update sales rep');
   return toSalesRep(data);
 }

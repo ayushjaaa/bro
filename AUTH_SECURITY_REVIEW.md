@@ -56,7 +56,7 @@ Docs used: Next.js (`node_modules/next/dist/docs/01-app/02-guides/data-security.
 ## To close everything
 1. Run `018` then `019` in the Supabase SQL editor, then `npm run test:security` — every test should be green.
 2. Dashboard: CAPTCHA, decide Confirm email, rotate the Google secret, reset the admin password.
-3. Re-run: `npm run test:unit`, `npm run test:security`, `npx playwright test e2e/auth-*.spec.ts`.
+3. Re-run: `npm run test:unit`, `npm run test:security`, `npx playwright test e2e/auth`.
 
 ## Server-action gate guard rail
 `tests/unit/server-action-gates.test.ts` walks every `'use server'` file: each exported action must check

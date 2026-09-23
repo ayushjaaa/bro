@@ -6,7 +6,7 @@ Three layers, because each catches different things:
 |---|---|---|---|
 | **Unit** | `storefront/tests/unit` | Pure logic: intent cookie, error copy, email escaping, application validation | `npm run test:unit` |
 | **Server-side / security** | `storefront/tests/security` | The real Supabase rules (RLS, Auth, Storage) — what actually stops an attacker, with no UI involved | `npm run test:security` |
-| **End-to-end (Playwright)** | `storefront/e2e/auth-*.spec.ts` | The whole app in a browser: wizards, login modal, callback, access gate, logout | `npx playwright test e2e/auth-*.spec.ts` |
+| **End-to-end (Playwright)** | `storefront/e2e/auth/*.spec.ts` | The whole app in a browser: wizards, login modal, callback, access gate, logout | `npx playwright test e2e/auth-*.spec.ts` |
 
 All test users are `e2e-auth-*@e2e.test.internal` / `e2e-sec-*@e2e.test.internal` and are deleted afterwards.
 Tests tagged `[needs 018]` / `[needs 019]` fail until `admin-panel/scripts/supabase/018` / `019` are run — a red one is a live hole.
@@ -43,13 +43,13 @@ as a user with a real session and no `customers` row — the app decides from th
 - **Least privilege [020]:** non-approved users can't read `sales_reps`; approved customers still can; `email_registered()` returns only true/false (case-insensitive) and doesn't open `customers` to anon.
 
 ## End-to-end (`e2e/`)
-**`auth-login.spec.ts` (9)** approved logs in; pending / rejected / no-application messages; wrong password + Google hint; unknown email = same message (no enumeration); failed login leaves no session; Google button → `prompt=select_account`, exact `redirect_to`, and a server-set HttpOnly SameSite=Lax intent cookie.
+**`login.spec.ts` (9)** approved logs in; pending / rejected / no-application messages; wrong password + Google hint; unknown email = same message (no enumeration); failed login leaves no session; Google button → `prompt=select_account`, exact `redirect_to`, and a server-set HttpOnly SameSite=Lax intent cookie.
 
-**`auth-callback.spec.ts` (17)** no code → `missing_code`; `error=access_denied` → `cancelled`; bad code → `exchange_failed` (no 500); forged register cookie can't create a session; **open-redirect params ignored**; no session cookie on failure; every `login_error` reason renders in the login modal; unknown / `constructor` / `__proto__` → generic; param removed from the URL; **no reflected XSS**.
+**`callback.spec.ts` (17)** no code → `missing_code`; `error=access_denied` → `cancelled`; bad code → `exchange_failed` (no 500); forged register cookie can't create a session; **open-redirect params ignored**; no session cookie on failure; every `login_error` reason renders in the login modal; unknown / `constructor` / `__proto__` → generic; param removed from the URL; **no reflected XSS**.
 
-**`auth-registration.spec.ts` (22)** — every scenario once for **wholesale (`/apply`)** and once for **retail (`/register/retailer`)**: chooser first; Google button sends `register:<type>`; password mismatch; **taken email refused on step 1** (and ignoring capitals); fresh email advances; **full password application saved with the right `account_type`, pending, licence stored, applicant not left logged in**; Google applicant → locked email / no password / no chooser; **full Google application saved with the session email and right type, then signed out**; existing account → "You already have an account". Plus cross-wizard (Google applicant on the retail page is saved as retail) and **double-click Submit → exactly one row**.
+**`registration.spec.ts` (22)** — every scenario once for **wholesale (`/apply`)** and once for **retail (`/register/retailer`)**: chooser first; Google button sends `register:<type>`; password mismatch; **taken email refused on step 1** (and ignoring capitals); fresh email advances; **full password application saved with the right `account_type`, pending, licence stored, applicant not left logged in**; Google applicant → locked email / no password / no chooser; **full Google application saved with the session email and right type, then signed out**; existing account → "You already have an account". Plus cross-wizard (Google applicant on the retail page is saved as retail) and **double-click Submit → exactly one row**.
 
-**`auth-session.spec.ts` (9)** Google applicant mid-wizard is a guest (price hidden, `/checkout` and `/account` closed, navbar shows Log in); pending and rejected sessions can't see prices or check out; approved sees the price; logout returns to guest; **logout in one tab logs out the other tab without reload**; Back after logout doesn't show the private page.
+**`session.spec.ts` (9)** Google applicant mid-wizard is a guest (price hidden, `/checkout` and `/account` closed, navbar shows Log in); pending and rejected sessions can't see prices or check out; approved sees the price; logout returns to guest; **logout in one tab logs out the other tab without reload**; Back after logout doesn't show the private page.
 
 Existing suites still cover: `guest`, `approved-flow`, `login-rejection`, `session-invalidation`, `concurrent-status-change`, `backend-direct`, `cross-app-credentials`.
 
