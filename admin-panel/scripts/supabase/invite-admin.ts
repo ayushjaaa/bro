@@ -30,7 +30,7 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
   async function tryGenerateLink(type: 'invite' | 'recovery') {
     return supabase.auth.admin.generateLink({ type, email });
