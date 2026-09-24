@@ -15,6 +15,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Flavor Admin",
   description: "Product add & taxonomy navigation admin panel",
+  // Staff-only: never let search engines list any admin page.
+  robots: { index: false, follow: false },
 };
 
 // Minimal by design (per ADMIN_PANEL_IMPLEMENTATION.md §2) — no Sidebar/TopBar here, so that
