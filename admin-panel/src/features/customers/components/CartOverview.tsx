@@ -27,24 +27,37 @@ function resolveVariantPrice(detail: VariantDetail, accountType: 'retail' | 'who
 }
 
 /** Sum of price × quantity across a customer's cart lines, priced at THAT customer's own account
- * type -- `null` if any line's price hasn't resolved yet (e.g. the variant details fetch for this
- * page is still catching up), so the UI can show "calculating…" instead of a silently wrong
- * partial total. Assumes a single currency across all lines (true for this store), using whichever
- * line resolves first. */
+ * type. Variant details are resolved on the server before render (and replaced together with the
+ * items on every refetch), so a line with no detail here isn't "still loading" -- its variant no
+ * longer exists in Shopify (deleted/archived product). Those lines are counted in `unavailable`
+ * instead of blocking the total forever. Assumes a single currency across all lines (true for
+ * this store), using whichever line resolves first. */
 function computeCartTotal(
   cartItems: CartSnapshotRow[],
   variantDetailById: Map<string, VariantDetail>,
   accountType: 'retail' | 'wholesale'
-): { amount: number; currencyCode: string } | null {
+): { amount: number; currencyCode: string; resolved: number; unavailable: number } {
   let amount = 0;
   let currencyCode: string | null = null;
+  let resolved = 0;
+  let unavailable = 0;
   for (const item of cartItems) {
     const detail = variantDetailById.get(item.variant_id);
-    if (!detail) return null;
+    if (!detail) {
+      unavailable += 1;
+      continue;
+    }
     amount += resolveVariantPrice(detail, accountType) * item.quantity;
     currencyCode ??= detail.currencyCode;
+    resolved += 1;
   }
-  return { amount, currencyCode: currencyCode ?? 'CAD' };
+  return { amount, currencyCode: currencyCode ?? 'CAD', resolved, unavailable };
+}
+
+function formatCartTotal(total: ReturnType<typeof computeCartTotal>): string {
+  if (total.resolved === 0) return total.unavailable > 0 ? 'unavailable (product removed from store)' : formatMoney(0, total.currencyCode);
+  const money = formatMoney(total.amount, total.currencyCode);
+  return total.unavailable > 0 ? `${money} + ${total.unavailable} unavailable` : money;
 }
 
 type CartEventRow = {
@@ -375,12 +388,11 @@ export default function CartOverview({
                     );
                   })}
                 </ul>
-                {/* Real total, not just an item count -- computed from resolved prices, shown
-                   only once every line's price is known so it's never a silently wrong partial
-                   sum. */}
+                {/* Real total from resolved prices; lines whose product is gone from Shopify are
+                   flagged as unavailable rather than silently dropped. */}
                 <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center justify-end">
                   <span className="text-xs font-semibold text-neutral-800">
-                    Total: {total ? formatMoney(total.amount, total.currencyCode) : 'calculating…'}
+                    Total: {formatCartTotal(total)}
                   </span>
                 </div>
               </button>
@@ -520,7 +532,7 @@ function CustomerActivityModal({
               </ul>
               <div className="mt-2 pt-2 border-t border-neutral-200 flex items-center justify-end mb-4">
                 <span className="text-sm font-semibold text-neutral-800">
-                  Total: {total ? formatMoney(total.amount, total.currencyCode) : 'calculating…'}
+                  Total: {formatCartTotal(total)}
                 </span>
               </div>
             </>
