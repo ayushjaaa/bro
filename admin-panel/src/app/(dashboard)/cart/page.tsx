@@ -1,5 +1,5 @@
 import { listCustomerCartsPage, listCartSnapshotForCustomers, listCartActivity } from '@/data/customers';
-import { listProductLines, getProductTitlesByIds, getVariantDetailsByIds } from '@/data/products';
+import { getProductTitlesByIds, getVariantDetailsByIds } from '@/data/products';
 import CartOverview, { PAGE_SIZE } from '@/features/customers/components/CartOverview';
 
 /**
@@ -17,32 +17,27 @@ import CartOverview, { PAGE_SIZE } from '@/features/customers/components/CartOve
  * calling getCustomerCartsPageAction.
  */
 export default async function CartPage() {
-  const firstPage = await listCustomerCartsPage({ limit: PAGE_SIZE, offset: 0 });
-  const [items, cartActivity, productLines] = await Promise.all([
-    listCartSnapshotForCustomers(firstPage.customers.map((c) => c.customerId)),
+  // Activity doesn't depend on the page of customers, so it runs alongside the RPC instead of after it.
+  const [firstPage, cartActivity] = await Promise.all([
+    listCustomerCartsPage({ limit: PAGE_SIZE, offset: 0 }),
     listCartActivity(),
-    listProductLines(),
   ]);
+  const items = await listCartSnapshotForCustomers(firstPage.customers.map((c) => c.customerId));
 
-  const productTitleById = new Map(productLines.map((p) => [p.id, p.title]));
-
-  // cart_snapshot/cart_events can reference products outside listProductLines()'s newest-100
-  // window (deleted, unpublished, or just old) -- resolve those specific ids directly rather than
-  // showing their bare Shopify numeric id in the UI.
-  const referencedProductIds = new Set([
-    ...items.map((r) => r.product_id),
-    ...cartActivity.map((e) => e.productId).filter((id): id is string => id !== null),
+  // Resolve exactly the referenced products/variants (no listProductLines() -- that pulls 100
+  // products x 250 variants + taxonomy metaobjects from Shopify just to read titles, and was the
+  // slowest step on this page). Both lookups are independent, so they run in parallel; variant
+  // details already carry the flavour, product title and price the cart list + totals need.
+  const productIds = [
+    ...new Set([
+      ...items.map((r) => r.product_id),
+      ...cartActivity.map((e) => e.productId).filter((id): id is string => id !== null),
+    ]),
+  ];
+  const [productTitleById, variantDetailById] = await Promise.all([
+    getProductTitlesByIds(productIds),
+    getVariantDetailsByIds(items.map((i) => i.variant_id)),
   ]);
-  const missingProductIds = [...referencedProductIds].filter((id) => !productTitleById.has(id));
-  if (missingProductIds.length > 0) {
-    const resolved = await getProductTitlesByIds(missingProductIds);
-    for (const [id, title] of resolved) productTitleById.set(id, title);
-  }
-
-  // Flavour name + price per line, keyed by variant_id -- resolved for every item on this
-  // initial page so the cart list and subtotal are correct on first render, not just after a
-  // client refetch.
-  const variantDetailById = await getVariantDetailsByIds(items.map((i) => i.variant_id));
 
   return (
     <div className="flex flex-col gap-8">

@@ -117,12 +117,14 @@ export async function getCustomerCartsPageAction(params: {
 
   const knownTitles = new Map(params.knownProductTitles);
   const missingIds = [...new Set(items.map((i) => i.product_id))].filter((id) => !knownTitles.has(id));
-  const resolved = missingIds.length > 0 ? await getProductTitlesByIds(missingIds) : new Map<string, string>();
-
   const knownVariants = new Map(params.knownVariantDetails);
   const missingVariantIds = [...new Set(items.map((i) => i.variant_id))].filter((id) => !knownVariants.has(id));
-  const resolvedVariants =
-    missingVariantIds.length > 0 ? await getVariantDetailsByIds(missingVariantIds) : new Map<string, VariantDetail>();
+
+  // Independent Shopify lookups -- run together rather than one after the other.
+  const [resolved, resolvedVariants] = await Promise.all([
+    missingIds.length > 0 ? getProductTitlesByIds(missingIds) : new Map<string, string>(),
+    missingVariantIds.length > 0 ? getVariantDetailsByIds(missingVariantIds) : new Map<string, VariantDetail>(),
+  ]);
 
   return {
     customers,
