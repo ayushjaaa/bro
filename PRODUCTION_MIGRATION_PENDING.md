@@ -308,6 +308,16 @@ so nothing gets missed before this goes live.
       migration (`_tmp-check-currency.ts`, `_tmp-check-quebec-price.ts`, `_tmp-check-scopes.ts`,
       `_tmp-list-locations.ts`, `_tmp-check-wholesaler-cart.ts` under `scripts/supabase/`, etc.) —
       fine to keep as debug tooling, but worth a pass to delete ones that were truly one-off.
+- [ ] **Storefront is temporarily blocked from search-engine crawling/indexing (2026-09-30)** while
+      the site is still being actively built — `storefront/src/app/robots.ts` now disallows `/`
+      sitewide (was an allow-list with specific disallowed paths), and `storefront/src/app/
+      layout.tsx`'s `metadata` now sets `robots: { index: false, follow: false }` as a
+      belt-and-suspenders in case a crawler doesn't fully respect `robots.txt`. The Google Search
+      Console site-verification file (`public/google9af4b3b3530b7e1a.html`) was also removed from
+      the repo. **Before going live**: revert `robots.ts` to its previous allow-list (commented
+      inline in the file), remove the `robots` key from `layout.tsx`'s metadata, and re-add the
+      Search Console verification file (or re-verify the property fresh) so the real site gets
+      indexed and Search Console can track it.
 - [ ] **Location's Shipping / Local delivery / Pickup in store toggles turned on but left
       unconfigured (no zones/rates/radius/instructions filled in yet).** Not urgent for the current
       order flow — see "Draft order flow vs. native checkout" note below for why — but should be
