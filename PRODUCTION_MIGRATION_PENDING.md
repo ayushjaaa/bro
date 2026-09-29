@@ -318,6 +318,16 @@ so nothing gets missed before this goes live.
       inline in the file), remove the `robots` key from `layout.tsx`'s metadata, and re-add the
       Search Console verification file (or re-verify the property fresh) so the real site gets
       indexed and Search Console can track it.
+      **Search Console property itself**: `geminidistribution.ca` is added as a Domain property,
+      verified via DNS (`search.google.com/search-console` → property dropdown → Settings →
+      Ownership verification shows "Domain name provider — Successfully verified"), not via the
+      HTML file above — removing that file did not affect this property's verification. Since
+      crawling is already blocked at the code level (`robots.ts`/`layout.tsx` above), leaving this
+      property as-is is harmless and optional to touch. If it should be removed for now: property
+      switcher dropdown (top-left) → hover the property row → gear/settings icon → "Remove
+      property" (this only unlists it from Search Console + stops data collection; the underlying
+      DNS verification record stays valid, so re-adding it later at launch is instant, no
+      re-verification needed).
 - [ ] **Location's Shipping / Local delivery / Pickup in store toggles turned on but left
       unconfigured (no zones/rates/radius/instructions filled in yet).** Not urgent for the current
       order flow — see "Draft order flow vs. native checkout" note below for why — but should be
