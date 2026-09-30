@@ -12,6 +12,10 @@ export function Field({ label, value }: { label: string; value: string | null })
 export function StatusBadge({ status }: { status: Customer['status'] }) {
   const styles = {
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    // Transient (030 migration): between an admin claiming a pending row for approval and the
+    // Shopify call + finalize completing -- should almost never be visible for more than a
+    // moment, but a fetch can genuinely see it.
+    approving: 'bg-sky-50 text-sky-700 border-sky-200',
     approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     rejected: 'bg-neutral-100 text-neutral-500 border-neutral-200',
   }[status];

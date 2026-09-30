@@ -41,8 +41,8 @@ export default function ProductHealthPanel({
   allBrands: { id: string; name: string }[];
   allSubcategories: { id: string; name: string }[];
 }) {
-  const products = [...useLiveTable('product_health_snapshot', 'product_id', initialProductHealth).values()];
-  const skus = [...useLiveTable('variant_sku_index', 'variant_id', initialSkuIndex).values()];
+  const products = [...useLiveTable('product_health_snapshot', 'product_id', initialProductHealth).rows.values()];
+  const skus = [...useLiveTable('variant_sku_index', 'variant_id', initialSkuIndex).rows.values()];
 
   if (products.length === 0) {
     return (

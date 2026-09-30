@@ -12,7 +12,7 @@ import type { ProductHealthRow } from './ProductHealthPanel';
  * it stays live independent of ProductHealthPanel's own subscription.
  */
 export default function RecentlyUpdatedCard({ initialProductHealth }: { initialProductHealth: ProductHealthRow[] }) {
-  const products = [...useLiveTable('product_health_snapshot', 'product_id', initialProductHealth).values()];
+  const products = [...useLiveTable('product_health_snapshot', 'product_id', initialProductHealth).rows.values()];
   const recentlyUpdated = [...products].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5);
 
   if (recentlyUpdated.length === 0) {

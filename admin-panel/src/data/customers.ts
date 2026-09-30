@@ -2,6 +2,8 @@ import 'server-only';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { requireAdmin } from './admin-auth';
 import { findOrCreateShopifyCustomer } from '@/lib/shopify/customer-lookup';
+import { validateCustomerInfoUpdate, type CustomerInfoFields } from '@/lib/customer-info-validation';
+import { mapCustomerRow } from '@/lib/customer-row-mapper';
 
 /** Service Role client — bypasses RLS. Never expose to the client; only used here. */
 function getServiceRoleClient() {
@@ -32,11 +34,19 @@ export type Customer = {
    * join is added to listCustomers()'s select AND a rep has actually been assigned. */
   salesRepId: string | null;
   salesRep: { name: string; phone: string; email: string } | null;
-  status: 'pending' | 'approved' | 'rejected';
+  /** 'approving' is transient (030 migration): set between an admin claiming a pending row for
+   * approval and the Shopify call + finalize completing. */
+  status: 'pending' | 'approving' | 'approved' | 'rejected';
   requestedAt: string;
+  /** Used to detect a customer stuck in 'approving' (030 migration escape hatch) -- also bumped
+   * by every other status/info change, so it's "last touched", not specific to approval. */
+  updatedAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
   shopifyCustomerId: string | null;
+  /** Optimistic-locking token for updateCustomerApplicationInfo (031 migration) -- must be sent
+   * back unchanged on every info-edit save, or the save is rejected outright. */
+  version: number;
   // Fields collected by the storefront's real registration wizard (008 migration) --
   // undocumented/unused by the older 005-era fields above, which stay for any pre-existing rows.
   legalBusinessName: string | null;
@@ -66,58 +76,6 @@ export type Customer = {
   signatureName: string | null;
   signedAt: string | null;
 };
-
-function toCustomer(row: any): Customer {
-  return {
-    id: row.id,
-    email: row.email,
-    firstName: row.first_name,
-    lastName: row.last_name,
-    phone: row.phone,
-    personalCell: row.personal_cell,
-    businessName: row.business_name,
-    businessRegistrationNumber: row.business_registration_number,
-    pstNumber: row.pst_number,
-    vptNumber: row.vpt_number,
-    typeOfBusiness: row.type_of_business,
-    licenseNumber: row.license_number,
-    accountType: row.account_type,
-    accountNumber: row.account_number,
-    salesRepId: row.sales_rep_id ?? null,
-    salesRep: row.sales_reps ?? null,
-    status: row.status,
-    requestedAt: row.requested_at,
-    approvedAt: row.approved_at,
-    approvedBy: row.approved_by,
-    shopifyCustomerId: row.shopify_customer_id,
-    legalBusinessName: row.legal_business_name,
-    operatingName: row.operating_name,
-    businessNumber: row.business_number,
-    numStores: row.num_stores,
-    businessTypes: row.business_types,
-    monthlyPurchaseRange: row.monthly_purchase_range,
-    sellsOnline: row.sells_online,
-    onlineUrl: row.online_url,
-    instagramHandle: row.instagram_handle,
-    shipLine1: row.ship_line1,
-    shipLine2: row.ship_line2,
-    shipCity: row.ship_city,
-    shipProvince: row.ship_province,
-    shipPostalCode: row.ship_postal_code,
-    billSameAsShipping: row.bill_same_as_shipping,
-    billLine1: row.bill_line1,
-    billLine2: row.bill_line2,
-    billCity: row.bill_city,
-    billProvince: row.bill_province,
-    billPostalCode: row.bill_postal_code,
-    businessLicencePath: row.business_licence_path,
-    specialtyLicencePath: row.specialty_licence_path,
-    taxExempt: row.tax_exempt,
-    referralSource: row.referral_source,
-    signatureName: row.signature_name,
-    signedAt: row.signed_at,
-  };
-}
 
 /** K1: a safety cap, not a redesign -- the Customers screen (item 38's design) intentionally
  * renders every customer in one live table (client-side "All"/"By Rep" toggle, no search/pagination
@@ -152,11 +110,36 @@ export async function listCustomers(): Promise<Customer[]> {
     rows.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;
   }
-  return rows.map(toCustomer);
+  return rows.map((r) => mapCustomerRow(r));
 }
 
-/** Approves a pending registration: finds-or-creates the matching Shopify Customer, then flips
- * the row to approved with that Shopify id attached (item 22 step 4). */
+/** Postgres errcodes our own SECURITY DEFINER functions raise deliberately, with a message
+ * already written to be shown to an admin as-is (030/031 migrations). Anything else is an
+ * unexpected failure (network blip, an actual bug, a raw Postgres/Shopify error) -- those get
+ * logged with full detail server-side but reduced to `fallback` for the UI, never passed through
+ * raw (standing checklist: a crash must never reach the admin as a raw/technical error). */
+function friendlyRpcError(error: { code?: string; message: string } | null, fallback: string, logLabel: string): Error {
+  if (!error) return new Error(fallback);
+  if (error.code === 'P0001' || error.code === 'P0002') return new Error(error.message);
+  console.error(`[${logLabel}]`, error.code, error.message);
+  return new Error(fallback);
+}
+
+/**
+ * Approves a pending registration in three steps (030 migration -- closes the race where two
+ * admins act on the same row concurrently, e.g. approve+approve or approve+reject):
+ *
+ *  1. CLAIM: atomically flip pending -> approving. If someone else already decided or is
+ *     mid-approving this customer, this throws immediately and Shopify is NEVER called.
+ *  2. Only the admin who won the claim calls Shopify to find-or-create the Customer.
+ *  3. FINALIZE: flip approving -> approved, using the account_type/ship_province the claim
+ *     captured (not a fresh read), so a concurrent account-type switch during step 2 can't
+ *     corrupt the account-number prefix.
+ *
+ * If step 2 fails, the claim is reverted back to pending so the applicant is never stuck
+ * unreachable in 'approving'; the same revert also runs if step 3 fails (safe either way -- a
+ * retry's Shopify step finds the already-created customer instead of duplicating it).
+ */
 export async function approveCustomer(id: string): Promise<void> {
   const admin = await requireAdmin();
   const supabase = getServiceRoleClient();
@@ -166,23 +149,109 @@ export async function approveCustomer(id: string): Promise<void> {
     .select('email, first_name, last_name')
     .eq('id', id)
     .single();
-  if (fetchError || !row) throw new Error(fetchError?.message ?? 'Customer not found');
+  if (fetchError || !row) throw new Error('Customer not found.');
 
-  const shopifyCustomerId = await findOrCreateShopifyCustomer(row.email, row.first_name, row.last_name);
+  const { data: claimRows, error: claimError } = await supabase.rpc('claim_customer_for_approval', { p_id: id });
+  if (claimError) throw friendlyRpcError(claimError, 'Could not approve. Please try again.', 'approveCustomer:claim');
+  const claim = claimRows?.[0];
+  if (!claim) throw new Error('This application was already decided or is being processed.');
 
-  const { error } = await supabase.rpc('approve_customer', {
+  const revertClaim = async () => {
+    const { error: revertError } = await supabase.rpc('revert_customer_claim', { p_id: id });
+    if (revertError) {
+      // Double failure: the thing we were reverting FROM already failed, and now the revert
+      // itself failed too. Not something a retry fixes on its own -- flag loudly so it surfaces
+      // in monitoring instead of leaving the row silently stuck (standing checklist: cleanup
+      // failures must not be swallowed).
+      console.error('[approveCustomer:revert] CRITICAL customer stuck in approving:', id, revertError.message);
+    }
+  };
+
+  let shopifyCustomerId: string;
+  try {
+    shopifyCustomerId = await findOrCreateShopifyCustomer(row.email, row.first_name, row.last_name);
+  } catch (err) {
+    await revertClaim();
+    console.error('[approveCustomer:shopify]', err);
+    throw new Error('Could not reach Shopify. Please try again.');
+  }
+
+  const { error: finalizeError } = await supabase.rpc('finalize_customer_approval', {
     p_id: id,
     p_approved_by: admin.email,
     p_shopify_customer_id: shopifyCustomerId,
+    p_account_type: claim.account_type,
+    p_ship_province: claim.ship_province,
   });
-  if (error) throw new Error(error.message);
+  if (finalizeError) {
+    await revertClaim();
+    throw friendlyRpcError(finalizeError, 'Could not finish approving this customer. Please try again.', 'approveCustomer:finalize');
+  }
 }
 
 export async function rejectCustomer(id: string): Promise<void> {
   await requireAdmin();
   const supabase = getServiceRoleClient();
   const { error } = await supabase.rpc('reject_customer', { p_id: id });
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not reject. Please try again.', 'rejectCustomer');
+}
+
+/** Manual escape hatch for a customer stuck in 'approving' (e.g. the server crashed mid-approval
+ * -- see 030 migration / plan doc for why this is manual rather than an automatic timeout). Only
+ * meaningful on a row that's actually stuck; the RPC itself refuses to run on anything else. */
+export async function forceResetStuckApproval(id: string): Promise<void> {
+  const admin = await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { error } = await supabase.rpc('force_reset_stuck_approval', { p_id: id, p_reset_by: admin.email });
+  if (error) throw friendlyRpcError(error, 'Could not reset this customer. Please try again.', 'forceResetStuckApproval');
+}
+
+/**
+ * Edits a customer's application info (business name, address, phone, etc -- NEVER email, which
+ * is tied to Supabase Auth, and never anything approval-related, which only moves through the
+ * functions above). Optimistic locking (031 migration): `version` must be the value the caller
+ * read the row at -- if it's stale (someone else edited in the meantime), the update is rejected
+ * with a distinguishable conflict error carrying the current row so the UI can show what changed
+ * instead of silently overwriting it. `fields` should contain ONLY the keys the admin actually
+ * changed (a partial update, not the whole record).
+ */
+export async function updateCustomerApplicationInfo(
+  id: string,
+  version: number,
+  fields: CustomerInfoFields
+): Promise<{ version: number } | { conflict: true; latest: Customer }> {
+  await requireAdmin();
+  if (version === undefined || version === null) {
+    // Standing checklist / explicit requirement: never proceed without a version -- there would
+    // be nothing to check the update against, and the whole guard would silently do nothing.
+    throw new Error('Missing version -- refusing to save without a conflict check.');
+  }
+
+  const validationError = validateCustomerInfoUpdate(fields);
+  if (validationError) throw new Error(validationError);
+
+  const supabase = getServiceRoleClient();
+  const { data: newVersion, error } = await supabase.rpc('update_customer_application_info', {
+    p_id: id,
+    p_version: version,
+    p_fields: fields,
+  });
+
+  if (error) {
+    if (error.code === 'P0002') throw new Error('This customer no longer exists.');
+    if (error.code === 'P0001') {
+      // Version conflict: fetch the current row so the UI can show what actually changed rather
+      // than a bare "conflict" message (Microsoft's documented approach -- current/original/
+      // database values, not just an error string).
+      const { data: latestRow } = await supabase.from('customers').select('*, sales_reps(name, phone, email)').eq('id', id).single();
+      if (latestRow) return { conflict: true, latest: mapCustomerRow(latestRow) };
+      throw new Error(error.message);
+    }
+    console.error('[updateCustomerApplicationInfo]', error.code, error.message);
+    throw new Error('Could not save changes. Please try again.');
+  }
+
+  return { version: newVersion as number };
 }
 
 /** The `registration-documents` bucket is private -- an admin needs a short-lived signed URL to

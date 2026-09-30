@@ -28,7 +28,7 @@ export default function SalesRepsManager({
   initialOrderStatusLog: OrderStatusRow[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const orderStatusLog = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
+  const { rows: orderStatusLog } = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
 
   const selectedCustomer = customers.find((c) => c.id === selectedId) ?? null;
   const selectedOrders = selectedCustomer?.shopifyCustomerId

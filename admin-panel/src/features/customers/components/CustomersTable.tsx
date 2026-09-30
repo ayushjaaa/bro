@@ -4,11 +4,24 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Customer, OrderStatusRow } from '@/data/customers';
 import type { SalesRep } from '@/data/sales-reps';
-import { approveCustomerAction, rejectCustomerAction, updateCustomerSalesRepAction } from '../actions';
+import {
+  approveCustomerAction,
+  rejectCustomerAction,
+  updateCustomerSalesRepAction,
+  forceResetStuckApprovalAction,
+  refetchCustomersAction,
+} from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
+import { mapCustomerRow } from '@/lib/customer-row-mapper';
 import { StatusBadge } from './shared';
 import CustomerDrawer from './CustomerDrawer';
 import CustomersBySalesRep from './CustomersBySalesRep';
+
+/** A customer is only offered the manual "stuck" escape hatch once it's been sitting in
+ * 'approving' well past how long a real Shopify call could plausibly take (normally sub-second)
+ * -- see 030 migration / plan doc for why this is a manual, human-confirmed action rather than an
+ * automatic timeout-based reclaim. */
+const STUCK_APPROVING_THRESHOLD_MS = 5 * 60 * 1000;
 
 /** Unified Customers screen (design decision: item 38) -- pending and approved rows live in
  * one table, not separate pages. Clicking a row opens a slide-over `CustomerDrawer` with every
@@ -34,10 +47,25 @@ export default function CustomersTable({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<'all' | 'byRep'>('all');
 
-  const orderStatusLog = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
+  const { rows: orderStatusLog } = useLiveTable('order_status_log', 'id', initialOrderStatusLog);
+  // Part 3: `customers` prop is just the initial seed -- the live Map, kept in sync via
+  // Realtime (including this admin's own actions, which trigger the same postgres_changes
+  // events back to this subscription), is the actual source of truth for rendering from here on.
+  const { rows: liveCustomersMap, connectionState } = useLiveTable(
+    'customers',
+    'id',
+    customers,
+    refetchCustomersAction,
+    mapCustomerRow,
+    // Guards against an out-of-order/late-resolving update (e.g. a reconnect resync that was in
+    // flight while a newer live event landed) rolling a row backward -- `version` strictly
+    // increases on every write, so it's a reliable ordering key.
+    (c) => c.version
+  );
+  const liveCustomers = [...liveCustomersMap.values()];
   const noteCountMap = new Map(noteCounts);
 
-  if (customers.length === 0) {
+  if (liveCustomers.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-400">
         No customers yet.
@@ -45,13 +73,18 @@ export default function CustomersTable({
     );
   }
 
-  const selectedCustomer = customers.find((c) => c.id === selectedId) ?? null;
+  const selectedCustomer = liveCustomers.find((c) => c.id === selectedId) ?? null;
   const selectedOrders = selectedCustomer?.shopifyCustomerId
     ? [...orderStatusLog.values()].filter((row) => row.customer_id === selectedCustomer.shopifyCustomerId)
     : [];
 
   return (
     <>
+      {connectionState === 'reconnecting' && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
+          Live updates paused — reconnecting…
+        </div>
+      )}
       <div className="mb-3 inline-flex rounded-lg border border-neutral-200 bg-neutral-50 p-0.5">
         <button
           type="button"
@@ -89,7 +122,7 @@ export default function CustomersTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {customers.map((c) => (
+              {liveCustomers.map((c) => (
                 <CustomerTableRow
                   key={c.id}
                   customer={c}
@@ -102,7 +135,7 @@ export default function CustomersTable({
           </table>
         </div>
       ) : (
-        <CustomersBySalesRep customers={customers} salesReps={salesReps} onSelect={setSelectedId} />
+        <CustomersBySalesRep customers={liveCustomers} salesReps={salesReps} onSelect={setSelectedId} />
       )}
 
       {selectedCustomer && (
@@ -148,7 +181,11 @@ function CustomerTableRow({
         router.refresh();
       } catch (err) {
         console.error('[CustomersTable] handleApprove failed:', err);
-        setRowError('Could not approve. Please try again.');
+        // 030: customers.ts's approveCustomer() already sanitizes every error it throws into an
+        // admin-safe message (e.g. "already decided/being processed" when a race guard fires) --
+        // show it as-is instead of a generic fallback, so a losing admin understands what
+        // happened instead of just seeing an opaque failure.
+        setRowError(err instanceof Error && err.message ? err.message : 'Could not approve. Please try again.');
       }
     });
   }
@@ -164,7 +201,21 @@ function CustomerTableRow({
         router.refresh();
       } catch (err) {
         console.error('[CustomersTable] handleReject failed:', err);
-        setRowError('Could not reject. Please try again.');
+        setRowError(err instanceof Error && err.message ? err.message : 'Could not reject. Please try again.');
+      }
+    });
+  }
+
+  function handleForceReset() {
+    if (!confirm(`This will reset ${customer.firstName} ${customer.lastName} back to pending, in case approval got stuck. Continue?`)) return;
+    setRowError('');
+    startTransition(async () => {
+      try {
+        await forceResetStuckApprovalAction(customer.id);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomersTable] handleForceReset failed:', err);
+        setRowError(err instanceof Error && err.message ? err.message : 'Could not reset. Please try again.');
       }
     });
   }
@@ -254,6 +305,19 @@ function CustomerTableRow({
               Reject
             </button>
           </div>
+        ) : customer.status === 'approving' &&
+          Date.now() - new Date(customer.updatedAt).getTime() > STUCK_APPROVING_THRESHOLD_MS ? (
+          // Manual escape hatch (030 migration / plan doc) -- only shown once a row has been
+          // 'approving' far longer than a real Shopify call could plausibly take, so this never
+          // appears during a normal, in-flight approval.
+          <button
+            type="button"
+            onClick={handleForceReset}
+            disabled={pending}
+            className="text-xs font-semibold px-2.5 py-1 rounded-full border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-40"
+          >
+            {pending ? '…' : 'Reset stuck approval'}
+          </button>
         ) : (
           <button
             type="button"

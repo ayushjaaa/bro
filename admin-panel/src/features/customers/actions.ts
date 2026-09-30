@@ -6,12 +6,17 @@ import {
   rejectCustomer,
   updateAccountType,
   updateCustomerSalesRep,
+  updateCustomerApplicationInfo,
+  forceResetStuckApproval,
+  listCustomers,
   getRegistrationDocumentUrl,
   listCustomerCartsPage,
   listCartSnapshotForCustomers,
+  type Customer,
   type CustomerCartsPage,
   type CartSnapshotRow,
 } from '@/data/customers';
+import type { CustomerInfoFields } from '@/lib/customer-info-validation';
 import { getProductTitlesByIds, getVariantDetailsByIds, type VariantDetail } from '@/data/products';
 import { listSalesReps, createSalesRep, type SalesRep } from '@/data/sales-reps';
 import { listNotes, createNote, type NoteEntityType, type InternalNote } from '@/data/internal-notes';
@@ -60,6 +65,41 @@ export async function createSalesRepAction(input: {
 export async function updateCustomerSalesRepAction(customerId: string, salesRepId: string | null) {
   await updateCustomerSalesRep(customerId, salesRepId);
   revalidatePath('/customers');
+}
+
+/** Manual escape hatch for a customer stuck in 'approving' (030 migration / plan doc). */
+export async function forceResetStuckApprovalAction(id: string) {
+  await forceResetStuckApproval(id);
+  revalidatePath('/customers');
+}
+
+/** Part 2 (031 migration): edits a customer's application info under optimistic locking.
+ * Returns the conflict shape as-is (not a thrown error) so the client can show the
+ * conflict-resolution flow instead of a generic failure -- see updateCustomerApplicationInfo's
+ * own doc comment for why. */
+export async function updateCustomerApplicationInfoAction(
+  id: string,
+  version: number,
+  fields: CustomerInfoFields
+): Promise<{ ok: true; version: number } | { ok: false; conflict: true; latest: Customer } | { ok: false; error: string }> {
+  try {
+    const result = await updateCustomerApplicationInfo(id, version, fields);
+    revalidatePath('/customers');
+    if ('conflict' in result) return { ok: false, conflict: true, latest: result.latest };
+    return { ok: true, version: result.version };
+  } catch (error) {
+    // updateCustomerApplicationInfo already sanitizes every error it throws into an
+    // admin-safe message (same convention as approveCustomer/rejectCustomer -- see their own
+    // action wrappers above, which likewise pass the error straight through to the client).
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not save changes. Please try again.' };
+  }
+}
+
+/** Backs Part 3's reconnect-resync (`useLiveTable`'s `onReconnect`) -- re-fetches the full
+ * customers list after a real websocket reconnect, since incremental Realtime payloads alone
+ * can't recover whatever changed while disconnected. */
+export async function refetchCustomersAction(): Promise<Customer[]> {
+  return listCustomers();
 }
 
 export async function listNotesAction(entityType: NoteEntityType, entityId: string): Promise<InternalNote[]> {

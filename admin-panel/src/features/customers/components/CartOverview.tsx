@@ -181,7 +181,7 @@ export default function CartOverview({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const cartActivity = useLiveTable('cart_events', 'id', initialCartActivity.map(toEventRow));
+  const { rows: cartActivity } = useLiveTable('cart_events', 'id', initialCartActivity.map(toEventRow));
 
   // Refs so the debounced search/live-refresh callbacks (set up once) always see the latest
   // values without needing to be torn down and rebuilt on every state change.
