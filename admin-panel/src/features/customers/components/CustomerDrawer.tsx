@@ -14,7 +14,12 @@ import {
   listNotesAction,
   createNoteAction,
 } from '../actions';
-import { validateCustomerInfoUpdate, type CustomerInfoFields } from '@/lib/customer-info-validation';
+import {
+  validateCustomerInfoUpdate,
+  MONTHLY_PURCHASE_RANGES,
+  REFERRAL_SOURCES,
+  type CustomerInfoFields,
+} from '@/lib/customer-info-validation';
 import { InfoCard } from './InfoCard';
 import { RepForm, type RepFormValue } from '@/features/sales-reps/components/RepForm';
 import { Field, StatusBadge } from './shared';
@@ -453,12 +458,16 @@ function TextField({
   label,
   value,
   onChange,
+  onBlur,
   disabled,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   disabled: boolean;
+  error?: string;
 }) {
   return (
     <label className="block">
@@ -467,9 +476,64 @@ function TextField({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         disabled={disabled}
-        className="w-full text-sm border border-neutral-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-purple-accent/30 focus:border-brand-purple-deep disabled:bg-neutral-100"
+        aria-invalid={Boolean(error)}
+        className={`w-full text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 disabled:bg-neutral-100 ${
+          error
+            ? 'border-red-300 focus:ring-red-200 focus:border-red-500'
+            : 'border-neutral-300 focus:ring-brand-purple-accent/30 focus:border-brand-purple-deep'
+        }`}
       />
+      {error && <span className="block text-[11px] text-red-600 mt-1">{error}</span>}
+    </label>
+  );
+}
+
+/** For the handful of fields that are a fixed dropdown in the original registration wizard
+ * (monthlyPurchaseRange, referralSource -- see customer-info-validation.ts's copied-by-value
+ * option lists) -- a `<select>` makes an invalid value structurally impossible to enter, instead
+ * of validating free text against an enum the admin has no way to see. Always includes the
+ * current value as an option even if it's not in the list (e.g. legacy data from before this),
+ * so opening the form never silently discards something already there. */
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  error,
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+  disabled: boolean;
+  error?: string;
+}) {
+  const allOptions = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-neutral-500 mb-1">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        className={`w-full text-sm border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 disabled:bg-neutral-100 ${
+          error
+            ? 'border-red-300 focus:ring-red-200 focus:border-red-500'
+            : 'border-neutral-300 focus:ring-brand-purple-accent/30 focus:border-brand-purple-deep'
+        }`}
+      >
+        <option value="">—</option>
+        {allOptions.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+      {error && <span className="block text-[11px] text-red-600 mt-1">{error}</span>}
     </label>
   );
 }
@@ -484,6 +548,11 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
   const [saving, startTransition] = useTransition();
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<Customer | null>(null);
+  // Per-field, real-time validation (on blur) -- complements the whole-form check in handleSave
+  // (which still runs as the final gate before a save attempt). Reuses the same shared validator
+  // as the backend, just scoped to one field at a time, so the rule text can never drift between
+  // "as you type" and "on submit" feedback.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const router = useRouter();
 
   // Bug found via a live e2e test, only surfaced running the FULL suite (not in isolation --
@@ -535,6 +604,32 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     touchedFields.current.add(key);
     setForm((prev) => ({ ...prev, [key]: value }));
+    // Clear any stale error for this field the moment the admin edits it again -- don't leave a
+    // red border sitting there after they've already started fixing it.
+    setFieldErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  /** Validates ONE field in isolation (called on blur) using the exact same shared validator as
+   * the whole-form check and the backend -- `numStores` needs the same string->number|null
+   * conversion buildChangedFields does, everything else goes through as the raw string. */
+  function validateField(key: keyof typeof form) {
+    const raw = form[key];
+    const fieldValue: CustomerInfoFields =
+      key === 'numStores'
+        ? { numStores: raw.trim() === '' ? null : Number(raw) }
+        : ({ [key]: raw } as CustomerInfoFields);
+    const message = validateCustomerInfoUpdate(fieldValue);
+    setFieldErrors((prev) => (message ? { ...prev, [key]: message } : (() => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    })()));
   }
 
   /** Compares the current form values against `against` (the original customer, or -- when
@@ -644,41 +739,46 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="First Name" value={form.firstName} onChange={(v) => set('firstName', v)} disabled={saving} />
-        <TextField label="Last Name" value={form.lastName} onChange={(v) => set('lastName', v)} disabled={saving} />
-        <TextField label="Business Phone" value={form.phone} onChange={(v) => set('phone', v)} disabled={saving} />
-        <TextField label="Personal Cell" value={form.personalCell} onChange={(v) => set('personalCell', v)} disabled={saving} />
+        <TextField label="First Name" value={form.firstName} onChange={(v) => set('firstName', v)} onBlur={() => validateField('firstName')} error={fieldErrors.firstName} disabled={saving} />
+        <TextField label="Last Name" value={form.lastName} onChange={(v) => set('lastName', v)} onBlur={() => validateField('lastName')} error={fieldErrors.lastName} disabled={saving} />
+        <TextField label="Business Phone" value={form.phone} onChange={(v) => set('phone', v)} onBlur={() => validateField('phone')} error={fieldErrors.phone} disabled={saving} />
+        <TextField label="Personal Cell" value={form.personalCell} onChange={(v) => set('personalCell', v)} onBlur={() => validateField('personalCell')} error={fieldErrors.personalCell} disabled={saving} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Legal Business Name" value={form.legalBusinessName} onChange={(v) => set('legalBusinessName', v)} disabled={saving} />
-        <TextField label="Operating Name" value={form.operatingName} onChange={(v) => set('operatingName', v)} disabled={saving} />
-        <TextField label="Business Number" value={form.businessNumber} onChange={(v) => set('businessNumber', v)} disabled={saving} />
-        <TextField label="No of Stores" value={form.numStores} onChange={(v) => set('numStores', v)} disabled={saving} />
-        <TextField label="Expected Monthly Purchase" value={form.monthlyPurchaseRange} onChange={(v) => set('monthlyPurchaseRange', v)} disabled={saving} />
-        <TextField label="Instagram" value={form.instagramHandle} onChange={(v) => set('instagramHandle', v)} disabled={saving} />
-        <TextField label="Online Store URL" value={form.onlineUrl} onChange={(v) => set('onlineUrl', v)} disabled={saving} />
+        <TextField label="Legal Business Name" value={form.legalBusinessName} onChange={(v) => set('legalBusinessName', v)} onBlur={() => validateField('legalBusinessName')} error={fieldErrors.legalBusinessName} disabled={saving} />
+        <TextField label="Operating Name" value={form.operatingName} onChange={(v) => set('operatingName', v)} onBlur={() => validateField('operatingName')} error={fieldErrors.operatingName} disabled={saving} />
+        <TextField label="Business Number" value={form.businessNumber} onChange={(v) => set('businessNumber', v)} onBlur={() => validateField('businessNumber')} error={fieldErrors.businessNumber} disabled={saving} />
+        <TextField label="No of Stores" value={form.numStores} onChange={(v) => set('numStores', v)} onBlur={() => validateField('numStores')} error={fieldErrors.numStores} disabled={saving} />
+        <SelectField label="Expected Monthly Purchase" value={form.monthlyPurchaseRange} options={MONTHLY_PURCHASE_RANGES} onChange={(v) => set('monthlyPurchaseRange', v)} disabled={saving} error={fieldErrors.monthlyPurchaseRange} />
+        <TextField label="Instagram" value={form.instagramHandle} onChange={(v) => set('instagramHandle', v)} onBlur={() => validateField('instagramHandle')} error={fieldErrors.instagramHandle} disabled={saving} />
+        <TextField label="Online Store URL" value={form.onlineUrl} onChange={(v) => set('onlineUrl', v)} onBlur={() => validateField('onlineUrl')} error={fieldErrors.onlineUrl} disabled={saving} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Shipping Line 1" value={form.shipLine1} onChange={(v) => set('shipLine1', v)} disabled={saving} />
-        <TextField label="Shipping Line 2" value={form.shipLine2} onChange={(v) => set('shipLine2', v)} disabled={saving} />
-        <TextField label="Shipping City" value={form.shipCity} onChange={(v) => set('shipCity', v)} disabled={saving} />
-        <TextField label="Shipping Province" value={form.shipProvince} onChange={(v) => set('shipProvince', v)} disabled={saving} />
-        <TextField label="Shipping Postal Code" value={form.shipPostalCode} onChange={(v) => set('shipPostalCode', v)} disabled={saving} />
+        <TextField label="Shipping Line 1" value={form.shipLine1} onChange={(v) => set('shipLine1', v)} onBlur={() => validateField('shipLine1')} error={fieldErrors.shipLine1} disabled={saving} />
+        <TextField label="Shipping Line 2" value={form.shipLine2} onChange={(v) => set('shipLine2', v)} onBlur={() => validateField('shipLine2')} error={fieldErrors.shipLine2} disabled={saving} />
+        <TextField label="Shipping City" value={form.shipCity} onChange={(v) => set('shipCity', v)} onBlur={() => validateField('shipCity')} error={fieldErrors.shipCity} disabled={saving} />
+        <TextField label="Shipping Province" value={form.shipProvince} onChange={(v) => set('shipProvince', v)} onBlur={() => validateField('shipProvince')} error={fieldErrors.shipProvince} disabled={saving} />
+        <TextField label="Shipping Postal Code" value={form.shipPostalCode} onChange={(v) => set('shipPostalCode', v)} onBlur={() => validateField('shipPostalCode')} error={fieldErrors.shipPostalCode} disabled={saving} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Billing Line 1" value={form.billLine1} onChange={(v) => set('billLine1', v)} disabled={saving} />
-        <TextField label="Billing Line 2" value={form.billLine2} onChange={(v) => set('billLine2', v)} disabled={saving} />
-        <TextField label="Billing City" value={form.billCity} onChange={(v) => set('billCity', v)} disabled={saving} />
-        <TextField label="Billing Province" value={form.billProvince} onChange={(v) => set('billProvince', v)} disabled={saving} />
-        <TextField label="Billing Postal Code" value={form.billPostalCode} onChange={(v) => set('billPostalCode', v)} disabled={saving} />
+        <TextField label="Billing Line 1" value={form.billLine1} onChange={(v) => set('billLine1', v)} onBlur={() => validateField('billLine1')} error={fieldErrors.billLine1} disabled={saving} />
+        <TextField label="Billing Line 2" value={form.billLine2} onChange={(v) => set('billLine2', v)} onBlur={() => validateField('billLine2')} error={fieldErrors.billLine2} disabled={saving} />
+        <TextField label="Billing City" value={form.billCity} onChange={(v) => set('billCity', v)} onBlur={() => validateField('billCity')} error={fieldErrors.billCity} disabled={saving} />
+        <TextField label="Billing Province" value={form.billProvince} onChange={(v) => set('billProvince', v)} onBlur={() => validateField('billProvince')} error={fieldErrors.billProvince} disabled={saving} />
+        <TextField label="Billing Postal Code" value={form.billPostalCode} onChange={(v) => set('billPostalCode', v)} onBlur={() => validateField('billPostalCode')} error={fieldErrors.billPostalCode} disabled={saving} />
       </div>
 
-      <TextField label="How They Heard About Us" value={form.referralSource} onChange={(v) => set('referralSource', v)} disabled={saving} />
+      <SelectField label="How They Heard About Us" value={form.referralSource} options={REFERRAL_SOURCES} onChange={(v) => set('referralSource', v)} disabled={saving} error={fieldErrors.referralSource} />
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {/* Only shown when no per-field error is already displayed inline above -- clicking Save
+          blurs whatever field was focused, so validateField's on-blur check already populated
+          fieldErrors for the invalid field by the time this runs; showing the same message twice
+          (once inline, once here) was a real duplicate-text bug a Playwright strict-mode failure
+          caught. This banner still covers errors that aren't tied to a single visible field. */}
+      {error && Object.keys(fieldErrors).length === 0 && <p className="text-xs text-red-600">{error}</p>}
 
       <div className="flex gap-2">
         <button
