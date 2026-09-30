@@ -48,6 +48,46 @@ async function openCustomerDrawer(page: Page, displayName: string) {
 }
 
 test.describe('Customer info editing (Part 2)', () => {
+  test('frontend validation blocks an invalid value BEFORE it reaches the server -- clearing a required field shows an error instantly, nothing is saved', async ({ page }) => {
+    const { customerId, userId, displayName } = await makeApprovedTestCustomer('frontend-validation');
+    try {
+      await openCustomerDrawer(page, displayName);
+      await page.getByRole('button', { name: 'Edit info' }).click();
+
+      // Legal Business Name is required-if-touched -- clear it, then try to save.
+      await page.getByLabel('Legal Business Name').fill('');
+      await page.getByRole('button', { name: 'Save changes' }).click();
+
+      // The same validation message the backend would give, shown immediately -- the edit form
+      // must still be open (a real server round trip was never needed to catch this).
+      await expect(page.getByText(/cannot be empty/i)).toBeVisible({ timeout: 2_000 });
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+
+      // Confirm nothing reached the database at all.
+      const service = getServiceRoleClient();
+      const { data: row } = await service.from('customers').select('legal_business_name').eq('id', customerId).single();
+      expect(row?.legal_business_name).toBe('Original Business Name');
+    } finally {
+      await cleanup(customerId, userId);
+    }
+  });
+
+  test('frontend validation catches a malformed postal code before saving', async ({ page }) => {
+    const { customerId, userId, displayName } = await makeApprovedTestCustomer('frontend-validation-postal');
+    try {
+      await openCustomerDrawer(page, displayName);
+      await page.getByRole('button', { name: 'Edit info' }).click();
+
+      await page.getByLabel('Shipping Postal Code').fill('not-a-real-code');
+      await page.getByRole('button', { name: 'Save changes' }).click();
+
+      await expect(page.getByText(/valid.*postal code/i)).toBeVisible({ timeout: 2_000 });
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    } finally {
+      await cleanup(customerId, userId);
+    }
+  });
+
   test('a normal edit, with no conflict, saves and shows the new value', async ({ page }) => {
     const { customerId, userId, displayName } = await makeApprovedTestCustomer('basic');
     try {

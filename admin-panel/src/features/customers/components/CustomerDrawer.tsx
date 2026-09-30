@@ -14,7 +14,7 @@ import {
   listNotesAction,
   createNoteAction,
 } from '../actions';
-import type { CustomerInfoFields } from '@/lib/customer-info-validation';
+import { validateCustomerInfoUpdate, type CustomerInfoFields } from '@/lib/customer-info-validation';
 import { InfoCard } from './InfoCard';
 import { RepForm, type RepFormValue } from '@/features/sales-reps/components/RepForm';
 import { Field, StatusBadge } from './shared';
@@ -582,6 +582,18 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
     const changed = buildChangedFields(baseCustomer);
     if (Object.keys(changed).length === 0) {
       onDone();
+      return;
+    }
+    // Frontend validation: reuses the EXACT same function the backend runs (customer-info-
+    // validation.ts is pure, no server-only import, safe to call from a Client Component) --
+    // never a second, hand-duplicated copy of the rules that could drift out of sync. Catches
+    // obvious problems (empty required field, bad postal code) instantly, without a round trip;
+    // the backend call right below still re-validates independently -- this is a fast pre-check,
+    // not a replacement for the real, trusted check (a direct API call bypasses the browser
+    // entirely, so the server can never skip its own validation just because the client did one).
+    const validationError = validateCustomerInfoUpdate(changed);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     startTransition(async () => {
