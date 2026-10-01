@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,8 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Flavor Admin",
   description: "Product add & taxonomy navigation admin panel",
+  icons: {
+    other: [{ rel: "mask-icon", url: "/safari-pinned-tab.svg", color: "#7c3aed" }],
+  },
   // Staff-only: never let search engines list any admin page.
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#7c3aed",
 };
 
 // Minimal by design (per ADMIN_PANEL_IMPLEMENTATION.md §2) — no Sidebar/TopBar here, so that
