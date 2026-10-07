@@ -118,6 +118,10 @@ export interface CreateDraftOrderInput {
    * this draft belongs to, without ever needing a Shopify customerId/customerAccessToken. */
   customerId: string;
   note?: string;
+  /** How the customer intends to pay -- informational only (no payment is actually collected at
+   * checkout). Folded into customAttributes as "Payment Method", same pattern as "Pickup
+   * Location", so admin staff see it on the Draft Order and can invoice/follow up accordingly. */
+  paymentMethod: 'direct_deposit' | 'e_transfer' | 'cheque';
   /** A real Shopify discount code (created in Shopify Admin) -- passed straight through to
    * `discountCodes` so Shopify itself validates and calculates it; we never fake the math
    * ourselves. */
@@ -140,8 +144,15 @@ export interface CreateDraftOrderError {
 export async function createDraftOrder(
   input: CreateDraftOrderInput
 ): Promise<CreateDraftOrderResult | CreateDraftOrderError> {
+  const PAYMENT_METHOD_LABELS: Record<CreateDraftOrderInput['paymentMethod'], string> = {
+    direct_deposit: 'Direct Deposit',
+    e_transfer: 'E-Transfer',
+    cheque: 'Cheque',
+  };
+
   const customAttributes = [
     { key: 'Fulfillment Method', value: input.fulfillmentMethod === 'ship' ? 'Ship' : 'Pickup' },
+    { key: 'Payment Method', value: PAYMENT_METHOD_LABELS[input.paymentMethod] },
     { key: '_customer_id', value: input.customerId },
     ...(input.fulfillmentMethod === 'pickup' && input.pickupLocationName
       ? [{ key: 'Pickup Location', value: input.pickupLocationName }]

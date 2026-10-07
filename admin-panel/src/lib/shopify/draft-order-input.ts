@@ -40,6 +40,7 @@ export const createDraftOrderSchema = z
     billingAddress: address.optional(),
     pickupLocationName: text(200).optional(),
     note: text(1000).optional(),
+    paymentMethod: z.enum(['direct_deposit', 'e_transfer', 'cheque']),
     discountCode: text(100).optional(),
   })
   .superRefine((value, ctx) => {
