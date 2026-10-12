@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { bulkCreateVariantsAction } from '../actions';
-import { validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
+import { validatePriceInput, validateQuantityInput, validateSkuInput } from '@/lib/variant-input';
 
 type Row = {
   id: number;
@@ -60,6 +60,10 @@ function validateRow(row: Row): RowErrors {
   if (!row.flavourName.trim()) errors.flavourName = 'Required';
   if (!row.description.trim()) errors.description = 'Required';
   if (!row.sku.trim()) errors.sku = 'Required';
+  else {
+    const skuError = validateSkuInput(row.sku);
+    if (skuError) errors.sku = skuError;
+  }
   // TEMPORARY (testing only, per explicit request) -- image left optional so 100 rows can be
   // Created without a photo per row first. Put `if (!row.image) errors.image = 'Required';` back
   // as soon as testing is done -- the backend (data/variants.ts) already treats image as optional

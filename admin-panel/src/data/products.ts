@@ -554,6 +554,17 @@ export async function createProductLine(input: {
     throw new Error('At least one region must be selected for a Product Line.');
   }
 
+  // Shopify's only actual constraints on a product title (confirmed live against the Admin API,
+  // 2026-10-12): can't be blank, max 255 characters. Checked against the REGION-SUFFIXED title
+  // (what actually gets sent, via regionSuffixedTitle below), not the raw input, since the suffix
+  // can push an otherwise-fine title over the limit.
+  if (!input.title.trim()) throw new SafeActionError('Product Line name cannot be empty.');
+  for (const region of input.regions) {
+    if (regionSuffixedTitle(input.title, region.label).length > 255) {
+      throw new SafeActionError('Product Line name is too long (maximum is 255 characters, including the region suffix).');
+    }
+  }
+
   // Resolve native Shopify fields from the taxonomy chain (PRODUCT_PAGE_PLAN.md filtering
   // architecture, 2026-09-04): `productType` = the Brand's parent Sub-category's name,
   // `vendor` = the Brand's own name. These power fast native `products(query:...)` filtering on

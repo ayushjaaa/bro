@@ -70,3 +70,39 @@ test('rejects too many business types', () => {
   const err = validateCustomerInfoUpdate({ businessTypes: Array.from({ length: 21 }, (_, i) => `type-${i}`) });
   assert.match(err ?? '', /too many business types/i);
 });
+
+// Regression test for the real incident (2026-10-12): a customer row had firstName/lastName
+// both saved as "  http://localhost:3000", which Shopify's customerSet mutation rejects at
+// approval time with "First/Last name cannot contain URL" -- surfaced to the admin only as the
+// generic "Could not reach Shopify. Please try again." (src/data/customers.ts:176), with no
+// indication of the real cause. An admin editing the row to fix it must be blocked from saving
+// the same bad value again, with a message that actually says what's wrong this time.
+test('rejects the exact bad value from the 2026-10-12 incident (name saved as a URL)', () => {
+  assert.match(validateCustomerInfoUpdate({ firstName: '  http://localhost:3000' }) ?? '', /cannot contain a URL/i);
+  assert.match(validateCustomerInfoUpdate({ lastName: '  http://localhost:3000' }) ?? '', /cannot contain a URL/i);
+});
+
+test('rejects a URL in first or last name generally', () => {
+  for (const bad of ['http://localhost:3000', 'https://example.com', 'www.example.com', 'John www.x.com']) {
+    assert.match(validateCustomerInfoUpdate({ firstName: bad }) ?? '', /cannot contain a URL/i, bad);
+    assert.match(validateCustomerInfoUpdate({ lastName: bad }) ?? '', /cannot contain a URL/i, bad);
+  }
+});
+
+test('rejects HTML tags in first or last name', () => {
+  assert.match(validateCustomerInfoUpdate({ firstName: '<b>John</b>' }) ?? '', /cannot contain HTML tags/i);
+  assert.match(validateCustomerInfoUpdate({ lastName: '<script>alert(1)</script>' }) ?? '', /cannot contain HTML tags/i);
+});
+
+test('rejects a first/last name over 255 characters, accepts one at the limit', () => {
+  assert.match(validateCustomerInfoUpdate({ firstName: 'A'.repeat(256) }) ?? '', /too long/i);
+  assert.equal(validateCustomerInfoUpdate({ firstName: 'A'.repeat(255) }), null);
+});
+
+test('name URL/HTML/length checks only apply when the field has real content (partial-update semantics)', () => {
+  // Clearing the field, or not touching it at all, must never trip the new format checks --
+  // only required-ness and format apply to a field that's actually present with content.
+  assert.equal(validateCustomerInfoUpdate({ firstName: '' }) === null, false); // still required when present+empty
+  assert.equal(validateCustomerInfoUpdate({}), null); // untouched
+  assert.equal(validateCustomerInfoUpdate({ lastName: 'Smith' }), null); // ordinary value, unaffected
+});

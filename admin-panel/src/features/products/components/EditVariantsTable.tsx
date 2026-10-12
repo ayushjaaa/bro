@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateVariantsAction } from '../actions';
 import AddStockButton from './AddStockButton';
 import { useInventorySnapshotSync } from '../hooks/useInventorySnapshotSync';
-import { validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
+import { validatePriceInput, validateQuantityInput, validateSkuInput } from '@/lib/variant-input';
 
 type Row = {
   id: string;
@@ -43,12 +43,14 @@ export type EditableVariant = {
  * zeroing a live variant's wholesale price with no guard. Reuses the exact same shared checks
  * `VariantBulkTable.tsx` uses (`lib/variant-input.ts`) so both tables enforce one rule, not two
  * parallel (and previously inconsistent) ones. */
-function validateRow(row: Row): { price?: string; quantity?: string } {
-  const errors: { price?: string; quantity?: string } = {};
+function validateRow(row: Row): { price?: string; quantity?: string; sku?: string } {
+  const errors: { price?: string; quantity?: string; sku?: string } = {};
   const priceError = validatePriceInput(row.price);
   if (priceError) errors.price = priceError;
   const quantityError = validateQuantityInput(row.quantity);
   if (quantityError) errors.quantity = quantityError;
+  const skuError = validateSkuInput(row.sku);
+  if (skuError) errors.sku = skuError;
   return errors;
 }
 
@@ -277,8 +279,11 @@ export default function EditVariantsTable({
                   <input
                     value={row.sku}
                     onChange={(e) => updateRow(i, { sku: e.target.value })}
-                    className="w-20 rounded border border-neutral-300 px-1.5 py-1 text-xs"
+                    className={`w-20 rounded border px-1.5 py-1 text-xs ${
+                      rowErrors.sku ? 'border-red-400' : 'border-neutral-300'
+                    }`}
                   />
+                  {rowErrors.sku && <p className="text-[10px] text-red-600 mt-0.5">{rowErrors.sku}</p>}
                 </td>
                 <td className="px-2 py-1.5">
                   <button

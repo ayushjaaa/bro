@@ -228,6 +228,7 @@ export default function ProductLineForm({
             <input
               name="title"
               required
+              maxLength={255}
               placeholder="e.g. RAW King Size Papers"
               className="w-full rounded border border-neutral-300 px-3 py-2 text-sm"
             />

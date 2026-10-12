@@ -4,7 +4,7 @@ import { shopifyAdminRequest, ShopifyAdminApiError } from '@/lib/shopify/admin-c
 import { uploadImageForProductMedia } from '@/lib/shopify/upload-image';
 import { requireAdmin } from './admin-auth';
 import { INVENTORY_LOCATION_ID } from '@/lib/inventory';
-import { validateVariantRowInput, validateVariantDescription, validatePriceInput, validateQuantityInput } from '@/lib/variant-input';
+import { validateVariantRowInput, validateVariantDescription, validatePriceInput, validateQuantityInput, validateSkuInput } from '@/lib/variant-input';
 
 /**
  * Bulk Variant Upload DAL (Flow C, ADMIN_PANEL_IMPLEMENTATION.md §5 Flow C). Region moved to being
@@ -223,6 +223,12 @@ export async function bulkCreateVariants(
         result.errors.push({ field: null, message: `"${row.flavourName || '(unnamed)'}": ${rowInvalid}` });
         return false;
       }
+      const skuError = validateSkuInput(row.sku);
+      if (skuError) {
+        result.failed += 1;
+        result.errors.push({ field: null, message: `"${row.flavourName || '(unnamed)'}": ${skuError}` });
+        return false;
+      }
       // A3 (PRODUCT_ERROR_HANDLING_REVIEW.md): `isValidMoney` above only checks string format
       // ("0.00" passes) -- reject a non-positive price and a non-positive/non-integer quantity
       // here too, same thresholds as the client-side check, so a direct POST can't silently create
@@ -373,13 +379,22 @@ export async function updateVariants(
     return !invalid;
   });
 
+  const skuValidRows = descriptionValidRows.filter((row) => {
+    const skuError = validateSkuInput(row.sku);
+    if (skuError) {
+      result.failed += 1;
+      result.errors.push({ field: null, message: `Row ${row.id}: ${skuError}` });
+    }
+    return !skuError;
+  });
+
   // A3 (PRODUCT_ERROR_HANDLING_REVIEW.md): `isValidMoney` above only checks the STRING FORMAT
   // ("0.00" passes it), and the quantity below was parsed with `parseInt(...) || 0`, silently
   // flooring "abc"/"" to stock=0 and letting a negative string through as a truthy value straight
   // to Shopify's inventory mutations. Client-side validation (EditVariantsTable/VariantBulkTable)
   // can't be the only guard -- this DAL is reachable via a direct POST to updateVariantsAction
   // regardless of what the UI enforces. Reuses the exact same thresholds as the client checks.
-  const validRows = descriptionValidRows.filter((row) => {
+  const validRows = skuValidRows.filter((row) => {
     const priceError = validatePriceInput(row.price);
     if (priceError) {
       result.failed += 1;

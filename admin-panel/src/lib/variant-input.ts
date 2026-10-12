@@ -38,6 +38,17 @@ export function validateQuantityInput(raw: string): string | null {
   return null;
 }
 
+// Shopify's only actual constraint on inventoryItem.sku (confirmed live against the Admin API,
+// 2026-10-12): max 255 characters. Everything else -- special characters, emoji, duplicates
+// across products -- Shopify itself allows, so nothing stricter is added here.
+const SKU_MAX_LENGTH = 255;
+
+export function validateSkuInput(sku: string | undefined): string | null {
+  if (!sku) return null;
+  if (sku.length > SKU_MAX_LENGTH) return `SKU is too long (max ${SKU_MAX_LENGTH} characters).`;
+  return null;
+}
+
 /** Used at creation time, where the Flavour name (the variant's option value) is also being set
  * for the first time -- `updateVariants` doesn't rename a Flavour, so it only needs
  * `validateVariantDescription` above. */

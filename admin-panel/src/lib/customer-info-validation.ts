@@ -1,3 +1,4 @@
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import { normalizeProvince } from './region-rules';
 
 /**
@@ -25,6 +26,14 @@ const INSTAGRAM_PATTERN = /^@?[A-Za-z0-9_.]{1,30}$/;
 // loose enough to accept either the bare 9-digit BN or the full BN+program-account form, with or
 // without spaces, since real applicants provide both styles.
 const BUSINESS_NUMBER_PATTERN = /^\d{9}(\s?[A-Z]{2}\d{4})?$/i;
+// Mirrors what Shopify's customerSet mutation actually rejects on firstName/lastName (confirmed
+// live against the Admin API, 2026-10-12): a URL, HTML tags, or more than 255 characters. An
+// admin edit writes straight to the same `customers` row the approval flow later sends to
+// Shopify (src/data/customers.ts -> findOrCreateShopifyCustomer), so letting a bad value through
+// here just moves the Shopify rejection from "edit" time to "approve" time instead of catching it.
+const NAME_URL_PATTERN = /(https?:\/\/|www\.)/i;
+const HTML_TAG_PATTERN = /<[^>]*>/;
+const MAX_NAME_LENGTH = 255;
 
 // Copied by value from storefront's features/apply/data.ts (identical in features/retail/data.ts)
 // -- these are the exact option sets the registration wizard's dropdowns restrict a fresh
@@ -67,6 +76,7 @@ export type CustomerInfoFields = {
   billProvince?: string | null;
   billPostalCode?: string | null;
   taxExempt?: boolean | null;
+  vptNumber?: string | null;
   referralSource?: string | null;
 };
 
@@ -106,6 +116,17 @@ export function validateCustomerInfoUpdate(fields: CustomerInfoFields): string |
     }
   }
 
+  for (const [key, label] of [
+    ['firstName', 'first name'],
+    ['lastName', 'last name'],
+  ] as const) {
+    const value = fields[key];
+    if (value === undefined || isBlank(value)) continue;
+    if (NAME_URL_PATTERN.test(value!)) return `The ${label} cannot contain a URL.`;
+    if (HTML_TAG_PATTERN.test(value!)) return `The ${label} cannot contain HTML tags.`;
+    if (value!.length > MAX_NAME_LENGTH) return `The ${label} is too long (maximum is ${MAX_NAME_LENGTH} characters).`;
+  }
+
   if (fields.shipProvince !== undefined && normalizeProvince(fields.shipProvince) === null) {
     return 'Please choose a valid shipping province.';
   }
@@ -122,7 +143,10 @@ export function validateCustomerInfoUpdate(fields: CustomerInfoFields): string |
   if (fields.phone !== undefined && !isBlank(fields.phone) && !PHONE_PATTERN.test(fields.phone!.trim())) {
     return 'Please enter a valid business phone number.';
   }
-  if (fields.personalCell !== undefined && !isBlank(fields.personalCell) && !PHONE_PATTERN.test(fields.personalCell!.trim())) {
+  // Personal cell uses libphonenumber-js (the industry-standard library, not a hand-rolled regex)
+  // -- it checks against real, currently-assigned Canadian number ranges, not just character
+  // shape, so a plausible-looking but fake number (e.g. "123-456-7890") is correctly rejected.
+  if (fields.personalCell !== undefined && !isBlank(fields.personalCell) && !isValidPhoneNumber(fields.personalCell!.trim(), 'CA')) {
     return 'Please enter a valid personal cell number.';
   }
 
