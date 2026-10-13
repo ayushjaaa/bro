@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu Restructure Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#fbf9f6;
+    --surface:#ffffff;
+    --border:#e4ddd1;
+    --ink:#241f18;
+    --ink-dim:#6b6353;
+    --accent:#9a5b2e;
+    --new:#2f6e4e;
+    --new-bg:#e8f3ec;
+    --moved:#9a5b2e;
+    --moved-bg:#f6ece0;
+    --changed:#8a5a00;
+    --changed-bg:#fbf1dc;
+    --question:#a3362d;
+    --question-bg:#fbeae8;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    margin:0;
+    padding-inline:20px;
+    padding-block:32px;
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .wrap{max-width:980px;margin:0 auto;}
+  .back-link{
+    display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+    color:var(--accent);text-decoration:none;margin-bottom:18px;
+  }
+  .back-link:hover{text-decoration:underline;}
+
+  h1{
+    font-family:'Fraunces', Georgia, serif;
+    font-size:clamp(28px,5vw,40px);
+    font-weight:600;
+    margin:0 0 6px;
+    text-wrap:balance;
+  }
+  .sub{color:var(--ink-dim);font-size:15px;margin:0 0 28px;max-width:62ch;line-height:1.55;}
+
+  .legend{
+    display:flex;flex-wrap:wrap;gap:10px;
+    margin-bottom:36px;
+  }
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12.5px;font-weight:600;letter-spacing:.01em;
+    padding:5px 11px;border-radius:999px;border:1px solid transparent;
+  }
+  .chip.new{color:var(--new);background:var(--new-bg);border-color:var(--new);}
+  .chip.moved{color:var(--moved);background:var(--moved-bg);border-color:var(--moved);}
+  .chip.changed{color:var(--changed);background:var(--changed-bg);border-color:var(--changed);}
+  .chip.question{color:var(--question);background:var(--question-bg);border-color:var(--question);}
+
+  section.block{
+    margin-bottom:40px;
+  }
+  .block h2{
+    font-family:'Fraunces', Georgia, serif;
+    font-size:22px;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  .block .note{color:var(--ink-dim);font-size:13.5px;margin:0 0 16px;line-height:1.5;max-width:68ch;}
+
+  .diagram-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px 14px 8px;
+    overflow-x:auto;
+  }
+  .diagram-card pre.mermaid{margin:0;min-width:560px;}
+
+  table.changelog{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    font-size:13.5px;
+  }
+  table.changelog th, table.changelog td{
+    text-align:left;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  table.changelog th{
+    font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink-dim);font-weight:700;background:var(--bg);
+  }
+  table.changelog tr:last-child td{border-bottom:none;}
+  table.changelog td.tag{white-space:nowrap;}
+  .tag-pill{
+    display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;
+  }
+  .tag-pill.new{color:var(--new);background:var(--new-bg);}
+  .tag-pill.moved{color:var(--moved);background:var(--moved-bg);}
+  .tag-pill.changed{color:var(--changed);background:var(--changed-bg);}
+
+  .questions{
+    background:var(--question-bg);
+    border:1px solid var(--question);
+    border-radius:14px;
+    padding:16px 18px;
+    margin-top:36px;
+  }
+  .questions h2{
+    font-family:'Fraunces', Georgia, serif;
+    font-size:18px;margin:0 0 10px;color:var(--question);
+  }
+  .questions ul{margin:0;padding-left:20px;font-size:13.5px;line-height:1.6;color:var(--ink);}
+  .questions li{margin-bottom:6px;}
+
+  footer{margin-top:40px;color:var(--ink-dim);font-size:12px;text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="back-link" href="index.html">&larr; Back to the menu mockup</a>
+
+  <h1>Menu Restructure Map</h1>
+  <p class="sub">From the client's handwritten notes, mapped against the live site's current mega-menu. Green = brand new, orange = moved from elsewhere, yellow = reorganized (same place, different grouping logic).</p>
+
+  <div class="legend">
+    <span class="chip new">&#9679; New sub-category</span>
+    <span class="chip moved">&#9679; Moved from Smoking</span>
+    <span class="chip changed">&#9679; Reorganized</span>
+    <span class="chip question">&#9679; Unclear in notes</span>
+  </div>
+
+  <section class="block">
+    <h2>Cannabis Accessories — current</h2>
+    <p class="note">Today's live structure: Bongs, Vaporizers, Grinders, Storage, Scales, Others.</p>
+    <div class="diagram-card">
+<pre class="mermaid">
+graph TD
+  CA["Cannabis Accessories"]
+  CA --> Bongs["Bongs"]
+  Bongs --> B1["Straight Tube Bongs"]
+  Bongs --> B2["Beaker Bongs"]
+  CA --> Vap["Vaporizers"]
+  CA --> Gr["Grinders — by Type"]
+  Gr --> G1["Cookies"]
+  Gr --> G2["Santa Cruz Shredder"]
+  CA --> St["Storage"]
+  CA --> Sc["Scales"]
+  Sc --> S1["AWS"]
+  Sc --> S2["MyWeigh"]
+  CA --> Ot["Others"]
+</pre>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Cannabis Accessories — client's new map</h2>
+    <p class="note">Bong types expand; two brand-new sub-categories appear (Pipes, Bong Access/Parts &amp; Tools); Grinders flips from by-type to by-brand; three Rolling sub-categories relocate here from Smoking.</p>
+    <div class="diagram-card">
+<pre class="mermaid">
+graph TD
+  CA["Cannabis Accessories"]
+
+  CA --> Bongs["Bong<br/>sizes: 10&amp;quot; / 12&amp;quot; / 14&amp;quot;"]
+  Bongs --> Bk["Beaker Bong"]
+  Bongs --> Dr["Dab Rig Bong"]
+  Bongs --> Si["Silicon Bong"]
+  Bongs --> Zg["Zong Bong"]
+  Bongs --> Ol["Oil Bong"]
+  Bongs --> Gn["Gun Bong"]
+  Bongs --> Va["view All"]
+
+  CA --> BP["Bong Access / Bong Parts &amp; Tools<br/>— by Category"]:::newnode
+  BP --> Bw["Bowls"]
+  BP --> Oa["Oil Pipe Attachment"]
+  BP --> Ds["Downstem"]
+  BP --> Bg["Banger?"]:::question
+  BP --> Db["Dabber"]
+  BP --> At["Ash Tray"]
+
+  CA --> Pi["Pipes — by Type"]:::newnode
+  Pi --> P1["Oil Pipes"]
+  Pi --> P2["Glass Pipe"]
+  Pi --> P3["Metal Pipe"]
+  Pi --> P4["Silicon Pipe"]
+  Pi --> P5["Nectar Collector"]
+
+  CA --> Gr["Grinders — by Brand"]:::changednode
+  Gr --> G1["2in1"]
+  Gr --> G2["Infyniti"]
+  Gr -.-> G3["Posh — crossed out"]:::question
+
+  CA --> Sc["Scales — by Brand"]:::changednode
+  Sc --> S1["Infyniti?"]:::question
+  Sc --> S2["Gforce?"]:::question
+
+  CA --> RP["Rolling Paper — by Brand"]:::movednode
+  RP --> R1["Juicy Jay"]
+  RP --> R2["Skunk"]
+  RP --> R3["Raw"]
+  RP --> R4["Zig Zag"]
+  RP --> R5["Element"]
+
+  CA --> PR["Pre-Rolled"]:::movednode
+  PR --> Pr1["Jumbo"]
+  PR --> Pr2["Raw"]
+  PR --> Pr3["Zig Zag"]
+  PR --> Pr4["Elements"]
+
+  CA --> FT["Filter &amp; Tips"]:::movednode
+  FT --> F1["Pop"]
+  FT --> F2["Raw"]
+
+  classDef newnode fill:#2f6e4e22,stroke:#2f6e4e,color:#2f6e4e,font-weight:600;
+  classDef movednode fill:#9a5b2e22,stroke:#9a5b2e,color:#9a5b2e,font-weight:600;
+  classDef changednode fill:#8a5a0022,stroke:#8a5a00,color:#8a5a00,font-weight:600;
+  classDef question fill:#a3362d22,stroke:#a3362d,color:#a3362d,stroke-dasharray: 3 2;
+</pre>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Smoking — current</h2>
+    <p class="note">Today's live structure: Rolling Accessories (6 groups incl. Rolling Papers, Blunts &amp; Wraps, Pre-Rolled Cones, Filters &amp; Tips, Tobacco), Torch Lighters, Butane.</p>
+    <div class="diagram-card">
+<pre class="mermaid">
+graph TD
+  SM["Smoking"]
+  SM --> RA["Rolling Accessories"]
+  RA --> RP1["Rolling Papers"]
+  RA --> RP2["Blunts &amp; Wraps"]
+  RA --> RP3["Pre-Rolled Cones"]
+  RA --> RP4["Filters &amp; Tips"]
+  RA --> RP5["Rolling Accessories"]
+  RA --> RP6["Tobacco"]
+  SM --> TL["Torch Lighters"]
+  SM --> Bu["Butane"]
+</pre>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Smoking — client's new map</h2>
+    <p class="note">The three Rolling sub-categories move out to Cannabis Accessories (see above). What's left is relabeled "Smoking Acc" with 5 entries — 4 of them by brand, the 5th by category.</p>
+    <div class="diagram-card">
+<pre class="mermaid">
+graph TD
+  SM["Smoking Acc"]
+  SM --> TL["1. Torch Lighters — by Brand"]
+  SM --> Bu["2. Butane — by Brand"]:::question
+  SM --> Li["3. Lighters — by Brand"]:::newnode
+  SM --> LF["4. Lighter Fluid — by Brand"]:::newnode
+  SM --> LA["5. Lighter Accessories — by Category"]:::newnode
+
+  Out["Rolling Papers / Pre-Rolled / Filter &amp; Tips"]:::movednode -.moved to Cannabis Accessories.-> CA2["Cannabis Accessories"]
+  SM -.no longer holds.-> Out
+
+  classDef newnode fill:#2f6e4e22,stroke:#2f6e4e,color:#2f6e4e,font-weight:600;
+  classDef movednode fill:#9a5b2e22,stroke:#9a5b2e,color:#9a5b2e,font-weight:600;
+  classDef question fill:#a3362d22,stroke:#a3362d,color:#a3362d,stroke-dasharray: 3 2;
+</pre>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Change log</h2>
+    <table class="changelog">
+      <thead>
+        <tr><th>Item</th><th>Change</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Bong types</td>
+          <td class="tag"><span class="tag-pill changed">Expanded</span></td>
+          <td>Straight Tube / Beaker → Beaker, Dab Rig, Silicon, Zong, Oil, Gun. Sizes 10"/12"/14" noted on Beaker; "view All" link.</td>
+        </tr>
+        <tr>
+          <td>Bong Access / Parts &amp; Tools</td>
+          <td class="tag"><span class="tag-pill new">New</span></td>
+          <td>Doesn't exist today. By Category: Bowls, Oil Pipe Attachment, Downstem, Banger(?), Dabber, Ash Tray.</td>
+        </tr>
+        <tr>
+          <td>Pipes</td>
+          <td class="tag"><span class="tag-pill new">New</span></td>
+          <td>Doesn't exist today. Oil Pipes, Glass Pipe, Metal Pipe, Silicon Pipe, Nectar Collector.</td>
+        </tr>
+        <tr>
+          <td>Grinders</td>
+          <td class="tag"><span class="tag-pill changed">Reorganized</span></td>
+          <td>By Type (2/3/4-piece, Electric) with Cookies/Santa Cruz Shredder → By Brand: 2in1, Infyniti. "Posh" is written then crossed out.</td>
+        </tr>
+        <tr>
+          <td>Scales</td>
+          <td class="tag"><span class="tag-pill changed">Reorganized</span></td>
+          <td>By Capacity/Type with AWS/MyWeigh → By Brand, but both candidate brands (Infyniti, Gforce) look crossed out in the photo — needs confirmation.</td>
+        </tr>
+        <tr>
+          <td>Rolling Paper, Pre-Rolled, Filter &amp; Tips</td>
+          <td class="tag"><span class="tag-pill moved">Moved</span></td>
+          <td>Relocate from Smoking to Cannabis Accessories, reorganized by brand. Brand lists also change (e.g. Rolling Paper drops OCB/Job/Bambu, adds Juicy Jay/Skunk).</td>
+        </tr>
+        <tr>
+          <td>Lighters, Lighter Fluid, Lighter Accessories</td>
+          <td class="tag"><span class="tag-pill new">New</span></td>
+          <td>Added to Smoking Acc alongside existing Torch Lighters and Butane. Lighter Accessories is the only one organized By Category instead of By Brand.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="questions">
+    <h2>Before building this, confirm:</h2>
+    <ul>
+      <li><strong>Scales brands</strong> — both "Infyniti" and "Gforce" appear struck through in the photo. Keep both, keep one, or are these replaced by something else?</li>
+      <li><strong>Bong Parts item 4</strong> — reads as "Burger" but is almost certainly "Banger" (a dab rig accessory). Confirm before it goes into the taxonomy.</li>
+      <li><strong>Word before "Butane"</strong> in the Smoking Acc list is scratched out — was something renamed to Butane, or was a 6th item removed entirely?</li>
+      <li><strong>Grinders — "Posh"</strong> is crossed out: drop it, or keep it alongside 2in1/Infyniti?</li>
+    </ul>
+  </div>
+
+  <footer>Built from the client's two handwritten photos, cross-checked against admin-panel/src/data/taxonomy.ts and storefront/src/features/navigation/data.ts.</footer>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+</script>
+
+</body>
+</html>
