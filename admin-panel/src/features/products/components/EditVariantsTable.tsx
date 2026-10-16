@@ -198,7 +198,7 @@ export default function EditVariantsTable({
               <th className="text-left px-3 py-2 font-medium">Description</th>
               <th className="text-left px-3 py-2 font-medium">Wholesale Price</th>
               <th className="text-left px-3 py-2 font-medium">Compare-at</th>
-              <th className="text-left px-3 py-2 font-medium">Retail Price</th>
+              <th className="text-left px-3 py-2 font-medium">Distributor Price</th>
               <th className="text-left px-3 py-2 font-medium">Quantity</th>
               <th className="text-left px-3 py-2 font-medium">SKU</th>
               <th className="text-left px-3 py-2 font-medium"></th>

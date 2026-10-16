@@ -13,6 +13,10 @@ import {
   createSalesRepAction,
   listNotesAction,
   createNoteAction,
+  suspendCustomerAction,
+  deactivateCustomerAction,
+  reactivateCustomerAction,
+  resetRejectedCustomerForReapplyAction,
 } from '../actions';
 import {
   validateCustomerInfoUpdate,
@@ -22,8 +26,25 @@ import {
 } from '@/lib/customer-info-validation';
 import { InfoCard } from './InfoCard';
 import { RepForm, type RepFormValue } from '@/features/sales-reps/components/RepForm';
+import { isAuthError, SESSION_EXPIRED_MESSAGE } from '@/lib/action-errors';
 import { Field, StatusBadge } from './shared';
 import { PhoneIcon, MailIcon, UserIcon, NoteIcon, XIcon } from '@/components/icons';
+
+/** Display labels only -- the stored/coded account type value stays 'retail'/'wholesale'. */
+const ACCOUNT_TYPE_LABELS: Record<'retail' | 'wholesale', string> = {
+  retail: 'Distributor',
+  wholesale: 'Wholesale',
+};
+
+/** Session expiry (requireAdmin() throwing mid-action) must read differently from a real business
+ * failure -- otherwise an admin whose session lapsed keeps retrying a button that can never
+ * succeed until they reload and log in again, with no hint why. Shared across every action
+ * handler in this file (drawer-level and the nested cards below). */
+function resolveErrorMessage(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : undefined;
+  if (isAuthError(message)) return SESSION_EXPIRED_MESSAGE;
+  return message || fallback;
+}
 
 /**
  * Slide-over drawer replacing the old inline `<tr>` expand -- every section of customer detail
@@ -37,11 +58,15 @@ export default function CustomerDrawer({
   customer,
   orders,
   salesReps,
+  initialIntent = null,
   onClose,
 }: {
   customer: Customer;
   orders: OrderStatusRow[];
   salesReps: SalesRep[];
+  /** Pre-opens the Suspend/Deactivate reason form (034) -- set when the drawer was opened via the
+   * table row's quick-action button rather than a plain row click. */
+  initialIntent?: 'suspend' | 'deactivate' | null;
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -67,10 +92,15 @@ export default function CustomerDrawer({
     setLoadingDocumentPath(path);
     try {
       const url = await getRegistrationDocumentUrlAction(path);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      // window.open returns null (never throws) when the browser blocks the popup -- without
+      // this check the admin sees the loading state resolve and nothing else, with no clue why.
+      if (!win) {
+        setDocumentError('Your browser blocked the popup. Please allow popups for this site and try again.');
+      }
     } catch (err) {
       console.error('[CustomerDrawer] handleViewDocument failed:', err);
-      setDocumentError('Could not open this document. Please try again.');
+      setDocumentError(resolveErrorMessage(err, 'Could not open this document. Please try again.'));
     } finally {
       setLoadingDocumentPath(null);
     }
@@ -91,7 +121,7 @@ export default function CustomerDrawer({
         router.refresh();
       } catch (err) {
         console.error('[CustomerDrawer] handleAccountTypeChange failed:', err);
-        setAccountTypeError('Could not update account type. Please try again.');
+        setAccountTypeError(resolveErrorMessage(err, 'Could not update account type. Please try again.'));
       }
     });
   }
@@ -108,7 +138,11 @@ export default function CustomerDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-lg h-full bg-neutral-50 shadow-xl overflow-y-auto flex flex-col">
+      <div
+        role="dialog"
+        aria-label={`${customer.firstName} ${customer.lastName}`.trim() || customer.email}
+        className="relative w-full max-w-lg h-full bg-neutral-50 shadow-xl overflow-y-auto flex flex-col"
+      >
         <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 px-5 py-4 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -152,13 +186,13 @@ export default function CustomerDrawer({
                   type="button"
                   onClick={() => handleAccountTypeChange(type)}
                   disabled={pending}
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full border capitalize ${
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
                     customer.accountType === type
                       ? 'bg-brand-purple-deep text-white border-brand-purple-deep'
                       : 'bg-white text-neutral-600 border-neutral-300 hover:bg-neutral-50'
                   }`}
                 >
-                  {type}
+                  {ACCOUNT_TYPE_LABELS[type]}
                 </button>
               ))}
               {customer.accountNumber && (
@@ -167,6 +201,10 @@ export default function CustomerDrawer({
             </div>
           )}
           {accountTypeError && <p className="text-xs text-red-600">{accountTypeError}</p>}
+
+          {!editingInfo && (
+            <AccountStatusActionsCard customer={customer} initialIntent={initialIntent} onClose={onClose} />
+          )}
 
           {!editingInfo && (
             <>
@@ -316,6 +354,266 @@ export default function CustomerDrawer({
       </div>
     </div>
   );
+}
+
+/**
+ * Suspend/Deactivate/Reactivate/Allow-reapply (034 migration) -- the admin's status-change
+ * actions for every status that has one. Deliberately renders NOTHING for 'suspended' beyond a
+ * read-only note: that status has no outgoing transition at all (enforced at the DB trigger
+ * level, see 034's enforce_customer_status_transition), so there must be no button anywhere that
+ * even looks like it could undo it.
+ */
+function AccountStatusActionsCard({
+  customer,
+  initialIntent,
+  onClose,
+}: {
+  customer: Customer;
+  initialIntent: 'suspend' | 'deactivate' | null;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [openForm, setOpenForm] = useState<'suspend' | 'deactivate' | null>(initialIntent);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  function handleSuspend() {
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      setError('A reason is required.');
+      return;
+    }
+    if (!confirm(`Permanently suspend ${customer.firstName} ${customer.lastName}? This is permanent and cannot be undone — they can never apply again with this email or business information.`)) {
+      return;
+    }
+    setError('');
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set('id', customer.id);
+        formData.set('reason', trimmed);
+        await suspendCustomerAction(formData);
+        router.refresh();
+        onClose();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleSuspend failed:', err);
+        setError(resolveErrorMessage(err, 'Could not suspend. Please try again.'));
+      }
+    });
+  }
+
+  function handleDeactivate() {
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      setError('A reason is required.');
+      return;
+    }
+    if (!confirm(`Deactivate ${customer.firstName} ${customer.lastName}? They'll be logged out and blocked from logging in until reactivated.`)) {
+      return;
+    }
+    setError('');
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set('id', customer.id);
+        formData.set('reason', trimmed);
+        await deactivateCustomerAction(formData);
+        router.refresh();
+        onClose();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleDeactivate failed:', err);
+        setError(resolveErrorMessage(err, 'Could not deactivate. Please try again.'));
+      }
+    });
+  }
+
+  function handleReactivate() {
+    if (!confirm(`Reactivate ${customer.firstName} ${customer.lastName}? They'll be able to log in again immediately, no data lost.`)) return;
+    setError('');
+    startTransition(async () => {
+      try {
+        await reactivateCustomerAction(customer.id);
+        router.refresh();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleReactivate failed:', err);
+        // err.message, not a blanket fallback -- surfaces friendlyRpcError's real text (e.g. a
+        // concurrency loss against another admin's click in the same instant), the same way
+        // handleSuspend/handleDeactivate already do. A generic "try again" here would hide exactly
+        // the information that explains WHY the retry the admin is about to make might behave
+        // differently (found during this session's concurrency-safety review).
+        setError(resolveErrorMessage(err, 'Could not reactivate. Please try again.'));
+      }
+    });
+  }
+
+  function handleAllowReapply() {
+    if (!confirm('This clears their submitted application info so they can reapply from scratch with the same email. Continue?')) return;
+    setError('');
+    startTransition(async () => {
+      try {
+        await resetRejectedCustomerForReapplyAction(customer.id);
+        router.refresh();
+        onClose();
+      } catch (err) {
+        console.error('[CustomerDrawer] handleAllowReapply failed:', err);
+        const message = resolveErrorMessage(err, 'Could not reset for reapplication. Please try again.');
+        setError(message);
+        // Same reasoning as CustomersTable's handleAllowReapply: this action's own success
+        // DELETES the row, so a losing race can have the live table's realtime sync pull the
+        // row (and this drawer's `customer` prop) out from under the error before it's ever
+        // seen. alert() guarantees it survives regardless.
+        alert(message);
+      }
+    });
+  }
+
+  // Suspend is available before approval too (product decision): a pending applicant can already
+  // be an obvious fraud case, and making the admin approve-then-suspend first would momentarily
+  // grant an account to someone about to be permanently blocked. Deactivate deliberately stays
+  // approved-only -- it exists to pause an account that actually has live access; a pending
+  // applicant has none yet (every login path already blocks non-approved customers), so
+  // "deactivating" one would be indistinguishable from leaving it pending. suspend_customer's own
+  // guard (034) already allows this -- it only refuses 'approving' and already-'suspended' rows.
+  if (customer.status === 'approved' || customer.status === 'pending') {
+    const canDeactivate = customer.status === 'approved';
+    return (
+      <InfoCard title="Account Status Actions">
+        <div className="flex flex-col gap-3">
+          {openForm ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={openForm === 'suspend' ? 'Reason for suspension (required)…' : 'Reason for deactivation (required)…'}
+                rows={2}
+                disabled={pending}
+                className="w-full text-sm border border-neutral-300 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-brand-purple-accent/30 focus:border-brand-purple-deep disabled:bg-neutral-100"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={openForm === 'suspend' ? handleSuspend : handleDeactivate}
+                  disabled={pending || !reason.trim()}
+                  className={`text-sm font-semibold px-3.5 py-1.5 rounded-lg text-white disabled:opacity-40 ${
+                    openForm === 'suspend' ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'
+                  }`}
+                >
+                  {pending ? 'Saving…' : openForm === 'suspend' ? 'Permanently suspend' : 'Deactivate'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenForm(null);
+                    setReason('');
+                    setError('');
+                  }}
+                  disabled={pending}
+                  className="text-sm font-semibold px-3.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {/* Solid red, not an outline -- matches the table's Suspend button (CustomersTable.tsx):
+                  this is the one permanent, un-reversible action here, so it must read as more
+                  severe than Deactivate at a glance, not share a lighter outline style with it. */}
+              <button
+                type="button"
+                onClick={() => setOpenForm('suspend')}
+                className="text-sm font-semibold px-3.5 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700"
+              >
+                Suspend account
+              </button>
+              {canDeactivate && (
+                <button
+                  type="button"
+                  onClick={() => setOpenForm('deactivate')}
+                  className="text-sm font-semibold px-3.5 py-1.5 rounded-lg border border-orange-200 text-orange-700 hover:bg-orange-50"
+                >
+                  Deactivate account
+                </button>
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      </InfoCard>
+    );
+  }
+
+  if (customer.status === 'deactivated') {
+    return (
+      <InfoCard title="Account Status Actions">
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+            <Field label="Deactivated By" value={customer.deactivatedBy} />
+            <Field label="Deactivated At" value={customer.deactivatedAt ? new Date(customer.deactivatedAt).toLocaleString('en-CA') : null} />
+            <Field label="Reason" value={customer.deactivationReason} />
+          </div>
+          {/* Blue, not Approve's green -- "undo a pause" is a different action from "approve a
+              brand-new application," even though the two never appear on the same row. */}
+          <button
+            type="button"
+            onClick={handleReactivate}
+            disabled={pending}
+            className="self-start text-sm font-semibold px-3.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            {pending ? 'Reactivating…' : 'Reactivate'}
+          </button>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      </InfoCard>
+    );
+  }
+
+  if (customer.status === 'suspended') {
+    return (
+      <InfoCard title="Account Status Actions">
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+            <Field label="Suspended By" value={customer.suspendedBy} />
+            <Field label="Suspended At" value={customer.suspendedAt ? new Date(customer.suspendedAt).toLocaleString('en-CA') : null} />
+            <Field label="Reason" value={customer.suspensionReason} />
+          </div>
+          <p className="text-xs text-neutral-400">Suspensions are permanent and cannot be reversed from this panel.</p>
+          {/* A losing Deactivate/Suspend click against this row can set `error` right before a
+              Realtime update flips `customer.status` to 'suspended' -- without this, the error
+              state had nowhere to render in this branch and silently disappeared (found via a
+              live concurrency e2e test: the admin saw the dead-end view with no explanation at
+              all for why their action just failed). */}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      </InfoCard>
+    );
+  }
+
+  if (customer.status === 'rejected') {
+    return (
+      <InfoCard title="Account Status Actions">
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+            <Field label="Rejected By" value={customer.rejectedBy} />
+            <Field label="Rejected At" value={customer.rejectedAt ? new Date(customer.rejectedAt).toLocaleString('en-CA') : null} />
+            <Field label="Times Rejected" value={String(customer.rejectionCount)} />
+          </div>
+          <button
+            type="button"
+            onClick={handleAllowReapply}
+            disabled={pending}
+            className="self-start text-sm font-semibold px-3.5 py-1.5 rounded-lg border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-40"
+          >
+            {pending ? 'Resetting…' : 'Allow reapply'}
+          </button>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      </InfoCard>
+    );
+  }
+
+  return null;
 }
 
 function OrderLine({ order }: { order: OrderStatusRow }) {
@@ -576,6 +874,7 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
     monthlyPurchaseRange: customer.monthlyPurchaseRange ?? '',
     instagramHandle: customer.instagramHandle ?? '',
     onlineUrl: customer.onlineUrl ?? '',
+    vptNumber: customer.vptNumber ?? '',
     shipLine1: customer.shipLine1 ?? '',
     shipLine2: customer.shipLine2 ?? '',
     shipCity: customer.shipCity ?? '',
@@ -653,6 +952,7 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
     maybe('monthlyPurchaseRange', against.monthlyPurchaseRange);
     maybe('instagramHandle', against.instagramHandle);
     maybe('onlineUrl', against.onlineUrl);
+    maybe('vptNumber', against.vptNumber);
     maybe('shipLine1', against.shipLine1);
     maybe('shipLine2', against.shipLine2);
     maybe('shipCity', against.shipCity);
@@ -706,7 +1006,7 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
         setConflict(result.latest);
         return;
       }
-      setError(result.error);
+      setError(isAuthError(result.error) ? SESSION_EXPIRED_MESSAGE : result.error);
     });
   }
 
@@ -753,6 +1053,7 @@ function CustomerInfoEditForm({ customer, onDone }: { customer: Customer; onDone
         <SelectField label="Expected Monthly Purchase" value={form.monthlyPurchaseRange} options={MONTHLY_PURCHASE_RANGES} onChange={(v) => set('monthlyPurchaseRange', v)} disabled={saving} error={fieldErrors.monthlyPurchaseRange} />
         <TextField label="Instagram" value={form.instagramHandle} onChange={(v) => set('instagramHandle', v)} onBlur={() => validateField('instagramHandle')} error={fieldErrors.instagramHandle} disabled={saving} />
         <TextField label="Online Store URL" value={form.onlineUrl} onChange={(v) => set('onlineUrl', v)} onBlur={() => validateField('onlineUrl')} error={fieldErrors.onlineUrl} disabled={saving} />
+        <TextField label="VPT Number" value={form.vptNumber} onChange={(v) => set('vptNumber', v)} onBlur={() => validateField('vptNumber')} error={fieldErrors.vptNumber} disabled={saving} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -824,7 +1125,7 @@ function SalesRepCard({ customer, salesReps }: { customer: Customer; salesReps: 
         router.refresh();
       } catch (err) {
         console.error('[CustomerDrawer] handleAssign failed:', err);
-        setError('Could not assign the rep. Please try again.');
+        setError(resolveErrorMessage(err, 'Could not assign the rep. Please try again.'));
       }
     });
   }
@@ -851,7 +1152,11 @@ function SalesRepCard({ customer, salesReps }: { customer: Customer; salesReps: 
         router.refresh();
       } catch (err) {
         console.error('[CustomerDrawer] handleCreateRep assign step failed:', err);
-        setError(`"${result.rep.name}" was created but could not be assigned — please assign manually from the dropdown above.`);
+        setError(
+          isAuthError(err instanceof Error ? err.message : undefined)
+            ? `"${result.rep.name}" was created, but ${SESSION_EXPIRED_MESSAGE.toLowerCase()} Please assign them manually from the dropdown above after logging back in.`
+            : `"${result.rep.name}" was created but could not be assigned — please assign manually from the dropdown above.`
+        );
         // The rep row itself was created successfully -- refresh so it shows up in the "Assigned
         // rep" dropdown for manual assignment, matching the error message above.
         router.refresh();

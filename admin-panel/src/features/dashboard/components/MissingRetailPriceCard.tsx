@@ -18,14 +18,14 @@ export default function MissingRetailPriceCard({ products }: { products: Missing
         title={
           <span className="flex items-center gap-1.5">
             <WarningIcon className="size-4 text-dash-warning" />
-            Missing Retail Price
+            Missing Distributor Price
           </span>
         }
         count={products.length}
       />
       {products.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-dash-text-muted">
-          None — every Flavour has a Retail Price set.
+          None — every Flavour has a Distributor Price set.
         </p>
       ) : (
         <ul>

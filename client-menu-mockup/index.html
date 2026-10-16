@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini Distribution — Menu Mockup (New Structure)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --color-brand-purple-deep:#6b3aac;
+    --color-brand-purple-bright:#cc66ff;
+    --color-text-ink:#050505;
+    --color-text-ink-60:rgb(5 5 5 / .6);
+    --color-text-ink-50:rgb(5 5 5 / .5);
+    --color-text-ink-20:rgb(5 5 5 / .2);
+    --color-text-ink-10:rgb(5 5 5 / .1);
+    --color-border-purple-15:rgb(107 58 172 / .15);
+    --color-surface-card-gray:#f9f9f9;
+    --shadow-card-soft:0px 8px 24px 0px rgb(5 5 5 / .06);
+    --gradient-brand-cta:linear-gradient(90deg,#6b3aac 64.288%,#cc66ff 100%);
+    --warn:#a3362d;
+    --warn-bg:#fbeae8;
+    --new:#2f6e4e;
+    --new-bg:#e8f3ec;
+    --moved:#9a5b2e;
+    --moved-bg:#f6ece0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Inter Tight", ui-sans-serif, system-ui, sans-serif;
+    color:var(--color-text-ink);
+    background:#fff;
+  }
+
+  /* ---------- top "this is a mockup" banner ---------- */
+  .mockup-banner{
+    background:var(--color-text-ink);
+    color:#fff;
+    font-size:13px;
+    padding:10px 20px;
+    text-align:center;
+    line-height:1.5;
+  }
+  .mockup-banner strong{color:var(--color-brand-purple-bright);}
+  .mockup-banner .legend{
+    display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px;
+  }
+  .mockup-banner .legend span{
+    display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dot.new{background:var(--new);}
+  .dot.moved{background:var(--moved);}
+  .dot.warn{background:var(--warn);}
+
+  /* ---------- header ---------- */
+  header{border-bottom:1px solid var(--color-text-ink-10);position:relative;}
+  .header-row{
+    height:80px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px;max-width:1440px;margin:0 auto;
+  }
+  .logo img{height:36px;width:auto;display:block;}
+  nav.main-nav{display:flex;align-items:center;gap:28px;}
+  .nav-item{
+    position:relative;
+  }
+  .nav-trigger{
+    font-size:16px;line-height:0.9;font-weight:400;background:none;border:none;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;color:var(--color-text-ink);
+    padding:8px 2px;white-space:nowrap;
+  }
+  .nav-trigger:hover{color:var(--color-brand-purple-deep);}
+  .nav-trigger.plain{cursor:default;}
+  .nav-trigger .chev{transition:transform .15s;}
+  .nav-trigger[aria-expanded="true"] .chev{transform:rotate(180deg);}
+  .header-right{display:flex;align-items:center;gap:16px;}
+  .pill-btn{
+    font-size:13px;font-weight:500;padding:9px 18px;border-radius:999px;border:none;cursor:default;
+    background-image:var(--gradient-brand-cta);color:#fff;
+  }
+
+  /* ---------- mega menu panel ---------- */
+  .panel{
+    position:fixed;z-index:50;
+    display:flex;width:922px;max-width:calc(100vw - 32px);
+    background:#fff;border:1px solid var(--color-border-purple-15);
+    border-radius:10px;box-shadow:var(--shadow-card-soft);
+    overflow:hidden;
+    opacity:0;pointer-events:none;max-height:0;transition:opacity .15s;
+  }
+  .panel.open{opacity:1;pointer-events:auto;max-height:640px;}
+
+  .col1{width:256px;flex-shrink:0;border-right:1px solid var(--color-text-ink-10);padding:18px;display:flex;flex-direction:column;gap:6px;max-height:560px;overflow-y:auto;}
+  .col1-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;font-size:16px;line-height:1.1;
+    color:var(--color-text-ink-60);border:none;background:none;width:100%;
+  }
+  .col1-item:hover{background:var(--color-surface-card-gray);}
+  .col1-item.active{background:rgb(107 58 172 / .1);color:var(--color-brand-purple-deep);font-weight:500;}
+  .badge{
+    font-size:9.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
+    padding:2px 6px;border-radius:999px;flex-shrink:0;
+  }
+  .badge.new{background:var(--new-bg);color:var(--new);}
+  .badge.moved{background:var(--moved-bg);color:var(--moved);}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);}
+
+  .col2{width:308px;flex-shrink:0;border-right:1px solid var(--color-text-ink-10);padding:18px;display:flex;flex-direction:column;gap:14px;}
+  .col2 h3{font-size:18px;font-weight:600;margin:0;}
+  .search-box{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--color-text-ink-10);
+    border-radius:8px;padding:8px 10px;color:var(--color-text-ink-50);font-size:12px;
+  }
+  .group-list{display:flex;flex-direction:column;gap:8px;max-height:330px;overflow-y:auto;}
+  .group-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    border-radius:10px;padding:7px;cursor:pointer;border:none;background:none;width:100%;text-align:left;
+  }
+  .group-item:hover{background:var(--color-surface-card-gray);}
+  .group-item.active{background:rgb(107 58 172 / .1);}
+  .group-left{display:flex;align-items:center;gap:9px;min-width:0;}
+  .swatch{
+    width:30px;height:30px;border-radius:7px;flex-shrink:0;
+    background-image:var(--gradient-brand-cta);color:#fff;font-weight:700;font-size:13px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .group-name{font-size:14px;color:var(--color-text-ink-50);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .group-item.active .group-name{color:var(--color-brand-purple-deep);font-weight:500;}
+  .ghost-item{opacity:.45;text-decoration:line-through;cursor:default;}
+  .ghost-item:hover{background:none;}
+  .view-all{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;margin-top:auto;color:var(--color-text-ink);}
+
+  .col3{width:358px;flex-shrink:0;padding:18px;display:flex;flex-direction:column;gap:14px;}
+  .col3 h3{font-size:18px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .product-list{display:flex;flex-direction:column;gap:8px;max-height:330px;overflow-y:auto;}
+  .product-item{display:flex;align-items:center;gap:9px;padding:7px;border-radius:10px;}
+  .product-item:hover{background:var(--color-surface-card-gray);}
+  .product-thumb{width:30px;height:30px;border-radius:7px;border:1px solid var(--color-text-ink-10);background:var(--color-surface-card-gray);flex-shrink:0;}
+  .product-name{font-size:14px;color:var(--color-text-ink-50);}
+  .sample-note{font-size:11px;color:var(--color-text-ink-50);font-style:italic;}
+
+  .confirm-strip{
+    margin-top:10px;background:var(--warn-bg);border:1px solid var(--warn);color:var(--warn);
+    font-size:11.5px;border-radius:8px;padding:8px 10px;line-height:1.4;
+  }
+
+  .nav-plain-note{
+    font-size:11px;color:var(--color-text-ink-50);
+  }
+
+  /* ---------- page body (context so it reads like a real page, not a floating header) ---------- */
+  main{max-width:1000px;margin:60px auto;padding:0 24px 80px;}
+  main h1{font-family:"Inter Tight";font-size:28px;font-weight:600;margin:0 0 10px;}
+  main p.lede{color:var(--color-text-ink-50);font-size:15px;line-height:1.6;max-width:62ch;margin:0 0 28px;}
+  .howto{
+    background:var(--color-surface-card-gray);border:1px solid var(--color-text-ink-10);
+    border-radius:12px;padding:18px 20px;font-size:13.5px;line-height:1.7;color:var(--color-text-ink);
+  }
+  .howto b{color:var(--color-brand-purple-deep);}
+  footer{text-align:center;padding:30px;font-size:11.5px;color:var(--color-text-ink-50);}
+
+  @media (max-width:980px){
+    nav.main-nav{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">
+  <div><strong>MOCKUP — not the live site.</strong> This rebuilds the real site's header/menu styling to show the <strong>new Cannabis Accessories &amp; Smoking structure</strong> from your notes. No live inventory is connected — product tiles below are placeholders.</div>
+  <div class="legend">
+    <span><span class="dot new"></span>New sub-category</span>
+    <span><span class="dot moved"></span>Moved from Smoking</span>
+    <span><span class="dot warn"></span>Needs your confirmation</span>
+  </div>
+</div>
+
+<header>
+  <div class="header-row">
+    <a class="logo" href="#"><img src="logoGemin.svg" alt="Gemini Distribution"></a>
+    <nav class="main-nav" id="main-nav">
+      <!-- nav items injected by JS -->
+    </nav>
+    <div class="header-right">
+      <a class="nav-plain-note" href="menu-map.html" style="color:var(--color-brand-purple-deep);font-weight:600;text-decoration:none;">View Structure Map →</a>
+      <span class="nav-plain-note">Account · Cart</span>
+      <button class="pill-btn">Shop Now</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <h1>How to read this</h1>
+  <p class="lede">Click <b>Cannabis Accessories</b> or <b>Smoking</b> above to open the new mega-menu, exactly like on the live site. Column 1 is the sub-category list, column 2 is "shop by brand/category", column 3 is that group's products. Items with a colored tag are changes from what's live today — hover the tag for the detail.</p>
+  <div class="howto">
+    <b>Vape &amp; e Juices</b> and <b>Convenience</b> are left as plain links here — your notes didn't ask for changes there, so the real menu for those two stays as-is.<br><br>
+    <b>Rolling Paper, Pre-Rolled, and Filter &amp; Tips</b> used to live under Smoking — in this mockup they've moved to Cannabis Accessories, per your note "which were in Smoking, move to cannabis &amp; by brand."<br><br>
+    Anything tagged <span style="color:var(--warn);font-weight:600;">⚠ confirm</span> is something I couldn't read clearly off the photo (a crossed-out word, an ambiguous brand). Open the two photos in <code>client-notes/</code> next to this file to double check against the original.
+  </div>
+</main>
+
+<footer>Gemini Distribution — internal review mockup. Built from the client's handwritten notes, not connected to Shopify or any live data.</footer>
+
+<script>
+const DATA = {
+  "Vape & e Juices": null, // plain link — unchanged
+  "Cannabis Accessories": {
+    columnTwoLabel: "Shop By Category",
+    subCategories: [
+      {
+        name: "Bong", note: "Sizes noted: 10\" / 12\" / 14\" (beaker). \"view All\" link on the original note.",
+        groups: [
+          { name: "Beaker Bong", products: ["Beaker Bong — 14\"", "Beaker Bong — 12\"", "Beaker Bong — 10\""] },
+          { name: "Dab Rig Bong", products: ["Dab Rig Bong — Standard", "Dab Rig Bong — Mini"] },
+          { name: "Silicon Bong", products: ["Silicon Bong — Standard"] },
+          { name: "Zong Bong", products: ["Zong Bong — Standard"] },
+          { name: "Oil Bong", products: ["Oil Bong — Standard"] },
+          { name: "Gun Bong", products: ["Gun Bong — Standard"] },
+        ],
+      },
+      {
+        name: "Bong Access / Parts & Tools", tag: "new", note: "Doesn't exist on the live site today. Organized By Category.",
+        groups: [
+          { name: "Bowls", products: ["Glass Bowl — Standard"] },
+          { name: "Oil Pipe Attachment", products: ["Oil Pipe Attachment — Standard"] },
+          { name: "Downstem", products: ["Downstem — 14mm", "Downstem — 18mm"] },
+          { name: "Banger", tag: "warn", warnText: "Note reads \"Burger\" — almost certainly \"Banger\" (a dab rig part). Please confirm.", products: ["Quartz Banger — Standard"] },
+          { name: "Dabber", products: ["Dab Tool — Standard"] },
+          { name: "Ash Tray", products: ["Ash Tray — Standard"] },
+        ],
+      },
+      {
+        name: "Pipes", tag: "new", note: "Doesn't exist on the live site today.",
+        groups: [
+          { name: "Oil Pipes", products: ["Oil Pipe — Standard"] },
+          { name: "Glass Pipe", products: ["Glass Pipe — Standard"] },
+          { name: "Metal Pipe", products: ["Metal Pipe — Standard"] },
+          { name: "Silicon Pipe", products: ["Silicon Pipe — Standard"] },
+          { name: "Nectar Collector", products: ["Nectar Collector — Standard"] },
+        ],
+      },
+      {
+        name: "Grinders", tag: "changed", note: "Live site organizes this By Grinder Type (2/3/4-piece, Electric) with Cookies / Santa Cruz Shredder. Your note switches it to By Brand.",
+        groups: [
+          { name: "2in1", products: ["2in1 Grinder — Standard"] },
+          { name: "Infyniti", products: ["Infyniti Grinder — Standard"] },
+          { name: "Posh", ghost: true, warnText: "Written then crossed out on the note — shown here struck through, assumed removed. Confirm." },
+        ],
+      },
+      {
+        name: "Scales", tag: "warn", note: "Live site organizes this By Capacity/Type with AWS / MyWeigh. Both candidate brand names below look crossed out in the photo.",
+        warnText: "Both \"Infyniti\" and \"Gforce\" appear struck through on the note. Keep both, keep one, or something else entirely?",
+        groups: [
+          { name: "Infyniti?", tag: "warn", products: ["Infyniti Scale — Standard"] },
+          { name: "Gforce?", tag: "warn", products: ["Gforce Scale — Standard"] },
+        ],
+      },
+      {
+        name: "Rolling Paper", tag: "moved", note: "Moved here from Smoking per your note. Brand list also changes.",
+        groups: [
+          { name: "Juicy Jay", products: ["Juicy Jay Rolling Papers"] },
+          { name: "Skunk", products: ["Skunk Rolling Papers"] },
+          { name: "Raw", products: ["RAW Classic Rolling Papers"] },
+          { name: "Zig Zag", products: ["Zig-Zag Orange Papers"] },
+          { name: "Element", products: ["Elements Rolling Papers"] },
+        ],
+      },
+      {
+        name: "Pre-Rolled", tag: "moved", note: "Moved here from Smoking per your note.",
+        groups: [
+          { name: "Jumbo", products: ["Jumbo Pre-Rolled Cones"] },
+          { name: "Raw", products: ["RAW Pre-Rolled Cones"] },
+          { name: "Zig Zag", products: ["Zig-Zag Pre-Rolled Cones"] },
+          { name: "Elements", products: ["Elements Pre-Rolled Cones"] },
+        ],
+      },
+      {
+        name: "Filter & Tips", tag: "moved", note: "Moved here from Smoking per your note.",
+        groups: [
+          { name: "Pop", products: ["Pop Filter Tips"] },
+          { name: "Raw", products: ["RAW Slim Filter Tips"] },
+        ],
+      },
+      {
+        name: "Vaporizers", note: "Unchanged — not mentioned in your notes, kept as-is from the live site.",
+        groups: [
+          { name: "Desktop Vaporizers", products: ["Volcano Hybrid"] },
+          { name: "Portable Vaporizers", products: ["Mighty+", "Crafty+"] },
+        ],
+      },
+      {
+        name: "Storage", note: "Unchanged — not mentioned in your notes, kept as-is from the live site.",
+        groups: [
+          { name: "Jars", products: ["Cookies Storage Jar"] },
+          { name: "Bags", products: ["Cookies Stash Bag"] },
+        ],
+      },
+    ],
+  },
+  "Smoking": {
+    columnTwoLabel: "Shop By Brand",
+    subCategories: [
+      {
+        name: "Torch Lighters", note: "Unchanged — already on the live site.",
+        groups: [
+          { name: "Spider", products: ["Spider Torch Lighter"] },
+          { name: "Maven", products: ["Maven Torch Lighter"] },
+          { name: "Scorch Torch", products: ["Scorch Torch Triple Flame"] },
+        ],
+      },
+      {
+        name: "Butane", tag: "warn", note: "Already on the live site. A word right before \"Butane\" on your note is scratched out — was something renamed to Butane, or was a 6th item here removed?",
+        groups: [
+          { name: "Whip-It", products: ["Whip-It Butane 300ml"] },
+          { name: "Zippo", products: ["Zippo Premium Butane"] },
+        ],
+      },
+      {
+        name: "Lighters", tag: "new", note: "New — plain lighters, separate from Torch Lighters. Brand list not specified in your note yet.",
+        groups: [
+          { name: "Brand TBD", tag: "warn", products: ["Lighter — Sample"] },
+        ],
+      },
+      {
+        name: "Lighter Fluid", tag: "new", note: "New. Brand list not specified in your note yet.",
+        groups: [
+          { name: "Brand TBD", tag: "warn", products: ["Lighter Fluid — Sample"] },
+        ],
+      },
+      {
+        name: "Lighter Accessories", tag: "new", note: "New — the only one of the five organized By Category instead of By Brand.",
+        groups: [
+          { name: "By Category", products: ["Lighter Case — Sample", "Lighter Holder — Sample"] },
+        ],
+      },
+    ],
+  },
+  "Convenience": null, // plain link — unchanged
+};
+
+const nav = document.getElementById('main-nav');
+
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function tagBadge(tag, text) {
+  if (!tag) return '';
+  const label = tag === 'new' ? 'New' : tag === 'moved' ? 'Moved' : tag === 'changed' ? 'Changed' : 'Confirm';
+  return `<span class="badge ${tag}" title="${(text||'').replace(/"/g,'&quot;')}">${label}</span>`;
+}
+
+Object.keys(DATA).forEach((title) => {
+  const data = DATA[title];
+  const item = el('div', 'nav-item');
+
+  if (!data) {
+    const link = el('button', 'nav-trigger plain', title);
+    item.appendChild(link);
+    nav.appendChild(item);
+    return;
+  }
+
+  const trigger = el('button', 'nav-trigger');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.innerHTML = `${title} <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>`;
+  item.appendChild(trigger);
+
+  const panel = el('div', 'panel');
+  const col1 = el('div', 'col1');
+  const col2 = el('div', 'col2');
+  const col3 = el('div', 'col3');
+  panel.append(col1, col2, col3);
+  // Clicks on anything inside the panel (sub-category, brand/category, search box) must only
+  // change the active column -- never bubble up to the document-level listener that closes every
+  // open panel on outside clicks, or picking an item would immediately close the menu on it.
+  panel.addEventListener('click', (e) => e.stopPropagation());
+  item.appendChild(panel);
+  nav.appendChild(item);
+
+  let activeSub = data.subCategories[0];
+  let activeGroup = activeSub.groups.find(g => !g.ghost) || activeSub.groups[0];
+
+  function render() {
+    // column 1
+    col1.innerHTML = '';
+    data.subCategories.forEach((sub) => {
+      const btn = el('button', 'col1-item' + (sub === activeSub ? ' active' : ''));
+      btn.innerHTML = `<span>${sub.name}</span>${tagBadge(sub.tag, sub.note)}`;
+      btn.title = sub.note || '';
+      btn.onclick = () => { activeSub = sub; activeGroup = sub.groups.find(g => !g.ghost) || sub.groups[0]; render(); };
+      col1.appendChild(btn);
+    });
+
+    // column 2
+    col2.innerHTML = '';
+    col2.appendChild(el('h3', null, data.columnTwoLabel));
+    col2.appendChild(el('div', 'search-box', `🔍 Search ${data.columnTwoLabel.toLowerCase().includes('brand') ? 'brands' : 'categories'}...`));
+    const list = el('div', 'group-list');
+    (activeSub.groups || []).forEach((g) => {
+      if (g.ghost) {
+        const ghost = el('div', 'group-item ghost-item');
+        ghost.innerHTML = `<span class="group-left"><span class="swatch">${g.name.charAt(0)}</span><span class="group-name">${g.name}</span></span>`;
+        ghost.title = g.warnText || '';
+        list.appendChild(ghost);
+        return;
+      }
+      const btn = el('button', 'group-item' + (g === activeGroup ? ' active' : ''));
+      btn.innerHTML = `<span class="group-left"><span class="swatch">${g.name.charAt(0)}</span><span class="group-name">${g.name}</span></span>${tagBadge(g.tag, g.warnText)}`;
+      btn.title = g.warnText || '';
+      btn.onclick = () => { activeGroup = g; render(); };
+      list.appendChild(btn);
+    });
+    col2.appendChild(list);
+    if (activeSub.note) {
+      col2.appendChild(el('div', 'confirm-strip', (activeSub.tag === 'warn' ? '⚠ ' : 'ℹ ') + activeSub.note));
+    }
+    col2.appendChild(el('div', 'view-all', `View All ${data.columnTwoLabel.toLowerCase().includes('brand') ? 'Brands' : 'Categories'} →`));
+
+    // column 3
+    col3.innerHTML = '';
+    col3.appendChild(el('h3', null, `Shop ${activeGroup ? activeGroup.name : ''}`));
+    col3.appendChild(el('div', 'search-box', '🔍 Search products...'));
+    const plist = el('div', 'product-list');
+    (activeGroup && activeGroup.products || []).forEach((p) => {
+      const row = el('div', 'product-item');
+      row.innerHTML = `<span class="product-thumb"></span><span class="product-name">${p}</span>`;
+      plist.appendChild(row);
+    });
+    col3.appendChild(plist);
+    col3.appendChild(el('div', 'sample-note', 'Sample products shown for layout only — not final inventory.'));
+    if (activeGroup && activeGroup.warnText) {
+      col3.appendChild(el('div', 'confirm-strip', '⚠ ' + activeGroup.warnText));
+    }
+  }
+
+  render();
+
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.nav-trigger[aria-expanded="true"]').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    if (!isOpen) {
+      panel.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      const rect = item.getBoundingClientRect();
+      const navRect = nav.getBoundingClientRect();
+      const margin = 24;
+      const left = Math.max(margin, Math.min(navRect.left, window.innerWidth - panel.offsetWidth - margin));
+      panel.style.top = (rect.bottom + 8) + 'px';
+      panel.style.left = left + 'px';
+    }
+  };
+});
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.nav-trigger[aria-expanded="true"]').forEach(t => t.setAttribute('aria-expanded', 'false'));
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.nav-trigger[aria-expanded="true"]').forEach(t => t.setAttribute('aria-expanded', 'false'));
+  }
+});
+</script>
+
+</body>
+</html>

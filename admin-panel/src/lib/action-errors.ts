@@ -15,3 +15,15 @@ export function safeActionError(error: unknown, fallback: string, context: strin
   console.error(`[${context}]`, error);
   return fallback;
 }
+
+/** requireAdmin() (data/admin-auth.ts) throws these two exact messages on session expiry/loss of
+ * admin access -- distinguishing them from every other action error lets the UI tell an admin
+ * "log in again" instead of "please try again", which would otherwise send them into an infinite
+ * retry loop against a button that can never succeed until they reload and re-authenticate. */
+const AUTH_ERROR_MESSAGES = ['Unauthorized — not logged in', 'Forbidden — not an admin'];
+
+export function isAuthError(message: string | null | undefined): boolean {
+  return !!message && AUTH_ERROR_MESSAGES.includes(message);
+}
+
+export const SESSION_EXPIRED_MESSAGE = 'Your session has expired — please reload the page and log in again.';

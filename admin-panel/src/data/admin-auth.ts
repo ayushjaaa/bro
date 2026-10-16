@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 

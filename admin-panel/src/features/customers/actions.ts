@@ -4,11 +4,16 @@ import { revalidatePath } from 'next/cache';
 import {
   approveCustomer,
   rejectCustomer,
+  suspendCustomer,
+  deactivateCustomer,
+  reactivateCustomer,
+  resetRejectedCustomerForReapply,
   updateAccountType,
   updateCustomerSalesRep,
   updateCustomerApplicationInfo,
   forceResetStuckApproval,
-  listCustomers,
+  listCustomersPage,
+  listApprovedCustomersForRepView,
   getRegistrationDocumentUrl,
   listCustomerCartsPage,
   listCartSnapshotForCustomers,
@@ -19,7 +24,7 @@ import {
 import type { CustomerInfoFields } from '@/lib/customer-info-validation';
 import { getProductTitlesByIds, getVariantDetailsByIds, type VariantDetail } from '@/data/products';
 import { listSalesReps, createSalesRep, type SalesRep } from '@/data/sales-reps';
-import { listNotes, createNote, type NoteEntityType, type InternalNote } from '@/data/internal-notes';
+import { listNotes, createNote, listNoteCountsFor, type NoteEntityType, type InternalNote } from '@/data/internal-notes';
 import { safeActionError } from '@/lib/action-errors';
 
 export async function approveCustomerAction(formData: FormData) {
@@ -31,6 +36,33 @@ export async function approveCustomerAction(formData: FormData) {
 export async function rejectCustomerAction(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   await rejectCustomer(id);
+  revalidatePath('/customers');
+}
+
+/** Permanent, no undo path (034) -- reason is mandatory. */
+export async function suspendCustomerAction(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  const reason = String(formData.get('reason') ?? '');
+  await suspendCustomer(id, reason);
+  revalidatePath('/customers');
+}
+
+/** Temporary, reversible via reactivateCustomerAction (034) -- reason is mandatory. */
+export async function deactivateCustomerAction(formData: FormData) {
+  const id = String(formData.get('id') ?? '');
+  const reason = String(formData.get('reason') ?? '');
+  await deactivateCustomer(id, reason);
+  revalidatePath('/customers');
+}
+
+export async function reactivateCustomerAction(id: string) {
+  await reactivateCustomer(id);
+  revalidatePath('/customers');
+}
+
+/** Lets a rejected applicant reapply with the same email (034) -- separate from Reject itself. */
+export async function resetRejectedCustomerForReapplyAction(id: string) {
+  await resetRejectedCustomerForReapply(id);
   revalidatePath('/customers');
 }
 
@@ -95,11 +127,51 @@ export async function updateCustomerApplicationInfoAction(
   }
 }
 
-/** Backs Part 3's reconnect-resync (`useLiveTable`'s `onReconnect`) -- re-fetches the full
- * customers list after a real websocket reconnect, since incremental Realtime payloads alone
- * can't recover whatever changed while disconnected. */
-export async function refetchCustomersAction(): Promise<Customer[]> {
-  return listCustomers();
+/** Backs the Customers screen's paginated main table -- both the initial page-change/Next-Previous
+ * clicks and the debounced refetch-on-Realtime-change (CustomersTable.tsx), which refetches
+ * whatever page is currently showing instead of merging raw postgres_changes events into a
+ * paginated list (same reasoning as CartOverview.tsx's getCustomerCartsPageAction). */
+export async function getCustomersPageAction(params: {
+  page: number;
+  pageSize: number;
+}): Promise<
+  | { ok: true; customers: Customer[]; totalCount: number; noteCounts: Array<[string, number]> }
+  | { ok: false; error: string }
+> {
+  try {
+    const offset = (params.page - 1) * params.pageSize;
+    const { customers, totalCount } = await listCustomersPage({ limit: params.pageSize, offset });
+    // Note counts only need to cover whatever's on THIS page -- bundled into the same round trip
+    // rather than a separate call, same reasoning as resolving product titles/variant details
+    // alongside getCustomerCartsPageAction above. Its own try/catch so a notes-system hiccup
+    // degrades to "no badges this page" rather than failing the whole page's customer list --
+    // same degrade-gracefully convention as page.tsx's salesReps/noteCounts handling.
+    let noteCounts = new Map<string, number>();
+    try {
+      noteCounts = await listNoteCountsFor('customer', customers.map((c) => c.id));
+    } catch (err) {
+      console.error('[customers:getPage] listNoteCountsFor failed:', err);
+    }
+    return { ok: true, customers, totalCount, noteCounts: [...noteCounts.entries()] };
+  } catch (error) {
+    return { ok: false, error: safeActionError(error, 'Could not load customers. Please try again.', 'customers:getPage') };
+  }
+}
+
+/** Backs the "By Sales Rep" tab -- fetched lazily (only when that tab is first opened), not
+ * eagerly alongside the main paginated table on every /customers load. Most admin visits never
+ * switch to this tab, so eager-fetching the full approved-customer set on every page load would
+ * undercut the whole point of paginating the main table in the first place (confirmed live this
+ * session: it was adding a full extra round trip to every /customers navigation). */
+export async function getApprovedCustomersForRepViewAction(): Promise<
+  { ok: true; customers: Customer[] } | { ok: false; error: string }
+> {
+  try {
+    const customers = await listApprovedCustomersForRepView();
+    return { ok: true, customers };
+  } catch (error) {
+    return { ok: false, error: safeActionError(error, 'Could not load approved customers. Please try again.', 'customers:getRepView') };
+  }
 }
 
 export async function listNotesAction(entityType: NoteEntityType, entityId: string): Promise<InternalNote[]> {
@@ -145,33 +217,40 @@ export async function getCustomerCartsPageAction(params: {
   pageSize: number;
   knownProductTitles: Array<[string, string]>;
   knownVariantDetails: Array<[string, VariantDetail]>;
-}): Promise<CustomerCartsPageResult> {
-  const offset = (params.page - 1) * params.pageSize;
-  const { customers, totalCount, totalItems } = await listCustomerCartsPage({
-    search: params.search,
-    limit: params.pageSize,
-    offset,
-  });
+}): Promise<{ ok: true; result: CustomerCartsPageResult } | { ok: false; error: string }> {
+  try {
+    const offset = (params.page - 1) * params.pageSize;
+    const { customers, totalCount, totalItems } = await listCustomerCartsPage({
+      search: params.search,
+      limit: params.pageSize,
+      offset,
+    });
 
-  const items = await listCartSnapshotForCustomers(customers.map((c) => c.customerId));
+    const items = await listCartSnapshotForCustomers(customers.map((c) => c.customerId));
 
-  const knownTitles = new Map(params.knownProductTitles);
-  const missingIds = [...new Set(items.map((i) => i.product_id))].filter((id) => !knownTitles.has(id));
-  const knownVariants = new Map(params.knownVariantDetails);
-  const missingVariantIds = [...new Set(items.map((i) => i.variant_id))].filter((id) => !knownVariants.has(id));
+    const knownTitles = new Map(params.knownProductTitles);
+    const missingIds = [...new Set(items.map((i) => i.product_id))].filter((id) => !knownTitles.has(id));
+    const knownVariants = new Map(params.knownVariantDetails);
+    const missingVariantIds = [...new Set(items.map((i) => i.variant_id))].filter((id) => !knownVariants.has(id));
 
-  // Independent Shopify lookups -- run together rather than one after the other.
-  const [resolved, resolvedVariants] = await Promise.all([
-    missingIds.length > 0 ? getProductTitlesByIds(missingIds) : new Map<string, string>(),
-    missingVariantIds.length > 0 ? getVariantDetailsByIds(missingVariantIds) : new Map<string, VariantDetail>(),
-  ]);
+    // Independent Shopify lookups -- run together rather than one after the other.
+    const [resolved, resolvedVariants] = await Promise.all([
+      missingIds.length > 0 ? getProductTitlesByIds(missingIds) : new Map<string, string>(),
+      missingVariantIds.length > 0 ? getVariantDetailsByIds(missingVariantIds) : new Map<string, VariantDetail>(),
+    ]);
 
-  return {
-    customers,
-    totalCount,
-    totalItems,
-    items,
-    productTitles: [...resolved.entries()],
-    variantDetails: [...resolvedVariants.entries()],
-  };
+    return {
+      ok: true,
+      result: {
+        customers,
+        totalCount,
+        totalItems,
+        items,
+        productTitles: [...resolved.entries()],
+        variantDetails: [...resolvedVariants.entries()],
+      },
+    };
+  } catch (error) {
+    return { ok: false, error: safeActionError(error, 'Could not load carts. Please try again.', 'cart:getPage') };
+  }
 }

@@ -30,7 +30,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome', launchOptions: { slowMo: 1200 } },
+      use: { ...devices['Desktop Chrome'], channel: 'chrome', launchOptions: { slowMo: Number(process.env.E2E_SLOWMO ?? 1800) } },
     },
   ],
 });

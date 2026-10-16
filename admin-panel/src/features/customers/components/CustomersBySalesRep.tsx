@@ -23,20 +23,28 @@ export default function CustomersBySalesRep({
   salesReps: SalesRep[];
   onSelect: (customerId: string) => void;
 }) {
-  const [tab, setTab] = useState<'reps' | 'unassigned'>('reps');
+  const [tab, setTab] = useState<'reps' | 'unassigned' | 'orphaned'>('reps');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const approved = customers.filter((c) => c.status === 'approved');
+  const validRepIds = new Set(salesReps.map((r) => r.id));
   const byRepId = new Map<string, Customer[]>();
   const unassigned: Customer[] = [];
+  // A customer can hold a `salesRepId` that no longer matches any current rep (the rep row was
+  // deleted/renamed) -- without this bucket, such a customer silently disappeared from every tab:
+  // not "unassigned" (it has an id set) and never read back out of `byRepId` since `repGroups`
+  // only iterates `salesReps`. Surfaced here instead so the admin can see it exists and reassign.
+  const orphaned: Customer[] = [];
 
   for (const c of approved) {
-    if (c.salesRepId) {
+    if (!c.salesRepId) {
+      unassigned.push(c);
+    } else if (validRepIds.has(c.salesRepId)) {
       const list = byRepId.get(c.salesRepId) ?? [];
       list.push(c);
       byRepId.set(c.salesRepId, list);
     } else {
-      unassigned.push(c);
+      orphaned.push(c);
     }
   }
 
@@ -70,9 +78,31 @@ export default function CustomersBySalesRep({
             </span>
           )}
         </button>
+        {orphaned.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setTab('orphaned')}
+            className={`text-xs font-medium px-3 py-1.5 rounded-md ${
+              tab === 'orphaned' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            Needs reassignment
+            <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-100 text-red-700 text-[10px] font-semibold size-4">
+              {orphaned.length}
+            </span>
+          </button>
+        )}
       </div>
 
-      {tab === 'reps' ? (
+      {tab === 'orphaned' ? (
+        <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+          <p className="px-4 py-2 text-xs text-amber-700 bg-amber-50 border-b border-neutral-100">
+            These accounts are assigned to a sales rep that no longer exists. Reassign them to a
+            current rep from the Customers table or the account&apos;s detail drawer.
+          </p>
+          <AccountList accounts={orphaned} onSelect={onSelect} emptyText="None." />
+        </div>
+      ) : tab === 'reps' ? (
         repGroups.length === 0 ? (
           <p className="text-sm text-neutral-400">No reps yet.</p>
         ) : (

@@ -11,12 +11,14 @@ export type TaxonomyEntry = {
   handle: string;
   name: string;
   parentId: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
 };
 
 interface MetaobjectField {
   key: string;
   value: string | null;
-  reference: { id: string } | null;
+  reference: { id: string; image?: { url: string } | null; url?: string | null } | null;
 }
 
 interface MetaobjectsResponse {
@@ -42,6 +44,14 @@ const METAOBJECTS_QUERY = /* GraphQL */ `
             ... on Metaobject {
               id
             }
+            ... on MediaImage {
+              image {
+                url
+              }
+            }
+            ... on GenericFile {
+              url
+            }
           }
         }
       }
@@ -57,33 +67,44 @@ function fieldReferenceId(fields: MetaobjectField[], key: string): string | null
   return fields.find((f) => f.key === key)?.reference?.id ?? null;
 }
 
-async function listMetaobjects(type: string, parentFieldKey?: string): Promise<TaxonomyEntry[]> {
+function fieldReferenceImageUrl(fields: MetaobjectField[], key: string): string | null {
+  const ref = fields.find((f) => f.key === key)?.reference;
+  return ref?.image?.url ?? ref?.url ?? null;
+}
+
+async function listMetaobjects(
+  type: string,
+  parentFieldKey?: string,
+  imageFieldKey?: string
+): Promise<TaxonomyEntry[]> {
   const data = await shopifyAdminRequest<MetaobjectsResponse>(METAOBJECTS_QUERY, { type });
   return data.metaobjects.nodes.map((node) => ({
     id: node.id,
     handle: node.handle,
     name: fieldValue(node.fields, 'name') ?? node.handle,
     parentId: parentFieldKey ? fieldReferenceId(node.fields, parentFieldKey) : null,
+    description: fieldValue(node.fields, 'description'),
+    imageUrl: imageFieldKey ? fieldReferenceImageUrl(node.fields, imageFieldKey) : null,
   }));
 }
 
 /** Category (top level, no parent). */
 export async function listCategories(): Promise<TaxonomyEntry[]> {
   await requireAdmin();
-  return listMetaobjects('category');
+  return listMetaobjects('category', undefined, 'image');
 }
 
 /** Sub-categories, optionally filtered to a single parent Category. */
 export async function listSubcategories(categoryId?: string): Promise<TaxonomyEntry[]> {
   await requireAdmin();
-  const all = await listMetaobjects('sub_category', 'category');
+  const all = await listMetaobjects('sub_category', 'category', 'image');
   return categoryId ? all.filter((s) => s.parentId === categoryId) : all;
 }
 
 /** Brands, optionally filtered to a single parent Sub-category. */
 export async function listBrands(subcategoryId?: string): Promise<TaxonomyEntry[]> {
   await requireAdmin();
-  const all = await listMetaobjects('brand', 'sub_category');
+  const all = await listMetaobjects('brand', 'sub_category', 'logo');
   return subcategoryId ? all.filter((b) => b.parentId === subcategoryId) : all;
 }
 
@@ -218,4 +239,50 @@ export async function createBrand(input: {
   if (input.description) fields.push({ key: 'description', value: input.description });
   if (input.logo) fields.push({ key: 'logo', value: await uploadImageFile(input.logo) });
   return createMetaobjectEntry('brand', fields);
+}
+
+interface MetaobjectUpdateResponse {
+  metaobjectUpdate: {
+    metaobject: { id: string; handle: string } | null;
+    userErrors: Array<{ field: string[] | null; message: string }>;
+  };
+}
+
+const METAOBJECT_UPDATE_MUTATION = /* GraphQL */ `
+  mutation MetaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+    metaobjectUpdate(id: $id, metaobject: $metaobject) {
+      metaobject {
+        id
+        handle
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+/** Updates an existing Brand's name/description/logo. Fields are only sent when provided --
+ * omitting `logo` leaves the existing logo untouched (metaobjectUpdate only overwrites the
+ * fields it's given), so staff aren't forced to re-upload an image just to fix a typo in the
+ * name. */
+export async function updateBrand(input: {
+  id: string;
+  name: string;
+  description?: string;
+  logo?: File;
+}): Promise<void> {
+  await requireAdmin();
+  const invalid = validateTaxonomyEntryInput(input);
+  if (invalid) throw new SafeActionError(invalid);
+  const fields = [{ key: 'name', value: input.name }];
+  fields.push({ key: 'description', value: input.description ?? '' });
+  if (input.logo) fields.push({ key: 'logo', value: await uploadImageFile(input.logo) });
+
+  const data = await shopifyAdminRequest<MetaobjectUpdateResponse>(METAOBJECT_UPDATE_MUTATION, {
+    id: input.id,
+    metaobject: { fields },
+  });
+  assertNoUserErrors(data.metaobjectUpdate.userErrors, 'metaobjectUpdate');
 }

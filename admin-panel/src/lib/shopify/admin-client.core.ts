@@ -40,6 +40,37 @@ export class ShopifyAdminApiError extends Error {
   }
 }
 
+/** Thrown instead of the generic ShopifyAdminApiError on a 429 -- lets callers distinguish "the
+ * store is rate-limiting us right now, this will likely succeed on its own shortly" from a real
+ * failure, instead of surfacing the same opaque message for both. */
+export class ShopifyRateLimitError extends ShopifyAdminApiError {
+  constructor(public readonly retryAfterSeconds: number | null) {
+    super('Shopify is rate-limiting requests right now. Please try again shortly.', null);
+    this.name = 'ShopifyRateLimitError';
+  }
+}
+
+/** Bounded so a hung Shopify request fails loudly instead of leaving an admin action (e.g.
+ * Approve) spinning forever with no feedback. 15s is generous for a single GraphQL call/OAuth
+ * token request, well past any normal response time. */
+const SHOPIFY_REQUEST_TIMEOUT_MS = 15_000;
+
+function parseRetryAfter(response: Response): number | null {
+  const header = response.headers.get('Retry-After');
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+async function parseJsonResponse<T>(response: Response, context: string): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch (err) {
+    console.error(`[${context}] Shopify returned an unreadable (non-JSON) response:`, err);
+    throw new ShopifyAdminApiError('Shopify returned an unreadable response. Please try again.', null);
+  }
+}
+
 interface CachedToken {
   token: string;
   expiresAt: number;
@@ -70,8 +101,12 @@ async function getAccessToken(): Promise<string> {
       client_secret: clientSecret!,
     }),
     cache: 'no-store',
+    signal: AbortSignal.timeout(SHOPIFY_REQUEST_TIMEOUT_MS),
   });
 
+  if (response.status === 429) {
+    throw new ShopifyRateLimitError(parseRetryAfter(response));
+  }
   if (!response.ok) {
     throw new ShopifyAdminApiError(
       `Shopify OAuth token request failed with status ${response.status}`,
@@ -79,7 +114,7 @@ async function getAccessToken(): Promise<string> {
     );
   }
 
-  const data = (await response.json()) as { access_token: string; expires_in: number };
+  const data = await parseJsonResponse<{ access_token: string; expires_in: number }>(response, 'getAccessToken');
   cachedToken = {
     token: data.access_token,
     expiresAt: Date.now() + data.expires_in * 1000,
@@ -131,8 +166,12 @@ async function rawShopifyAdminRequest<TData, TVariables = Record<string, unknown
     },
     body: JSON.stringify({ query, variables }),
     cache: 'no-store',
+    signal: AbortSignal.timeout(SHOPIFY_REQUEST_TIMEOUT_MS),
   });
 
+  if (response.status === 429) {
+    throw new ShopifyRateLimitError(parseRetryAfter(response));
+  }
   if (!response.ok) {
     throw new ShopifyAdminApiError(
       `Shopify Admin API request failed with status ${response.status}`,
@@ -140,7 +179,7 @@ async function rawShopifyAdminRequest<TData, TVariables = Record<string, unknown
     );
   }
 
-  return (await response.json()) as GraphQLResponse<TData>;
+  return parseJsonResponse<GraphQLResponse<TData>>(response, 'rawShopifyAdminRequest');
 }
 
 /**

@@ -33,7 +33,8 @@
       "WebFetch(domain:shopify.dev)",
       "Bash(npx tsx *)",
       "WebFetch(domain:help.shopify.com)",
-      "WebFetch(domain:community.shopify.com)"
+      "WebFetch(domain:community.shopify.com)",
+      "Bash(sort -t- -k1 -n)"
     ],
     "additionalDirectories": [
       "/Users/ayushjaiswal/Downloads/new varinat and the category/storefront/src/components/ui",

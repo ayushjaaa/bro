@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { TaxonomyEntry } from '@/data/taxonomy';
 import type { FilterDefinition } from '@/data/filters';
-import { createCategoryAction, createSubcategoryAction, createBrandAction } from '../actions';
+import { createCategoryAction, createSubcategoryAction, createBrandAction, updateBrandAction } from '../actions';
 import AddEntryForm from './AddEntryForm';
+import EditBrandForm from './EditBrandForm';
 import AddFilterForm from '@/features/filters/components/AddFilterForm';
 import FilterChip from '@/features/filters/components/FilterChip';
 
@@ -13,6 +14,7 @@ type OpenForm =
   | 'category'
   | { level: 'sub'; categoryId: string }
   | { level: 'brand'; subcategoryId: string }
+  | { level: 'edit-brand'; brandId: string }
   | { level: 'filter'; subcategoryId: string }
   | null;
 
@@ -217,8 +219,34 @@ export default function TaxonomyTree({
                                 />
                               )}
                             {subBrands.map((brand) => (
-                              <div key={brand.id} className="px-2 py-1.5 text-neutral-600">
-                                • {brand.name}
+                              <div key={brand.id}>
+                                {typeof openForm === 'object' &&
+                                openForm?.level === 'edit-brand' &&
+                                openForm.brandId === brand.id ? (
+                                  <EditBrandForm
+                                    brand={brand}
+                                    onSubmit={updateBrandAction}
+                                    onDone={closeForm}
+                                  />
+                                ) : (
+                                  <div className="flex items-center gap-2 px-2 py-1.5 text-neutral-600">
+                                    {brand.imageUrl && (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={brand.imageUrl}
+                                        alt=""
+                                        className="h-5 w-5 rounded object-cover border border-neutral-200"
+                                      />
+                                    )}
+                                    <span className="flex-1">• {brand.name}</span>
+                                    <button
+                                      onClick={() => setOpenForm({ level: 'edit-brand', brandId: brand.id })}
+                                      className="text-xs text-sky-700 hover:underline shrink-0"
+                                    >
+                                      Edit
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             ))}
                             {subBrands.length === 0 && !openForm && (

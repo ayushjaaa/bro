@@ -35,15 +35,35 @@ export type Customer = {
   salesRepId: string | null;
   salesRep: { name: string; phone: string; email: string } | null;
   /** 'approving' is transient (030 migration): set between an admin claiming a pending row for
-   * approval and the Shopify call + finalize completing. */
-  status: 'pending' | 'approving' | 'approved' | 'rejected';
+   * approval and the Shopify call + finalize completing. 'suspended' (034) is a permanent dead
+   * end -- see enforce_customer_status_transition(), it has no outgoing transition at all.
+   * 'deactivated' (034) is a temporary, reversible block (deactivated -> approved only). */
+  status: 'pending' | 'approving' | 'approved' | 'rejected' | 'suspended' | 'deactivated';
   requestedAt: string;
   /** Used to detect a customer stuck in 'approving' (030 migration escape hatch) -- also bumped
    * by every other status/info change, so it's "last touched", not specific to approval. */
   updatedAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** 034 migration audit trail -- one set of columns per terminal/transitional action, same
+   * approvedAt/approvedBy naming convention. rejectionCount lets the drawer show "rejected twice"
+   * etc. across reapply cycles. */
+  rejectedAt: string | null;
+  rejectedBy: string | null;
+  rejectionCount: number;
+  suspendedAt: string | null;
+  suspendedBy: string | null;
+  suspensionReason: string | null;
+  deactivatedAt: string | null;
+  deactivatedBy: string | null;
+  deactivationReason: string | null;
+  reactivatedAt: string | null;
+  reactivatedBy: string | null;
   shopifyCustomerId: string | null;
+  /** Needed to revoke the customer's active Supabase session on suspend/deactivate/reject
+   * (034) -- `supabase.auth.admin.signOut(userId)` can only be called from application code,
+   * never from SQL, so the RPCs hand this back and the caller does the revoke itself. */
+  supabaseUserId: string | null;
   /** Optimistic-locking token for updateCustomerApplicationInfo (031 migration) -- must be sent
    * back unchanged on every info-edit save, or the save is rejected outright. */
   version: number;
@@ -106,11 +126,58 @@ export async function listCustomers(): Promise<Customer[]> {
       .select('*, sales_reps(name, phone, email)')
       .order('requested_at', { ascending: false })
       .range(offset, to);
-    if (error) throw new Error(error.message);
+    if (error) throw friendlyRpcError(error, 'Could not load customers. Please try again.', 'listCustomers');
     rows.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;
   }
   return rows.map((r) => mapCustomerRow(r));
+}
+
+/** Server-side paginated version of listCustomers() -- backs the Customers screen's main table.
+ * Flat table, no GROUP BY complexity (unlike cart_snapshot's list_customer_carts RPC), so a plain
+ * PostgREST `.range()` + `count: 'exact'` is enough; no RPC needed. Realtime changes are handled
+ * by refetching whatever page is currently showing (CustomersTable.tsx), never by merging raw
+ * postgres_changes events into a paginated list -- same reasoning as CartOverview.tsx's own
+ * paginated cart list (see that component's doc comment). */
+export async function listCustomersPage(params: { limit: number; offset: number }): Promise<{
+  customers: Customer[];
+  totalCount: number;
+}> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error, count } = await supabase
+    .from('customers')
+    .select('*, sales_reps(name, phone, email)', { count: 'exact' })
+    .order('requested_at', { ascending: false })
+    .range(params.offset, params.offset + params.limit - 1);
+  if (error) throw friendlyRpcError(error, 'Could not load customers. Please try again.', 'listCustomersPage');
+  return { customers: (data ?? []).map((r) => mapCustomerRow(r)), totalCount: count ?? 0 };
+}
+
+/** Backs the "X pending requests awaiting review" header -- independent of whatever page of the
+ * main table is currently showing, so it stays accurate no matter which page an admin is on. */
+export async function getPendingCustomerCount(): Promise<number> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { count, error } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+  if (error) throw friendlyRpcError(error, 'Could not load pending count. Please try again.', 'getPendingCustomerCount');
+  return count ?? 0;
+}
+
+/** Backs the "By Sales Rep" tab only -- that view groups the COMPLETE set of approved accounts (a
+ * much smaller, slower-growing set than the full table, since pending/rejected/suspended rows
+ * never appear there), so it deliberately stays its own full fetch rather than being paginated --
+ * paginating a rep-grouping view would make "how many accounts does this rep have" wrong/partial. */
+export async function listApprovedCustomersForRepView(): Promise<Customer[]> {
+  await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase
+    .from('customers')
+    .select('*, sales_reps(name, phone, email)')
+    .eq('status', 'approved')
+    .order('requested_at', { ascending: false });
+  if (error) throw friendlyRpcError(error, 'Could not load approved customers. Please try again.', 'listApprovedCustomersForRepView');
+  return (data ?? []).map((r) => mapCustomerRow(r));
 }
 
 /** Postgres errcodes our own SECURITY DEFINER functions raise deliberately, with a message
@@ -189,11 +256,115 @@ export async function approveCustomer(id: string): Promise<void> {
   }
 }
 
+/** Blocks a customer's Supabase Auth user from signing in or refreshing again (034 migration).
+ * NOT `auth.admin.signOut(userId)` -- that doesn't exist for this purpose: GoTrue's `signOut`
+ * takes an access-token JWT to invalidate ONE session the caller already holds, not a user id an
+ * admin can target (confirmed against the installed @supabase/auth-js: calling it with a user id
+ * fails with "invalid JWT: token contains an invalid number of segments", caught live in this
+ * project's own Playwright run). The actual supported mechanism is `ban_duration` on
+ * `updateUserById` (Supabase's own documented idiom for both a temporary and a "permanent" ban --
+ * `'876000h'` is ~100 years, the same value their own docs use). This blocks future sign-in/token
+ * refresh; per SuperTokens' "how to ban users" writeup, a short-lived access token already issued
+ * before the ban can still work until it naturally expires -- the achievable, industry-normal bar,
+ * not an instant kill of every in-flight request. Logged loudly on failure but never thrown -- the
+ * DB status change is the authoritative part of suspend/deactivate; a ban-call failure shouldn't
+ * make the whole action look like it failed when the row was, in fact, already updated. */
+async function setCustomerAuthBan(supabase: ReturnType<typeof getServiceRoleClient>, userId: string | null, banned: boolean, logLabel: string) {
+  if (!userId) return;
+  const { error } = await supabase.auth.admin.updateUserById(userId, { ban_duration: banned ? '876000h' : 'none' });
+  if (error) {
+    console.error(`[${logLabel}] could not ${banned ? 'ban' : 'unban'} auth user ${userId}:`, error.message);
+  }
+}
+
+/** A rejected row is, by construction, never 'approved' (reject_customer only acts on 'pending'
+ * rows), and every login path signs a non-approved customer's session back out within the same
+ * request (signInWithPassword / auth/callback) -- so a rejected customer can never hold a standing
+ * session to revoke in the first place. No ban call here is needed or made. */
 export async function rejectCustomer(id: string): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = getServiceRoleClient();
-  const { error } = await supabase.rpc('reject_customer', { p_id: id });
+  const { error } = await supabase.rpc('reject_customer', { p_id: id, p_rejected_by: admin.email });
   if (error) throw friendlyRpcError(error, 'Could not reject. Please try again.', 'rejectCustomer');
+}
+
+/** Permanent -- see 034 migration's enforce_customer_status_transition(): a 'suspended' row has
+ * no outgoing transition at all, enforced at the DB level, not just by this UI never offering one.
+ * Blocked while 'approving' (half-finished Shopify approval, product decision: let it settle to
+ * pending/approved first). Reason is required (mandatory per product decision -- this is
+ * undoable, the admin must record why). */
+export async function suspendCustomer(id: string, reason: string): Promise<void> {
+  const admin = await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.rpc('suspend_customer', {
+    p_id: id,
+    p_suspended_by: admin.email,
+    p_reason: reason,
+  });
+  if (error) throw friendlyRpcError(error, 'Could not suspend this customer. Please try again.', 'suspendCustomer');
+  await setCustomerAuthBan(supabase, data?.[0]?.supabase_user_id ?? null, true, 'suspendCustomer');
+}
+
+/** Temporary, reversible (034) -- only from 'approved'. Reason is required for the same audit
+ * reasons as suspend, though this one can be undone via reactivateCustomer, which lifts the ban. */
+export async function deactivateCustomer(id: string, reason: string): Promise<void> {
+  const admin = await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.rpc('deactivate_customer', {
+    p_id: id,
+    p_deactivated_by: admin.email,
+    p_reason: reason,
+  });
+  if (error) throw friendlyRpcError(error, 'Could not deactivate this customer. Please try again.', 'deactivateCustomer');
+  await setCustomerAuthBan(supabase, data?.[0]?.supabase_user_id ?? null, true, 'deactivateCustomer');
+}
+
+/** Reverses deactivateCustomer -- only from 'deactivated'. Lifts the auth ban deactivateCustomer
+ * put in place, so the customer can sign in again with their existing password immediately. */
+export async function reactivateCustomer(id: string): Promise<void> {
+  const admin = await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { error } = await supabase.rpc('reactivate_customer', { p_id: id, p_reactivated_by: admin.email });
+  if (error) throw friendlyRpcError(error, 'Could not reactivate this customer. Please try again.', 'reactivateCustomer');
+
+  const { data: row } = await supabase.from('customers').select('supabase_user_id').eq('id', id).single();
+  await setCustomerAuthBan(supabase, row?.supabase_user_id ?? null, false, 'reactivateCustomer');
+}
+
+/** Lets a rejected applicant reapply with the SAME email (034, product decision) -- clears the
+ * application fields and flips the row back to 'pending' rather than making Reject itself
+ * destructive. A separate, explicitly confirmed admin action on purpose: Reject alone must stay
+ * the zero-friction, non-destructive action it's always been. */
+/** 035: deletes the rejected customer's row (after the RPC snapshots its rejection history +
+ * internal notes into rejection_history, see that migration's header) and, here on the JS side,
+ * the things only the Admin API / Storage API can touch -- their Auth user and any uploaded
+ * licence documents. Without this, signUp() would still fail with `user_already_exists` for the
+ * same email even though the customers row is gone -- deleting the row alone isn't enough to
+ * actually unblock a fresh registration. Storage sweep mirrors api/internal/delete-applicant's own
+ * "belt and braces" sweep, inlined here since admin-panel already holds the service-role client
+ * this needs (that endpoint exists for the storefront, which doesn't). */
+export async function resetRejectedCustomerForReapply(id: string): Promise<void> {
+  const admin = await requireAdmin();
+  const supabase = getServiceRoleClient();
+  const { data, error } = await supabase.rpc('reset_rejected_customer_for_reapply', { p_id: id, p_reset_by: admin.email });
+  if (error) throw friendlyRpcError(error, 'Could not reset this customer for reapplication. Please try again.', 'resetRejectedCustomerForReapply');
+
+  const userId = data?.[0]?.supabase_user_id;
+  if (!userId) return;
+
+  try {
+    const { data: files } = await supabase.storage.from('registration-documents').list(userId);
+    if (files && files.length > 0) {
+      await supabase.storage.from('registration-documents').remove(files.map((f) => `${userId}/${f.name}`));
+    }
+  } catch (err) {
+    console.error('[resetRejectedCustomerForReapply] document sweep failed:', err);
+  }
+
+  const { error: deleteUserError } = await supabase.auth.admin.deleteUser(userId);
+  if (deleteUserError) {
+    console.error('[resetRejectedCustomerForReapply] could not delete auth user:', deleteUserError.message);
+  }
 }
 
 /** Manual escape hatch for a customer stuck in 'approving' (e.g. the server crashed mid-approval
@@ -261,7 +432,10 @@ export async function getRegistrationDocumentUrl(path: string): Promise<string> 
   await requireAdmin();
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.storage.from('registration-documents').createSignedUrl(path, 60);
-  if (error || !data) throw new Error(error?.message ?? 'Could not generate document URL');
+  if (error || !data) {
+    console.error('[getRegistrationDocumentUrl]', error?.message);
+    throw new Error('Could not generate document URL. Please try again.');
+  }
   return data.signedUrl;
 }
 
@@ -272,7 +446,7 @@ export async function updateCustomerSalesRep(customerId: string, salesRepId: str
   await requireAdmin();
   const supabase = getServiceRoleClient();
   const { error } = await supabase.from('customers').update({ sales_rep_id: salesRepId }).eq('id', customerId);
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not assign the rep. Please try again.', 'updateCustomerSalesRep');
 }
 
 export async function updateAccountType(id: string, accountType: 'retail' | 'wholesale'): Promise<void> {
@@ -282,7 +456,7 @@ export async function updateAccountType(id: string, accountType: 'retail' | 'who
     p_id: id,
     p_account_type: accountType,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not update account type. Please try again.', 'updateAccountType');
 }
 
 export type CartEvent = {
@@ -303,7 +477,7 @@ export async function listCartActivity(): Promise<CartEvent[]> {
     .select('*')
     .order('event_at', { ascending: false })
     .limit(100);
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not load cart activity. Please try again.', 'listCartActivity');
   return (data ?? []).map((r: any) => ({
     id: r.id,
     customerId: r.customer_id,
@@ -332,7 +506,7 @@ export async function listCartSnapshotForCustomers(customerIds: string[]): Promi
   if (customerIds.length === 0) return [];
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.from('cart_snapshot').select('*').in('customer_id', customerIds);
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not load cart contents. Please try again.', 'listCartSnapshotForCustomers');
   return data ?? [];
 }
 
@@ -371,7 +545,7 @@ export async function listCustomerCartsPage(params: {
     p_limit: params.limit,
     p_offset: params.offset,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw friendlyRpcError(error, 'Could not load carts. Please try again.', 'listCustomerCartsPage');
   const rows = data ?? [];
   return {
     customers: rows.map((r: any) => ({
@@ -418,7 +592,7 @@ export async function listOrderStatusLog(): Promise<OrderStatusRow[]> {
       .select('*')
       .order('changed_at', { ascending: false })
       .range(offset, to);
-    if (error) throw new Error(error.message);
+    if (error) throw friendlyRpcError(error, 'Could not load order history. Please try again.', 'listOrderStatusLog');
     rows.push(...(data ?? []));
     if ((data ?? []).length < 1000) break;
   }

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createCategory, createSubcategory, createBrand } from '@/data/taxonomy';
+import { createCategory, createSubcategory, createBrand, updateBrand } from '@/data/taxonomy';
 
 function fileOrUndefined(formData: FormData, key: string): File | undefined {
   const value = formData.get(key);
@@ -47,4 +47,14 @@ export async function createBrandAction(formData: FormData) {
   });
   revalidatePath('/taxonomy');
   return entry;
+}
+
+export async function updateBrandAction(formData: FormData) {
+  await updateBrand({
+    id: String(formData.get('id') ?? ''),
+    name: String(formData.get('name') ?? ''),
+    description: (formData.get('description') as string) || undefined,
+    logo: fileOrUndefined(formData, 'logo'),
+  });
+  revalidatePath('/taxonomy');
 }

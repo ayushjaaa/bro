@@ -1,11 +1,18 @@
-import { listCustomers, listOrderStatusLog } from '@/data/customers';
+import { listCustomersPage, getPendingCustomerCount, listOrderStatusLog } from '@/data/customers';
 import { listSalesReps, type SalesRep } from '@/data/sales-reps';
 import { listNoteCountsFor } from '@/data/internal-notes';
 import CustomersTable from '@/features/customers/components/CustomersTable';
+import { CUSTOMERS_PAGE_SIZE } from '@/features/customers/constants';
 
 export default async function CustomersPage() {
-  const [customers, orderStatusLog] = await Promise.all([listCustomers(), listOrderStatusLog()]);
-  const pendingCount = customers.filter((c) => c.status === 'pending').length;
+  // pendingCount is independent of whichever page of the main table is showing -- it must stay
+  // accurate regardless of pagination, so it's its own count query, never derived from
+  // firstPage.customers (which only ever holds one page's worth of rows).
+  const [firstPage, pendingCount, orderStatusLog] = await Promise.all([
+    listCustomersPage({ limit: CUSTOMERS_PAGE_SIZE, offset: 0 }),
+    getPendingCustomerCount(),
+    listOrderStatusLog(),
+  ]);
 
   // Both features (015-sales-reps-and-notes.sql) degrade to "off" rather than breaking this
   // page if the migration hasn't been run yet against the live database -- same lesson as the
@@ -13,20 +20,24 @@ export default async function CustomersPage() {
   // discovered the hard way. Self-activates the moment the migration is applied, no follow-up
   // code change needed.
   let salesReps: SalesRep[] = [];
+  let salesRepsFailed = false;
   try {
     salesReps = await listSalesReps();
   } catch (err) {
     console.error('[customers] listSalesReps failed -- has 015-sales-reps-and-notes.sql been run?', err);
+    salesRepsFailed = true;
   }
 
   let noteCounts = new Map<string, number>();
+  let noteCountsFailed = false;
   try {
     noteCounts = await listNoteCountsFor(
       'customer',
-      customers.map((c) => c.id)
+      firstPage.customers.map((c) => c.id)
     );
   } catch (err) {
     console.error('[customers] listNoteCountsFor failed -- has 015-sales-reps-and-notes.sql been run?', err);
+    noteCountsFailed = true;
   }
 
   return (
@@ -41,10 +52,13 @@ export default async function CustomersPage() {
       </div>
 
       <CustomersTable
-        customers={customers}
+        initialCustomers={firstPage.customers}
+        initialTotalCount={firstPage.totalCount}
         initialOrderStatusLog={orderStatusLog}
         salesReps={salesReps}
         noteCounts={[...noteCounts.entries()]}
+        salesRepsFailed={salesRepsFailed}
+        noteCountsFailed={noteCountsFailed}
       />
     </div>
   );

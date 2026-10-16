@@ -18,6 +18,10 @@ export function StatusBadge({ status }: { status: Customer['status'] }) {
     approving: 'bg-sky-50 text-sky-700 border-sky-200',
     approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     rejected: 'bg-neutral-100 text-neutral-500 border-neutral-200',
+    // Permanent (034) -- most severe, red, deliberately distinct from rejected's neutral gray.
+    suspended: 'bg-red-50 text-red-700 border-red-200',
+    // Temporary/reversible (034) -- orange, distinct from both suspended's red and pending's amber.
+    deactivated: 'bg-orange-50 text-orange-700 border-orange-200',
   }[status];
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full border capitalize ${styles}`}>{status}</span>;
 }

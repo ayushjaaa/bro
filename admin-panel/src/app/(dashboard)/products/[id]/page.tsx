@@ -177,7 +177,7 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
                   <th className="text-left py-1.5 pr-3 font-medium">Image</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Flavour</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Wholesale</th>
-                  <th className="text-left py-1.5 pr-3 font-medium">Retail</th>
+                  <th className="text-left py-1.5 pr-3 font-medium">Distributor</th>
                   <th className="text-left py-1.5 pr-3 font-medium">Stock</th>
                   <th className="text-left py-1.5 pr-3 font-medium">SKU</th>
                 </tr>

@@ -1,11 +1,75 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CartSnapshotRow, CartEvent, CustomerCartSummary } from '@/data/customers';
 import type { VariantDetail } from '@/data/products';
 import { getCustomerCartsPageAction } from '../actions';
 import { useLiveTable } from '@/features/dashboard/hooks/useLiveTable';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { CaretIcon } from '@/components/icons';
+
+/** Relative "3 hours ago" / "2 days ago" labels for the Created At column, matching how the rest
+ * of this view already reports recency (e.g. "updated ..."). Falls back to a locale date once the
+ * gap is old enough that a relative label stops being useful. */
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHour = Math.round(diffMin / 60);
+  if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+  const diffDay = Math.round(diffHour / 24);
+  if (diffDay < 30) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleDateString('en-CA');
+}
+
+type ColumnKey = 'firstName' | 'lastName' | 'businessName' | 'cartItems' | 'cartValue' | 'createdAt';
+
+const COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'firstName', label: 'First Name' },
+  { key: 'lastName', label: 'Last Name' },
+  { key: 'businessName', label: 'Business Name' },
+  { key: 'cartItems', label: 'Cart Items' },
+  { key: 'cartValue', label: 'Cart Value' },
+  { key: 'createdAt', label: 'Created At' },
+];
+
+type SortDir = 'asc' | 'desc';
+
+/** Small ▲▼ sort-indicator column header, matching the mockup's clickable sortable headers --
+ * reuses `CaretIcon` for both arrows rather than introducing a second icon just for this. */
+function SortableHeader({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 hover:text-neutral-700"
+    >
+      {label}
+      <span className="flex flex-col -space-y-1">
+        <CaretIcon
+          direction="up"
+          className={`h-2.5 w-2.5 ${active && dir === 'asc' ? 'text-neutral-700' : 'text-neutral-300'}`}
+        />
+        <CaretIcon
+          direction="down"
+          className={`h-2.5 w-2.5 ${active && dir === 'desc' ? 'text-neutral-700' : 'text-neutral-300'}`}
+        />
+      </span>
+    </button>
+  );
+}
 
 /** Real Intl-based currency formatting, not a manual "$" + toFixed(2) -- correct thousands
  * separators and always exactly 2 decimal places regardless of what Shopify's price string
@@ -180,6 +244,43 @@ export default function CartOverview({
   const [variantDetailById, setVariantDetailById] = useState(initialVariantDetailById);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [sortKey, setSortKey] = useState<ColumnKey>('createdAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>({
+    firstName: true,
+    lastName: true,
+    businessName: true,
+    cartItems: true,
+    cartValue: true,
+    createdAt: true,
+  });
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const columnMenuRef = useRef<HTMLDivElement | null>(null);
+
+  function toggleSort(key: ColumnKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  function toggleColumn(key: ColumnKey) {
+    setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  useEffect(() => {
+    if (!columnMenuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target as Node)) {
+        setColumnMenuOpen(false);
+      }
+    }
+    window.addEventListener('mousedown', onClickOutside);
+    return () => window.removeEventListener('mousedown', onClickOutside);
+  }, [columnMenuOpen]);
 
   const { rows: cartActivity } = useLiveTable('cart_events', 'id', initialCartActivity.map(toEventRow));
 
@@ -194,16 +295,32 @@ export default function CartOverview({
     variantDetailByIdRef.current = variantDetailById;
   }, [variantDetailById]);
 
+  // Guards against the stale-response race: a search keystroke or a Next/Previous click can fire
+  // a new fetch while an older one is still in flight (e.g. slow network on the older request) --
+  // without this, whichever response resolves LAST wins regardless of which was actually requested
+  // most recently, silently overwriting newer-but-already-rendered data with stale results.
+  // Incrementing this on every call and checking it still matches before applying a response
+  // discards any response that's no longer the most recent request.
+  const latestRequestIdRef = useRef(0);
+
   async function fetchPage(nextPage: number, nextQuery: string) {
+    const requestId = ++latestRequestIdRef.current;
     setIsLoading(true);
+    setFetchError('');
     try {
-      const result = await getCustomerCartsPageAction({
+      const response = await getCustomerCartsPageAction({
         search: nextQuery,
         page: nextPage,
         pageSize: PAGE_SIZE,
         knownVariantDetails: [...variantDetailByIdRef.current.entries()],
         knownProductTitles: [...productTitleByIdRef.current.entries()],
       });
+      if (requestId !== latestRequestIdRef.current) return;
+      if (!response.ok) {
+        setFetchError(response.error);
+        return;
+      }
+      const result = response.result;
       setCustomers(result.customers);
       setTotalCount(result.totalCount);
       setTotalItems(result.totalItems);
@@ -222,8 +339,12 @@ export default function CartOverview({
           return next;
         });
       }
+    } catch (err) {
+      if (requestId !== latestRequestIdRef.current) return;
+      console.error('[CartOverview] fetchPage failed:', err);
+      setFetchError('Could not load carts. Please try again.');
     } finally {
-      setIsLoading(false);
+      if (requestId === latestRequestIdRef.current) setIsLoading(false);
     }
   }
 
@@ -310,6 +431,41 @@ export default function CartOverview({
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const selectedCustomer = selectedCustomerId ? customerById.get(selectedCustomerId) : null;
 
+  // Row data with its sort-relevant values pre-computed once per render, then sorted client-side
+  // across just the currently-loaded page (sorting is a view concern on top of the server-paginated
+  // "who's got items in cart right now" result, not a second server round-trip).
+  const rows = useMemo(() => {
+    return customers.map((customer) => {
+      const customerItems = [...(byCustomer.get(customer.customerId) ?? [])].sort((a, b) =>
+        b.updated_at.localeCompare(a.updated_at)
+      );
+      const total = computeCartTotal(customerItems, variantDetailById, customer.accountType);
+      return { customer, customerItems, total };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, items, variantDetailById]);
+
+  const sortedRows = useMemo(() => {
+    const dirMul = sortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      switch (sortKey) {
+        case 'firstName':
+          return a.customer.firstName.localeCompare(b.customer.firstName) * dirMul;
+        case 'lastName':
+          return a.customer.lastName.localeCompare(b.customer.lastName) * dirMul;
+        case 'businessName':
+          return (a.customer.businessName ?? '').localeCompare(b.customer.businessName ?? '') * dirMul;
+        case 'cartItems':
+          return (a.customer.itemCount - b.customer.itemCount) * dirMul;
+        case 'cartValue':
+          return (a.total.amount - b.total.amount) * dirMul;
+        case 'createdAt':
+        default:
+          return a.customer.lastUpdated.localeCompare(b.customer.lastUpdated) * dirMul;
+      }
+    });
+  }, [rows, sortKey, sortDir]);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -317,14 +473,56 @@ export default function CartOverview({
           {totalCount} customer{totalCount === 1 ? '' : 's'} with items in cart · {totalItems} item
           {totalItems === 1 ? '' : 's'} total
         </p>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search by customer or email"
-          className="w-72 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            placeholder="Search by name"
+            className="w-72 rounded-md border border-neutral-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          />
+          <div className="relative" ref={columnMenuRef}>
+            <button
+              type="button"
+              onClick={() => setColumnMenuOpen((v) => !v)}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              Show/Hide Columns
+            </button>
+            {columnMenuOpen && (
+              <div className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-neutral-200 bg-white p-2 shadow-lg">
+                {COLUMNS.map((col) => (
+                  <label
+                    key={col.key}
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns[col.key]}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-neutral-300"
+                    />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {fetchError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {fetchError}{' '}
+          <button
+            type="button"
+            onClick={() => fetchPageRef.current(page, query)}
+            className="font-semibold underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {customers.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-400">
@@ -332,72 +530,52 @@ export default function CartOverview({
         </div>
       ) : (
         <div
-          className={`rounded-lg border border-neutral-200 bg-white divide-y divide-neutral-100 transition-opacity ${isLoading ? 'opacity-60' : ''}`}
+          className={`overflow-x-auto rounded-lg border border-neutral-200 bg-white transition-opacity ${isLoading ? 'opacity-60' : ''}`}
         >
-          {customers.map((customer) => {
-            const customerItems = [...(byCustomer.get(customer.customerId) ?? [])].sort((a, b) =>
-              b.updated_at.localeCompare(a.updated_at)
-            );
-            const total = computeCartTotal(customerItems, variantDetailById, customer.accountType);
-            return (
-              <button
-                type="button"
-                key={customer.customerId}
-                onClick={() => setSelectedCustomerId(customer.customerId)}
-                className="w-full px-4 py-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-medium text-neutral-800">
-                      {customer.firstName} {customer.lastName}
-                    </span>
-                    {customer.businessName && (
-                      <span className="text-neutral-400 text-xs ml-2">{customer.businessName}</span>
-                    )}
-                  </div>
-                  <span className="text-xs text-neutral-400">
-                    {customer.itemCount} item{customer.itemCount === 1 ? '' : 's'} · updated{' '}
-                    {new Date(customer.lastUpdated).toLocaleString('en-CA')}
-                  </span>
-                </div>
-                <ul className="mt-2 text-xs flex flex-col gap-1">
-                  {customerItems.map((item) => {
-                    const detail = variantDetailById.get(item.variant_id);
-                    return (
-                      <li key={item.variant_id} className="flex items-center justify-between gap-2 text-neutral-700">
-                        <CartLineLabel
-                          productId={item.product_id}
-                          variantId={item.variant_id}
-                          productTitleById={productTitleById}
-                          variantDetailById={variantDetailById}
-                        />
-                        <span className="text-neutral-400 shrink-0 ml-2 whitespace-nowrap">
-                          ×{item.quantity}
-                          {detail && (
-                            <>
-                              {' '}
-                              ·{' '}
-                              {formatMoney(
-                                resolveVariantPrice(detail, customer.accountType) * item.quantity,
-                                detail.currencyCode
-                              )}
-                            </>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {/* Real total from resolved prices; lines whose product is gone from Shopify are
-                   flagged as unavailable rather than silently dropped. */}
-                <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center justify-end">
-                  <span className="text-xs font-semibold text-neutral-800">
-                    Total: {formatCartTotal(total)}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+          <table className="w-full text-sm">
+            <thead className="border-b border-neutral-200 bg-neutral-50">
+              <tr>
+                {COLUMNS.filter((col) => visibleColumns[col.key]).map((col) => (
+                  <th key={col.key} className="px-4 py-2.5 text-left">
+                    <SortableHeader
+                      label={col.label}
+                      active={sortKey === col.key}
+                      dir={sortDir}
+                      onClick={() => toggleSort(col.key)}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {sortedRows.map(({ customer, total }) => (
+                <tr
+                  key={customer.customerId}
+                  onClick={() => setSelectedCustomerId(customer.customerId)}
+                  className="cursor-pointer hover:bg-neutral-50 transition-colors"
+                >
+                  {visibleColumns.firstName && (
+                    <td className="px-4 py-2.5 text-neutral-800">{customer.firstName}</td>
+                  )}
+                  {visibleColumns.lastName && (
+                    <td className="px-4 py-2.5 text-neutral-800">{customer.lastName}</td>
+                  )}
+                  {visibleColumns.businessName && (
+                    <td className="px-4 py-2.5 text-neutral-600">{customer.businessName ?? '—'}</td>
+                  )}
+                  {visibleColumns.cartItems && (
+                    <td className="px-4 py-2.5 text-neutral-600">{customer.itemCount}</td>
+                  )}
+                  {visibleColumns.cartValue && (
+                    <td className="px-4 py-2.5 text-neutral-600">{formatCartTotal(total)}</td>
+                  )}
+                  {visibleColumns.createdAt && (
+                    <td className="px-4 py-2.5 text-neutral-500">{formatRelativeTime(customer.lastUpdated)}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
