@@ -7,14 +7,17 @@ import { REGIONS } from '@/lib/regions';
 import PublishButton from '@/features/products/components/PublishButton';
 import LiveTotalStock from '@/features/products/components/LiveTotalStock';
 import LiveVariantStock from '@/features/products/components/LiveVariantStock';
+import FeaturedToggle from '@/features/featured/components/FeaturedToggle';
+import { getProductFeaturedStatus } from '@/data/featured-collections';
 
 export default async function ProductLineDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const productId = `gid://shopify/Product/${id}`;
 
-  const [product, filterDefinitions] = await Promise.all([
+  const [product, filterDefinitions, featuredStatus] = await Promise.all([
     getProductLine(productId),
     listFilterDefinitions(),
+    getProductFeaturedStatus(productId),
   ]);
 
   if (!product) notFound();
@@ -91,6 +94,11 @@ export default async function ProductLineDetailPage({ params }: { params: Promis
             View on storefront →
           </a>
         )}
+      </div>
+
+      <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-neutral-700 mb-2">Featured Brands (storefront homepage)</h2>
+        <FeaturedToggle productId={product.id} productDetailPathId={id} initial={featuredStatus} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -188,3 +188,15 @@ export function ActivityIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function StarIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} {...props}>
+      <path
+        d="M10 2.5l2.3 4.66 5.14.75-3.72 3.63.88 5.12L10 14.1l-4.6 2.56.88-5.12-3.72-3.63 5.14-.75L10 2.5z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, BoxIcon, WarningIcon, LayersIcon, UsersIcon, UserIcon, CartIcon, ActivityIcon } from './icons';
+import { HomeIcon, BoxIcon, WarningIcon, LayersIcon, UsersIcon, UserIcon, CartIcon, ActivityIcon, StarIcon } from './icons';
 
 /**
  * 4 sections, per the UX pass in ADMIN_PANEL_IMPLEMENTATION.md §4 — Chunking (4±1 ideal group
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   // this doesn't also light up "Products".
   { href: '/products/attention', label: 'Attention', icon: WarningIcon },
   { href: '/taxonomy', label: 'Taxonomy', icon: LayersIcon },
+  { href: '/featured', label: 'Featured', icon: StarIcon },
   { href: '/customers', label: 'Customers', icon: UsersIcon },
   { href: '/sales-reps', label: 'Sales Reps', icon: UserIcon },
   { href: '/cart', label: 'Cart', icon: CartIcon },
