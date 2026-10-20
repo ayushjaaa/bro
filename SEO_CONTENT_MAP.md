@@ -2,7 +2,7 @@
 
 Source doc: [01. Oxbar-Disposables-Gemini.docx](https://docs.google.com/document/d/1xOyC3PWnI4NAHeYpblZ5a2i9lFG3dAu1/edit) (SEO team, Oct 2026)
 
-Status (2026-10-20): **code built, Oxbar content seeded into Sanity (tflrlnle / production), page proof-read on localhost. Not committed, not deployed** — the live site won't show the page until the code is deployed.
+Status (2026-10-20): **LIVE at https://www.geminidistribution.ca/disposables/oxbar** (storefront commit `127deb9`, auto-deployed to the client's Vercel project). Content seeded into Sanity (tflrlnle / production); page proof-read on production. Still `noindex` until the sitewide pre-launch block is lifted (D8).
 
 This file maps the SEO team's content onto the storefront: what goes where, what was built and what's still pending.
 
@@ -248,7 +248,7 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 | 9 | Proof-read the page against the doc | ✅ Done on localhost (details below) |
 | — | `tsc --noEmit` + eslint on new files | ✅ Clean |
 | — | Sanity webhook filter | ✅ Done 2026-10-20 — "crud" webhook filter is now `_type in ["page","collectionBanner","pageBanner","productPageContent","topBar","brandCategoryPage"]` (`topBar` was also missing before) |
-| — | Commit / deploy | ⏳ Not done |
+| — | Commit / deploy | ✅ Storefront `127deb9` pushed to `main` → live in ~90s. Production check: 0 of 99 doc lines missing at 390px and 1440px, no sideways scroll, title/canonical/FAQ JSON-LD correct, both warnings present, Log In opens the popup, `/disposables/oxbar/` → 308, page listed in `/sitemap.xml` |
 
 **Proof-read result (2026-10-20, `localhost:3000/disposables/oxbar` with the real Sanity content):**
 - All 99 content lines of the doc are on the page word for word, 0 missing.
