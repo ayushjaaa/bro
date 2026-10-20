@@ -21,7 +21,7 @@ This file maps the SEO team's content onto the storefront: what goes where, what
 
 | Rule | Why | What it means for us |
 |---|---|---|
-| Health warning at top **and** bottom, with "Health Canada" beside/below it | Vaping Products Promotion Regulations s.12 / s.22 | A dedicated warning component, exact text, not editable into something else |
+| Health warning at top **and** bottom, with "Health Canada" beside/below it | Vaping Products Promotion Regulations s.12 / s.22 | Text lives once in the shared Sanity `landingPageSettings` doc (required fields); the page refuses to render if it's missing, so it can never go out without the warning |
 | **No reviews / testimonials** on this page | TVPA s.30.21 bans promotion via testimonials | Do **not** reuse the homepage `Testimonials` section here |
 | "Last reviewed: October 2026" line under the provincial rules | Rules change; date must be honest | Kept as normal body text in Sanity (editable, in the doc's exact position), not hardcoded |
 | Audience notice ("registered businesses and adults of legal age") | Ads must not be seen by young persons | Show near the top; the existing `ProvinceGateModal` still runs sitewide |
@@ -34,7 +34,7 @@ IDs (S0, S1…) are used in the rest of this file.
 
 | ID | Section (heading in doc) | Content type | Count |
 |---|---|---|---|
-| S0 | Health warning (top) | Fixed legal text | 1 line |
+| S0 | Health warning (top) | Legal text (shared Sanity settings) | 1 line |
 | S1 | Audience notice | 1 sentence | 1 |
 | S2 | Breadcrumb `Home / Disposables / Oxbar` | Nav | 3 crumbs |
 | S3 | **H1:** Wholesale Oxbar Disposables in Canada From Gemini Distribution | 2 paragraphs + CTA row + 4 trust bullets | 4 bullets |
@@ -102,7 +102,8 @@ flowchart LR
   subgraph CODE["storefront/src"]
     R["app/[category]/[brand]/page.tsx"]
     L["features/seo-landing/BrandCategoryLanding.tsx"]
-    HW["HealthWarning.tsx (fixed text)"]
+    HW["HealthWarning.tsx"]
+    SET["landingPageSettings doc\n(warning, buttons, Home crumb)"]
     BC["components/ui/Breadcrumb.tsx"]
     RT["LandingRichText.tsx\n(paras, H3, lists, bold, links)"]
     CTA["WholesaleCtaRow.tsx + LoginOpeners.tsx"]
@@ -112,8 +113,8 @@ flowchart LR
   end
 
   D1 & D2 & D3 & D4 & D10 & D11 & D12 & DM --> S1 --> R
-  D0 --> HW
-  DC --> CTA
+  D0 & DC --> SET
+  SET --> HW & CTA & BC
   R --> META & L
   L --> HW & BC & RT & CTA & FAQ
   S1 --> SM
@@ -127,7 +128,7 @@ flowchart LR
 | Content | Sanity doc type `brandCategoryPage` + 4 section types | `src/sanity/schemaTypes/brandCategoryPage.ts` (registered in `schemaTypes/index.ts`) |
 | Fetching | `getBrandCategoryPage()`, `listBrandCategoryPages()` — cached weekly, never throw, keep last good copy | `src/lib/sanity/brand-category-page.ts` |
 | Page layout (all sections in order) | `BrandCategoryLanding` | `src/features/seo-landing/BrandCategoryLanding.tsx` |
-| S0 / S14 warning | `HealthWarning` — fixed legal text, not editable | `src/features/seo-landing/HealthWarning.tsx` |
+| S0 / S14 warning | `HealthWarning` — text from shared Sanity `landingPageSettings` | `src/features/seo-landing/HealthWarning.tsx`, `src/sanity/schemaTypes/landingPageSettings.ts` |
 | S1 audience notice | Sanity field `audienceNotice` | (in `BrandCategoryLanding`) |
 | S2 breadcrumb | `Breadcrumb` (new shared component) | `src/components/ui/Breadcrumb.tsx` |
 | S3 hero | H1 + intro + CTA row + trust points | (in `BrandCategoryLanding`) |
@@ -164,7 +165,9 @@ brandCategoryPage
 
 Rich-text links accept: `/site-path`, `https://…` (opens in a new tab), `mailto:…`, or `#login`.
 
-Not fields on purpose: the health warning and the CTA button labels. They're the same on every page, so no single page can end up with them edited or missing.
+**Shared across all landing pages — `landingPageSettings` (one doc, id `landingPageSettings`, Studio: "SEO Landing Page Settings"):** health warning text + "Health Canada" attribution, the 3 button labels + 2 links, and the breadcrumb's "Home" label. Every field is required. If the doc is missing or incomplete, the landing page throws an error instead of rendering without the warning. Source values: `scripts/sanity/landing-page-settings.json`.
+
+**Everything on the page is managed in Sanity** (audit 2026-10-20: 183 text pieces on the page, 0 not from Sanity; the only code-generated text is the step numbers 1–4 and FAQ counters 1–9). Edit test: changing the Log In label in Sanity changed all 4 buttons on the page after publish; reverted.
 
 Oxbar section settings used: S7 rules and S9 benefits use the **cards** layout. Buttons appear after S9, S10 and S13 (plus the hero), which matches the doc's 4 CTA rows.
 
@@ -248,6 +251,8 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 | 9 | Proof-read the page against the doc | ✅ Done on localhost (details below) |
 | — | `tsc --noEmit` + eslint on new files | ✅ Clean |
 | — | Sanity webhook filter | ✅ Done 2026-10-20 — "crud" webhook filter is now `_type in ["page","collectionBanner","pageBanner","productPageContent","topBar","brandCategoryPage"]` (`topBar` was also missing before) |
+| — | Webhook filter: add `"landingPageSettings"` | ⏳ **To do** — without it, edits to the warning/buttons only reach the live site after the weekly revalidate |
+| — | Shared settings moved to Sanity | ✅ Storefront `46e9d66`, live on the client's Vercel team. Live audit at 390px + 1440px: 183 text pieces, 0 not from Sanity; 104/104 doc lines in order; no sideways scroll |
 | — | Commit / deploy | ✅ Storefront `127deb9` pushed to `main` → live in ~90s. Production check: 0 of 99 doc lines missing at 390px and 1440px, no sideways scroll, title/canonical/FAQ JSON-LD correct, both warnings present, Log In opens the popup, `/disposables/oxbar/` → 308, page listed in `/sitemap.xml` |
 
 **Proof-read result (2026-10-20, `localhost:3000/disposables/oxbar` with the real Sanity content):**
