@@ -5,6 +5,8 @@ import { toggleFeaturedAction } from '../actions';
 import type { FeaturedCollectionKey } from '@/data/featured-collections';
 
 const LABELS: Record<FeaturedCollectionKey, string> = {
+  'best-sellers': 'Show in Best Sellers',
+  'new-arrivals': 'Show in New Arrivals',
   trending: 'Show in Trending',
   promotions: 'Show in Promotions',
 };

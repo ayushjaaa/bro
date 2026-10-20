@@ -22,12 +22,16 @@ export default function ProductLineForm({
   brands,
   filterDefinitions,
   subcategoryFilterLinks,
+  featuredKey,
 }: {
   categories: TaxonomyEntry[];
   subcategories: TaxonomyEntry[];
   brands: TaxonomyEntry[];
   filterDefinitions: FilterDefinition[];
   subcategoryFilterLinks: Record<string, string[]>;
+  /** Set when opened from a Featured collection's "Create new product" button -- the created
+   * Product Line(s) also get added to the top of that collection. */
+  featuredKey?: string;
 }) {
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
@@ -222,6 +226,7 @@ export default function ProductLineForm({
           className="rounded-lg border border-neutral-200 bg-white p-4 space-y-4"
         >
           <input type="hidden" name="brandId" value={brandId} />
+          {featuredKey && <input type="hidden" name="featured" value={featuredKey} />}
 
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1">Product Line Name</label>

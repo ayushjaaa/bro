@@ -11,6 +11,7 @@ import {
   type ProductLinesPage,
 } from '@/data/products';
 import { REGIONS } from '@/lib/regions';
+import { isFeaturedCollectionKey, setProductFeatured, type FeaturedCollectionKey } from '@/data/featured-collections';
 import { SafeActionError, safeActionError } from '@/lib/action-errors';
 import {
   bulkCreateVariants,
@@ -42,9 +43,12 @@ export async function createProductLineAction(formData: FormData) {
 
   const checkedRegionValues = new Set(formData.getAll('regions').map(String));
   const regions = REGIONS.filter((r) => checkedRegionValues.has(r.value));
+  const featuredRaw = String(formData.get('featured') ?? '');
+  const featuredKey: FeaturedCollectionKey | null = isFeaturedCollectionKey(featuredRaw) ? featuredRaw : null;
 
+  let created: Awaited<ReturnType<typeof createProductLine>>;
   try {
-    await createProductLine({
+    created = await createProductLine({
       title: String(formData.get('title') ?? ''),
       brandId: String(formData.get('brandId') ?? ''),
       filterValues,
@@ -61,6 +65,24 @@ export async function createProductLineAction(formData: FormData) {
       );
     }
     throw new SafeActionError(safeActionError(err, 'Failed to create Product Line. Please try again.', 'products:create'));
+  }
+
+  if (featuredKey) {
+    // Opened from a Featured collection's "Create new product" button: add each created region-
+    // clone to the top of that collection. The products themselves already exist at this point,
+    // so a failure here must say so plainly rather than read like the creation failed.
+    try {
+      for (const product of created) await setProductFeatured(featuredKey, product.id, true);
+    } catch (err) {
+      console.error('[products:create-featured]', err);
+      throw new SafeActionError(
+        'Product Line created, but adding it to the Featured collection failed. Add it from the Featured page instead -- do not resubmit this form.'
+      );
+    }
+    revalidatePath('/featured');
+    revalidatePath(`/featured/${featuredKey}`);
+    revalidatePath('/products');
+    redirect(`/featured/${featuredKey}`);
   }
 
   revalidatePath('/products');

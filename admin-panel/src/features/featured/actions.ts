@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import {
+  FEATURED_COLLECTION_KEYS,
   setProductFeatured,
+  moveFeaturedProduct,
+  clearFeaturedProducts,
   listFeaturedProducts,
   searchProductsForFeatured,
   type FeaturedCollectionKey,
@@ -31,6 +34,36 @@ export async function toggleFeaturedAction(
   }
 }
 
+export async function moveFeaturedAction(
+  productId: string,
+  key: FeaturedCollectionKey,
+  newPosition: number
+): Promise<ActionResult> {
+  try {
+    await moveFeaturedProduct(key, productId, newPosition);
+    revalidatePath('/featured');
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: safeActionError(error, 'Could not change the order. Please try again.', 'featured:move'),
+    };
+  }
+}
+
+export async function clearFeaturedAction(key: FeaturedCollectionKey): Promise<ActionResult> {
+  try {
+    await clearFeaturedProducts(key);
+    revalidatePath('/featured');
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: safeActionError(error, 'Could not remove the products. Please try again.', 'featured:clear'),
+    };
+  }
+}
+
 export async function searchProductsForFeaturedAction(
   query: string
 ): Promise<{ ok: true; results: FeaturedProduct[] } | { ok: false; error: string }> {
@@ -46,14 +79,15 @@ export async function searchProductsForFeaturedAction(
 }
 
 export async function getFeaturedListsAction(): Promise<
-  { ok: true; trending: FeaturedProduct[]; promotions: FeaturedProduct[] } | { ok: false; error: string }
+  { ok: true; lists: Record<FeaturedCollectionKey, FeaturedProduct[]> } | { ok: false; error: string }
 > {
   try {
-    const [trending, promotions] = await Promise.all([
-      listFeaturedProducts('trending'),
-      listFeaturedProducts('promotions'),
-    ]);
-    return { ok: true, trending, promotions };
+    const results = await Promise.all(FEATURED_COLLECTION_KEYS.map((key) => listFeaturedProducts(key)));
+    const lists = Object.fromEntries(FEATURED_COLLECTION_KEYS.map((key, i) => [key, results[i]])) as Record<
+      FeaturedCollectionKey,
+      FeaturedProduct[]
+    >;
+    return { ok: true, lists };
   } catch (error) {
     return {
       ok: false,
