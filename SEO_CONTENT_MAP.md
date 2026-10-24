@@ -1,14 +1,76 @@
 # SEO Content Map — Brand × Category Landing Pages
 
-Source doc: [01. Oxbar-Disposables-Gemini.docx](https://docs.google.com/document/d/1xOyC3PWnI4NAHeYpblZ5a2i9lFG3dAu1/edit) (SEO team, Oct 2026)
-
-Status (2026-10-20): **LIVE at https://www.geminidistribution.ca/disposables/oxbar** (storefront commit `127deb9`, auto-deployed to the client's Vercel project). Content seeded into Sanity (tflrlnle / production); page proof-read on production. Still `noindex` until the sitewide pre-launch block is lifted (D8).
-
 This file maps the SEO team's content onto the storefront: what goes where, what was built and what's still pending.
 
 ---
 
-## 1. What the doc actually is
+## 0. Doc tracker (updated 2026-10-24)
+
+### Docs received
+
+| # | Doc | URL | Status |
+|---|---|---|---|
+| 01 | *(first batch: "01. Oxbar")* — [old doc](https://docs.google.com/document/d/1xOyC3PWnI4NAHeYpblZ5a2i9lFG3dAu1/edit) | /disposables/oxbar | Replaced by doc 02. Live 2026-10-20 → 2026-10-24 and approved by the SEO team; their only feedback was to **remove the office address** |
+| 02 | [02__Oxbar-Disposables-Gemini](https://docs.google.com/document/d/1EqX-93QU9ccnLW8XTf0sJE5rlQFINzgeK6F3uBoUDsc/edit) | /disposables/oxbar | ✅ **Live 2026-10-24**. Replaces the 01 content in full (client decision) |
+| 03 | [03__Flavour-Beast-Disposables-Gemini](https://docs.google.com/document/d/1IZkxAKfUiuw5vf5hMYKcGC6s4vXdqRmaxRm4lZKVEls/edit) | /disposables/flavour-beast | ✅ **Live 2026-10-24** |
+| 04 | [04__Instabar-Disposables-Gemini](https://docs.google.com/document/d/106eZ-Dthq7-WZzsLyzK32AoLQgC9gWOwwUMn0JOapz8/edit) | /disposables/instabar | ✅ **Live 2026-10-24** |
+
+Storefront commit `88000f2`; content written to Sanity with `seed-landing-pages.ts`. Proof-read by an independent check of each Google Doc against the rendered page: 0 unexpected differences in meta, headings, wording, links or CTA rows, on localhost and production. No sideways scroll at 390px or 1440px.
+
+Applied to every page: the **"Office: 2835 23 St NE…" line is removed** (SEO team's feedback on the approved Oxbar page). The address stays in the site footer.
+
+### The 12 disposable brands the docs name
+
+Each doc lists the page's own brand plus the same 11 others. This is the full set; none may be skipped.
+
+| # | Brand | Planned URL | Doc | Page | Linked from (docs 02–04) | Shopify brand name |
+|---|---|---|---|---|---|---|
+| 1 | Oxbar | /disposables/oxbar | ✅ 02 | ✅ | Flavour Beast | Oxbar |
+| 2 | Flavour Beast | /disposables/flavour-beast | ✅ 03 | ✅ | Instabar | Flavour Beast |
+| 3 | Instabar | /disposables/instabar | ✅ 04 | ✅ | Oxbar | Instabar |
+| 4 | Kraze | /disposables/kraze | ❌ | ❌ | Oxbar, Instabar | Kraze |
+| 5 | STLTH | /disposables/stlth | ❌ | ❌ | Oxbar, Flavour Beast | **Stlth** (case differs) |
+| 6 | Geek Bar | /disposables/geek-bar | ❌ | ❌ | Instabar | Geek Bar |
+| 7 | Drip'n by ENVI | /disposables/dripn-by-envi | ❌ | ❌ | Flavour Beast | **Drip'n** (name differs) |
+| 8 | Mr Fog | /disposables/mr-fog *(guess)* | ❌ | ❌ | chip only | Mr Fog |
+| 9 | Ripper | /disposables/ripper *(guess)* | ❌ | ❌ | chip only | Ripper |
+| 10 | Gcore | /disposables/gcore *(guess)* | ❌ | ❌ | chip only | Gcore |
+| 11 | Elf Bar | /disposables/elf-bar *(guess)* | ❌ | ❌ | chip only | Elf Bar |
+| 12 | Orbito | /disposables/orbito *(guess)* | ❌ | ❌ | chip only | Orbito |
+
+Plus the **hub page `/disposables`**: every doc links to it 3 times ("disposables guide", "wholesale disposable vapes" page). ❌ No doc yet. Docs are numbered 02–04, so it may be the missing 01 (to confirm).
+
+**Links to pages that don't exist yet are not broken:** the link is saved in Sanity exactly as the doc has it, and the page shows plain text until that landing page is published. After that it becomes a link by itself, with no content edit (`isUnpublishedLandingPath` in `LandingRichText.tsx`). This covers 5 targets: /disposables, kraze, stlth, geek-bar, dripn-by-envi.
+
+### Disposable brands in Shopify but in no doc
+
+CAPSL, Dojo, Doozy Quad, ENVI x TasteFlex, Linvo, VFEEL, Vice. Ask the SEO team whether these get pages. Also, `ddddddd` and `dddssssss` (Disposable Vapes) and `dd` (Pre-Rolled Cones) are test brand entries in Shopify and should be deleted in the admin.
+
+### Menu coverage (live Shopify menu, 2026-10-24)
+
+```
+Vape & e Juices
+├── Disposable ........ 3 of 12 brand pages + hub missing   (this file)
+├── E-Juices .......... 17 brands  ❌ no docs
+├── Pre-Filled Pods ... Oxbar, Flavour Beast, Mr Fog, Ripper  ❌ no docs
+├── Devices ........... ❌ no docs
+└── Hardware .......... ❌ no docs
+Smoking / Cannabis Accessories / Convenience ...  ❌ no docs
+```
+
+### What the docs say about the site (checked against the code)
+
+| Claim in docs | True? |
+|---|---|
+| Province picker: BC is its own choice, not part of Federal | ✅ `src/lib/regions.ts` (Federal, BC, Alberta, Manitoba, Ontario, Quebec) |
+| Picker doesn't show NS, NB, PEI or the territories (doc 03) | ✅ same list |
+| Pick province + sign in → stock and price for your stamp | ✅ existing behaviour |
+| /apply: Retailer, Wholesale or Google sign-up | ✅ `src/app/apply/page.tsx` |
+| $1,000 minimum, free shipping over $1,500 | ⚠️ Not enforced anywhere in storefront code. Business policy, so confirm with the client |
+
+---
+
+## 1. What the doc actually is (written for the first doc, 01. Oxbar — sections 1–4 describe that build)
 
 - It is **one new landing page**: "Oxbar Disposables" at URL `/disposables/oxbar/`.
 - It is **not** a product page and **not** a change to the homepage. The doc says so itself: *"This page covers Oxbar disposables as a category. Each device, flavour and strength is listed as its own product in our catalogue."*
@@ -142,7 +204,8 @@ flowchart LR
 | Structured data | `BreadcrumbList` + `FAQPage` JSON-LD (`<` escaped) | `page.tsx` |
 | Sitemap | Landing pages added from Sanity; Sanity failure only drops these entries | `src/app/sitemap.ts` |
 | Cache refresh on publish | New tag `sanity:brand-category-pages` | `src/app/api/webhooks/sanity/route.ts` |
-| Oxbar content (word for word) | Seed data + markdown→Portable Text helper | `scripts/sanity/oxbar-disposables-content.ts`, `scripts/sanity/seed-oxbar-disposables.ts` |
+| Page content (word for word), one file per doc | Seed data + markdown→Portable Text helper (`pt.ts`: bold, italic, links inside bold, bullets, numbered lists, H3) | `scripts/sanity/landing-content/*.ts`, `scripts/sanity/seed-landing-pages.ts` |
+| Links to unpublished landing pages | Shown as plain text until the target page is published, then a link by itself | `isUnpublishedLandingPath` in `src/features/seo-landing/LandingRichText.tsx` |
 
 ### Sanity schema as built (`brandCategoryPage`)
 
@@ -158,7 +221,8 @@ brandCategoryPage
 ├─ h1, heroIntro (rich text), trustBullets[]
 └─ sections[]  (any order, any mix)
    ├─ landingRichSection      heading, body (rich text), listLayout list|cards, ctaRowAfter
-   ├─ landingStepsSection     heading, steps[{title, body}], afterSteps, ctaRowAfter
+   ├─ landingStepsSection     heading, intro (added 2026-10-24), steps[{title, body}], afterSteps, ctaRowAfter
+   │                          (step titles render as bold text, not H3, to match the docs' heading outline)
    ├─ landingBrandListSection heading, intro, brands[], outro, ctaRowAfter
    └─ landingFaqSection       heading, items[{question, answer}], outro, ctaRowAfter
 ```
@@ -217,6 +281,9 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 | D6 | Link the S11 brand names? | **What the doc says:** plain text. → **Built** as plain text chips. Link each one once its own landing page exists. |
 | D7 | Footer "Brands → Oxbar" is `href="#"` | Not in the doc → follow-up after launch. |
 | D8 | Indexing | Not in the doc. `robots.ts` + `layout.tsx` block all indexing (pre-launch) → left as is. The page has correct meta, canonical and sitemap entry, ready for when indexing is switched on. |
+| D9 | Docs 02–04 link to pages that don't exist (/disposables hub, Kraze, STLTH, Geek Bar, Drip'n by ENVI) | Links are stored as written in the doc and render as plain text until the target landing page is published; after that they become links by themselves. No 404 links, and no content edit needed later. (2026-10-24) |
+| D10 | Office address in the "other brands" section | Removed from every landing page at the SEO team's request (their only feedback on the approved Oxbar page). The footer keeps it. (2026-10-24) |
+| D11 | Oxbar: keep the approved 01 content or switch to doc 02? | Client chose doc 02 in full (2026-10-24). |
 
 ### Questions for the SEO team
 
@@ -233,6 +300,7 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 - Link the S11 brand names once their landing pages exist *(D6)*
 - Lift the sitewide noindex at launch *(D8)*
 - Separate bug: sitewide sideways scroll at 1024px (Navbar/TopBar), see section 4
+- **Sitemap isn't refreshed by the Sanity webhook** (found 2026-10-24): after Flavour Beast + Instabar were published, `/sitemap.xml` still listed only Oxbar (Vercel cache age kept growing from the deploy, through 2 webhook fires). It picks them up on the next deploy or the weekly revalidate. Possible fix: `revalidatePath('/sitemap.xml')` in `api/webhooks/sanity/route.ts`. Low impact while the site is `noindex` (D8).
 
 ---
 
@@ -281,7 +349,13 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 - [ ] Publish → page appears at `/<category>/<brand>` and in `/sitemap.xml`.
 - [ ] Mobile check at 360px.
 
-Quickest way for a new doc: copy `scripts/sanity/oxbar-disposables-content.ts`, swap the text, and run a seed. Or fill the fields in Studio by hand.
+Quickest way for a new doc: copy one file in `scripts/sanity/landing-content/`, swap the text, add it to `PAGES` in `seed-landing-pages.ts`, and run the seed. Or fill the fields in Studio by hand.
+
+- [ ] Drop the "Office:" address line (SEO team feedback, 2026-10-24).
+- [ ] Keep links to brand pages that don't exist yet exactly as in the doc: they show as plain text until that page is published.
+- [ ] Doc numbered steps ("1. **Apply.** …") → steps section; the H3 above them → the section's intro; the H3s after them → "Text after the steps".
+- [ ] Proof-read: have someone compare the Google Doc against the rendered page line by line (meta, headings, every line, every link, CTA rows).
+- [ ] Update the tracker in section 0.
 
 ---
 
@@ -290,8 +364,8 @@ Quickest way for a new doc: copy `scripts/sanity/oxbar-disposables-content.ts`, 
 1. In sanity.io/manage → project **tflrlnle** → API → Tokens, create a token with **Editor** rights.
 2. Add it to `storefront/.env.local` as `SANITY_WRITE_TOKEN=...` (never commit it, never put it in Vercel).
 3. Run from `storefront/`:
-   `npx tsx --env-file=.env.local scripts/sanity/seed-oxbar-disposables.ts`
-   This creates the doc as **published**. It won't overwrite it if it already exists.
-4. Open `http://localhost:3000/disposables/oxbar` and proof-read it against the doc.
+   `npx tsx --env-file=.env.local scripts/sanity/seed-landing-pages.ts oxbar flavour-beast instabar`
+   This writes the docs as **published** with createOrReplace (Studio edits get overwritten), after saving the current versions to a JSON backup in the OS temp folder.
+4. Open `http://localhost:3000/disposables/<brand>` and proof-read it against the doc.
 5. Add `"brandCategoryPage"` to the Sanity webhook filter. ✅ Done once; future SEO pages use the same type, so nothing to add.
 6. Deploy (client's Vercel team).
