@@ -14,33 +14,52 @@ This file maps the SEO team's content onto the storefront: what goes where, what
 | 02 | [02__Oxbar-Disposables-Gemini](https://docs.google.com/document/d/1EqX-93QU9ccnLW8XTf0sJE5rlQFINzgeK6F3uBoUDsc/edit) | /disposables/oxbar | ✅ **Live 2026-10-24**. Replaces the 01 content in full (client decision) |
 | 03 | [03__Flavour-Beast-Disposables-Gemini](https://docs.google.com/document/d/1IZkxAKfUiuw5vf5hMYKcGC6s4vXdqRmaxRm4lZKVEls/edit) | /disposables/flavour-beast | ✅ **Live 2026-10-24** |
 | 04 | [04__Instabar-Disposables-Gemini](https://docs.google.com/document/d/106eZ-Dthq7-WZzsLyzK32AoLQgC9gWOwwUMn0JOapz8/edit) | /disposables/instabar | ✅ **Live 2026-10-24** |
+| 05 | [05__Mr-Fog-Disposables-Gemini](https://docs.google.com/document/d/1mOTNP3aJo72GSBdKLZvy8mHZg3lEdO3MKDEGAoPkMpw/edit) | /disposables/mr-fog | ✅ **Live 2026-10-24** |
+| 06 | [06__STLTH-Disposables-Gemini](https://docs.google.com/document/d/1MvSNasnm3rfvAO28B8b6QNcQNP7fScHD6JLs4vdSAn0/edit) | /disposables/stlth | ✅ **Live 2026-10-24** |
+| 07 | [07__Kraze-Disposables-Gemini](https://docs.google.com/document/d/1x4LvYU9cr73M2IszyB1kIv1cr9OOC31AYtwn45uyzgk/edit) | /disposables/kraze | ✅ **Live 2026-10-24** |
+| 08 | [08__Geek-Bar-Disposables-Gemini](https://docs.google.com/document/d/1C7jbwjt_7BgaPbTCpIkMs5vKEJmg3Gn0MsTvoWWwHZ8/edit) | /disposables/geek-bar | ✅ **Live 2026-10-24** |
+| 09 | [09__Dripn-by-ENVI-Disposables-Gemini](https://docs.google.com/document/d/199qOSarQvP-tLMPq6Aqil4u2VDDEBoiWhWD5gPz7__s/edit) | /disposables/dripn-by-envi | ✅ **Live 2026-10-24** |
+| 10 | [10__Ripper-Disposables-Gemini](https://docs.google.com/document/d/1zO266mSSV5It5LDVXsKPkACpoMil8llTiBazpTiGG8g/edit) | /disposables/ripper | ✅ **Live 2026-10-24** |
+| 11 | [11__Elf-Bar-Disposables-Gemini](https://docs.google.com/document/d/1VipPBNjHKmAe9xz_yR-qEZwog6FZj3ewsqnBCZk-20s/edit) | /disposables/elf-bar | ✅ **Live 2026-10-24** |
+| 12 | [12__Gcore-Disposables-Gemini](https://docs.google.com/document/d/114G49ApveSYbQtZbMBCkXBE5hJaZ_AllLtsIRsoxMlE/edit) | /disposables/gcore | ✅ **Live 2026-10-24** |
+| 01 (new numbering) | ❌ not received | probably the /disposables hub (to confirm) | — |
 
-Storefront commit `88000f2`; content written to Sanity with `seed-landing-pages.ts`. Proof-read by an independent check of each Google Doc against the rendered page: 0 unexpected differences in meta, headings, wording, links or CTA rows, on localhost and production. No sideways scroll at 390px or 1440px.
+Docs are matched to pages by the **URL slug and title inside each doc**, never by the number or link order they were sent with (the doc 07/08 links were first sent as copies of doc 06).
 
-Applied to every page: the **"Office: 2835 23 St NE…" line is removed** (SEO team's feedback on the approved Oxbar page). The address stays in the site footer.
+Code: storefront commit `88000f2` (the template, unchanged since). Content is written to Sanity with `seed-landing-pages.ts`. Proof-reading:
+- **02–04 and 09–12:** an independent agent compared each Google Doc against the rendered localhost page. Result: 0 unexpected differences.
+- **05–08:** the same check, run against the content files (low disk space ruled out a browser run). Result: 0 unexpected differences.
+- **All 11 on production (2026-10-24):** every text piece in the content files appears on the live page (114 to 127 per page). Meta titles are correct, no page shows the address, and there are 3 CTA rows per page.
+- **Responsive check:** no sideways scroll at 390px or 1440px. This was checked for the 7 pages verified in a browser; 05–08 use the same template.
+
+Applied to every page: the **office address line is removed** (it appears as "Office:", "Our office:", "Find us at:", "Calgary office:", "Mailing address:" or "Office address:"). This was the SEO team's feedback on the approved Oxbar page. The address stays in the site footer.
 
 ### The 12 disposable brands the docs name
 
-Each doc lists the page's own brand plus the same 11 others. This is the full set; none may be skipped.
+Each doc lists the page's own brand plus the same 11 others.
 
-| # | Brand | Planned URL | Doc | Page | Linked from (docs 02–04) | Shopify brand name |
-|---|---|---|---|---|---|---|
-| 1 | Oxbar | /disposables/oxbar | ✅ 02 | ✅ | Flavour Beast | Oxbar |
-| 2 | Flavour Beast | /disposables/flavour-beast | ✅ 03 | ✅ | Instabar | Flavour Beast |
-| 3 | Instabar | /disposables/instabar | ✅ 04 | ✅ | Oxbar | Instabar |
-| 4 | Kraze | /disposables/kraze | ❌ | ❌ | Oxbar, Instabar | Kraze |
-| 5 | STLTH | /disposables/stlth | ❌ | ❌ | Oxbar, Flavour Beast | **Stlth** (case differs) |
-| 6 | Geek Bar | /disposables/geek-bar | ❌ | ❌ | Instabar | Geek Bar |
-| 7 | Drip'n by ENVI | /disposables/dripn-by-envi | ❌ | ❌ | Flavour Beast | **Drip'n** (name differs) |
-| 8 | Mr Fog | /disposables/mr-fog *(guess)* | ❌ | ❌ | chip only | Mr Fog |
-| 9 | Ripper | /disposables/ripper *(guess)* | ❌ | ❌ | chip only | Ripper |
-| 10 | Gcore | /disposables/gcore *(guess)* | ❌ | ❌ | chip only | Gcore |
-| 11 | Elf Bar | /disposables/elf-bar *(guess)* | ❌ | ❌ | chip only | Elf Bar |
-| 12 | Orbito | /disposables/orbito *(guess)* | ❌ | ❌ | chip only | Orbito |
+| # | Brand | URL | Doc | Page | Shopify brand name |
+|---|---|---|---|---|---|
+| 1 | Oxbar | /disposables/oxbar | 02 | ✅ | Oxbar |
+| 2 | Flavour Beast | /disposables/flavour-beast | 03 | ✅ | Flavour Beast |
+| 3 | Instabar | /disposables/instabar | 04 | ✅ | Instabar |
+| 4 | Mr Fog | /disposables/mr-fog | 05 | ✅ | Mr Fog |
+| 5 | STLTH | /disposables/stlth | 06 | ✅ | **Stlth** (case differs) |
+| 6 | Kraze | /disposables/kraze | 07 | ✅ | Kraze |
+| 7 | Geek Bar | /disposables/geek-bar | 08 | ✅ | Geek Bar |
+| 8 | Drip'n by ENVI | /disposables/dripn-by-envi | 09 | ✅ | **Drip'n** (name differs) |
+| 9 | Ripper | /disposables/ripper | 10 | ✅ | Ripper |
+| 10 | Elf Bar | /disposables/elf-bar | 11 | ✅ | Elf Bar |
+| 11 | Gcore | /disposables/gcore | 12 | ✅ | Gcore |
+| 12 | Orbito | — | ❌ none | ❌ | Orbito |
 
-Plus the **hub page `/disposables`**: every doc links to it 3 times ("disposables guide", "wholesale disposable vapes" page). ❌ No doc yet. Docs are numbered 02–04, so it may be the missing 01 (to confirm).
+**Orbito** is named in every doc's brand list, but no doc links to it, and no doc number is left free for it (02–12 are taken). Ask the SEO team whether a page is planned.
 
-**Links to pages that don't exist yet are not broken:** the link is saved in Sanity exactly as the doc has it, and the page shows plain text until that landing page is published. After that it becomes a link by itself, with no content edit (`isUnpublishedLandingPath` in `LandingRichText.tsx`). This covers 5 targets: /disposables, kraze, stlth, geek-bar, dripn-by-envi.
+**Hub page `/disposables`:** every doc links to it 3 times ("disposables guide", "wholesale disposable vapes" page). ❌ No doc yet; probably doc 01.
+
+**Links to pages that don't exist yet are not broken.** The link is saved in Sanity exactly as the doc has it, and the page shows it as plain text until that landing page is published. After that it becomes a link by itself, with no content edit (`isUnpublishedLandingPath` in `LandingRichText.tsx`). Now that all 11 brand pages are live, every brand link is active. Only `/disposables` is still plain text.
+
+**Formatting notes:** Elf Bar and Geek Bar's ordering steps are numbered lists, not step cards, because their bold leads run into the sentence. Two-paragraph FAQ answers (Gcore, Kraze) show as one paragraph, since FAQ answers are plain text.
 
 ### Disposable brands in Shopify but in no doc
 
@@ -50,7 +69,7 @@ CAPSL, Dojo, Doozy Quad, ENVI x TasteFlex, Linvo, VFEEL, Vice. Ask the SEO team 
 
 ```
 Vape & e Juices
-├── Disposable ........ 3 of 12 brand pages + hub missing   (this file)
+├── Disposable ........ 11 of 12 brand pages live; Orbito + hub missing   (this file)
 ├── E-Juices .......... 17 brands  ❌ no docs
 ├── Pre-Filled Pods ... Oxbar, Flavour Beast, Mr Fog, Ripper  ❌ no docs
 ├── Devices ........... ❌ no docs
