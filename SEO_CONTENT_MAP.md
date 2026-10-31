@@ -22,7 +22,7 @@ This file maps the SEO team's content onto the storefront: what goes where, what
 | 10 | [10__Ripper-Disposables-Gemini](https://docs.google.com/document/d/1zO266mSSV5It5LDVXsKPkACpoMil8llTiBazpTiGG8g/edit) | /disposables/ripper | ✅ **Live 2026-10-24** |
 | 11 | [11__Elf-Bar-Disposables-Gemini](https://docs.google.com/document/d/1VipPBNjHKmAe9xz_yR-qEZwog6FZj3ewsqnBCZk-20s/edit) | /disposables/elf-bar | ✅ **Live 2026-10-24** |
 | 12 | [12__Gcore-Disposables-Gemini](https://docs.google.com/document/d/114G49ApveSYbQtZbMBCkXBE5hJaZ_AllLtsIRsoxMlE/edit) | /disposables/gcore | ✅ **Live 2026-10-24** |
-| 01 (new numbering) | ❌ not received | probably the /disposables hub (to confirm) | — |
+| 01 | [01__Disposables-Hub-Gemini](https://docs.google.com/document/d/1vLWwoFSsyaTFfy9UiDkVGFWT7ACnjyhevetFuqKHl5A/edit) | /disposables | ✅ **Live 2026-10-31**. Sanity type `categoryHubPage`; adds a comparison table. Address removed in 2 places (the Office line, and the clause in the FAQ outro) |
 
 Docs are matched to pages by the **URL slug and title inside each doc**, never by the number or link order they were sent with (the doc 07/08 links were first sent as copies of doc 06).
 
@@ -53,11 +53,11 @@ Each doc lists the page's own brand plus the same 11 others.
 | 11 | Gcore | /disposables/gcore | 12 | ✅ | Gcore |
 | 12 | Orbito | — | ❌ none | ❌ | Orbito |
 
-**Orbito** is named in every doc's brand list, but no doc links to it, and no doc number is left free for it (02–12 are taken). Ask the SEO team whether a page is planned.
+**Orbito:** the hub doc says "Our wider catalogue also includes Orbito disposables", with no link, so no Orbito page is planned.
 
-**Hub page `/disposables`:** every doc links to it 3 times ("disposables guide", "wholesale disposable vapes" page). ❌ No doc yet; probably doc 01.
+**Hub page `/disposables`:** ✅ live since 2026-10-31 (doc 01). Every brand doc links to it 3 times ("disposables guide", "wholesale disposable vapes"), and all of those links are now active. The brand pages' "Disposables" breadcrumb points to the hub; their View all button still goes to the product listing.
 
-**Links to pages that don't exist yet are not broken.** The link is saved in Sanity exactly as the doc has it, and the page shows it as plain text until that landing page is published. After that it becomes a link by itself, with no content edit (`isUnpublishedLandingPath` in `LandingRichText.tsx`). Now that all 11 brand pages are live, every brand link is active. Only `/disposables` is still plain text.
+**Links to pages that don't exist yet are not broken.** The link is saved in Sanity exactly as the doc has it, and the page shows it as plain text until that landing page is published. After that it becomes a link by itself, with no content edit (`isUnpublishedLandingPath` in `LandingRichText.tsx`). All 11 brand pages and the hub are live, so every link in the docs is active.
 
 **Formatting notes:** Elf Bar and Geek Bar's ordering steps are numbered lists, not step cards, because their bold leads run into the sentence. Two-paragraph FAQ answers (Gcore, Kraze) show as one paragraph, since FAQ answers are plain text.
 
@@ -69,7 +69,7 @@ CAPSL, Dojo, Doozy Quad, ENVI x TasteFlex, Linvo, VFEEL, Vice. Ask the SEO team 
 
 ```
 Vape & e Juices
-├── Disposable ........ 11 of 12 brand pages live; Orbito + hub missing   (this file)
+├── Disposable ........ hub + 11 brand pages live (Orbito has no page by design)   (this file)
 ├── E-Juices .......... 17 brands  ❌ no docs
 ├── Pre-Filled Pods ... Oxbar, Flavour Beast, Mr Fog, Ripper  ❌ no docs
 ├── Devices ........... ❌ no docs
