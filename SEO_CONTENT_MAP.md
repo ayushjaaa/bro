@@ -423,7 +423,7 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 
 Quickest way for a new doc: copy one file in `scripts/sanity/landing-content/`, swap the text, add it to `PAGES` in `seed-landing-pages.ts`, and run the seed. Or fill the fields in Studio by hand.
 
-- [ ] Drop the "Office:" address line (SEO team feedback, 2026-10-24).
+- [ ] **Standing rule (2026-10-31): remove every mention of the office address** ("2835 23 St NE, Suite 204, Calgary…") from all SEO content, now and in future. A separate line ("Office:", "Our office:", "Find us at:", "Mailing address:"…) is dropped. Inside a sentence, cut only the address clause and keep the rest: "Write to us, or visit our office at 2835 …" becomes "Write to us." Search each new doc for "2835" and "office". The site footer keeps its address.
 - [ ] Keep links to brand pages that don't exist yet exactly as in the doc: they show as plain text until that page is published.
 - [ ] Doc numbered steps ("1. **Apply.** …") → steps section; the H3 above them → the section's intro; the H3s after them → "Text after the steps".
 - [ ] Proof-read: have someone compare the Google Doc against the rendered page line by line (meta, headings, every line, every link, CTA rows).
