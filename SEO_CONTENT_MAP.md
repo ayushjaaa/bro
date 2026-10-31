@@ -89,6 +89,59 @@ Smoking / Cannabis Accessories / Convenience ...  ❌ no docs
 
 ---
 
+## 0b. Brand logos batch from the SEO team (received 2026-10-31)
+
+15 PNG files arrived over WhatsApp. So far only their file names have been seen, not the images. Each is matched below to the Brand entry in Shopify (live check 2026-10-31). A brand's logo shows in the mega menu, the homepage brand strip and the /brands page.
+
+The rule for each file: match it to the Shopify Brand **by name**, never by file order. Two file names are spelled differently from Shopify: `instbar` is Instabar and `koil-killz` is Koil Killaz. Open each image before uploading it.
+
+Done in 2 phases. Phase 1 covers the disposable brands, which have live SEO landing pages; Phase 2 covers the rest. This split is a proposal and can be changed.
+
+### Phase 1: Disposable brands (10 files)
+
+| File | Shopify brand | Logo live now? | Action | Status |
+|---|---|---|---|---|
+| gcore.png | Gcore | ❌ | Add | ⏳ |
+| geek-bar.png | Geek Bar | ❌ | Add. ⚠️ The file is only 2 kB, so check its quality first | ⏳ |
+| instbar.png | Instabar | ❌ | Add | ⏳ |
+| orbito.png | Orbito | ❌ | Add (no SEO page) | ⏳ |
+| ripper.png | Ripper | ❌ | Add | ⏳ |
+| vfeel.png | VFEEL | ❌ | Add (no SEO page) | ⏳ |
+| kraze.png | Kraze | ✅ | Replace or keep? | ❓ |
+| mr-fog.png | Mr Fog | ✅ | Replace or keep? | ❓ |
+| oxbar.png | Oxbar | ✅ | Replace or keep? | ❓ |
+| stlth.png | Stlth | ✅ | Replace or keep? ⚠️ The file is only 4 kB | ❓ |
+
+### Phase 2: E-liquid, device and unknown (5 files)
+
+| File | Shopify brand | Category | Logo live now? | Action | Status |
+|---|---|---|---|---|---|
+| kapow.png | Kapow | E-Liquids | ❌ | Add | ⏳ |
+| koil-killz.png | Koil Killaz | E-Liquids | ❌ | Add | ⏳ |
+| lemon-drop.png | Lemon Drop | E-Liquids | ❌ | Add | ⏳ |
+| vaporesso.png | Vaporesso | Devices / Hardware | ❌ | Add | ⏳ |
+| level-x.png | ❓ **not in Shopify** | — | — | Ask what this is; the brand may need creating first | ❓ |
+
+### Brands that have no logo and no file
+
+The file list starts at "g", so it may have been cut off at the top. Ask whether files for these brands were sent:
+
+- **Disposable:** CAPSL, Dojo, Doozy Quad, **Drip'n**, **Elf Bar**, ENVI x TasteFlex, Linvo, Vice. Drip'n and Elf Bar have live SEO pages.
+- **E-Liquids:** Berry Drop, Delicious Drip E-Juice, Doozy, ElfLiq, Flavour Drop, Fruitbae, Naked, Rufpuf.
+- **Devices / Hardware:** Battery, Caliburn.
+
+Flavour Beast already has a logo. `ddddddd` and `dddssssss` have logos but are test entries that should be deleted.
+
+### Open questions
+
+1. Where do the actual files go? Download them to one folder.
+2. Is the top of the file list (a–f) missing?
+3. What is Level X?
+4. Should the 4 existing logos (Kraze, Mr Fog, Oxbar, STLTH) be replaced?
+5. Are these brand logos, or are they meant as the 2 hero images on the landing pages?
+
+---
+
 ## 1. What the doc actually is (written for the first doc, 01. Oxbar — sections 1–4 describe that build)
 
 - It is **one new landing page**: "Oxbar Disposables" at URL `/disposables/oxbar/`.
