@@ -32,7 +32,7 @@ Code: storefront commit `88000f2` (the template, unchanged since). Content is wr
 - **All 11 on production (2026-10-24):** every text piece in the content files appears on the live page (114 to 127 per page). Meta titles are correct, no page shows the address, and there are 3 CTA rows per page.
 - **Responsive check:** no sideways scroll at 390px or 1440px. This was checked for the 7 pages verified in a browser; 05–08 use the same template.
 
-Applied to every page: the **office address line is removed** (it appears as "Office:", "Our office:", "Find us at:", "Calgary office:", "Mailing address:" or "Office address:"). This was the SEO team's feedback on the approved Oxbar page. The address stays in the site footer.
+Applied to every page: the **office address line is removed** (it appears as "Office:", "Our office:", "Find us at:", "Calgary office:", "Mailing address:" or "Office address:"). This was the SEO team's feedback on the approved Oxbar page. Since 2026-11-01 the address appears nowhere on the site: it was also removed from the Privacy Policy, and the footer never had it.
 
 ### The 12 disposable brands the docs name
 
@@ -354,7 +354,7 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 | D7 | Footer "Brands → Oxbar" is `href="#"` | Not in the doc → follow-up after launch. |
 | D8 | Indexing | Not in the doc. `robots.ts` + `layout.tsx` block all indexing (pre-launch) → left as is. The page has correct meta, canonical and sitemap entry, ready for when indexing is switched on. |
 | D9 | Docs 02–04 link to pages that don't exist (/disposables hub, Kraze, STLTH, Geek Bar, Drip'n by ENVI) | Links are stored as written in the doc and render as plain text until the target landing page is published; after that they become links by themselves. No 404 links, and no content edit needed later. (2026-10-24) |
-| D10 | Office address in the "other brands" section | Removed from every landing page at the SEO team's request (their only feedback on the approved Oxbar page). The footer keeps it. (2026-10-24) |
+| D10 | Office address in the "other brands" section | Removed from every landing page at the SEO team's request (their only feedback on the approved Oxbar page). Extended to the whole site 2026-11-01: removed from the Privacy Policy too; the footer never had it. |
 | D11 | Oxbar: keep the approved 01 content or switch to doc 02? | Client chose doc 02 in full (2026-10-24). |
 
 ### Questions for the SEO team
@@ -423,7 +423,7 @@ Rule followed: no `max-w-md / lg / xl` (they collapse to tiny px values in this 
 
 Quickest way for a new doc: copy one file in `scripts/sanity/landing-content/`, swap the text, add it to `PAGES` in `seed-landing-pages.ts`, and run the seed. Or fill the fields in Studio by hand.
 
-- [ ] **Standing rule (2026-10-31): remove every mention of the office address** ("2835 23 St NE, Suite 204, Calgary…") from all SEO content, now and in future. A separate line ("Office:", "Our office:", "Find us at:", "Mailing address:"…) is dropped. Inside a sentence, cut only the address clause and keep the rest: "Write to us, or visit our office at 2835 …" becomes "Write to us." Search each new doc for "2835" and "office". The site footer keeps its address.
+- [ ] **Standing rule (2026-10-31): remove every mention of the office address** ("2835 23 St NE, Suite 204, Calgary…") from all SEO content, now and in future. A separate line ("Office:", "Our office:", "Find us at:", "Mailing address:"…) is dropped. Inside a sentence, cut only the address clause and keep the rest: "Write to us, or visit our office at 2835 …" becomes "Write to us." Search each new doc for "2835" and "office". The address appears nowhere on the site, not even the Privacy Policy (2026-11-01).
 - [ ] Keep links to brand pages that don't exist yet exactly as in the doc: they show as plain text until that page is published.
 - [ ] Doc numbered steps ("1. **Apply.** …") → steps section; the H3 above them → the section's intro; the H3s after them → "Text after the steps".
 - [ ] Proof-read: have someone compare the Google Doc against the rendered page line by line (meta, headings, every line, every link, CTA rows).
