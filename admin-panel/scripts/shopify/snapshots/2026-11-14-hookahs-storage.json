@@ -1,0 +1,676 @@
+{
+  "takenAt": "2026-11-14T13:51:31.453Z",
+  "groups": [
+    "Hookahs",
+    "Storage"
+  ],
+  "subCategories": [
+    {
+      "id": "gid://shopify/Metaobject/252082618566",
+      "handle": "sub-category-vqhj0tgk",
+      "fields": {
+        "name": "Hookahs",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": "[\"gid://shopify/Metaobject/255350243526\",\"gid://shopify/Metaobject/255350276294\",\"gid://shopify/Metaobject/255350309062\",\"gid://shopify/Metaobject/255350341830\",\"gid://shopify/Metaobject/255350374598\"]"
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082651334",
+      "handle": "sub-category-23cudsa9",
+      "fields": {
+        "name": "Hookah Bowls",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082684102",
+      "handle": "sub-category-utbnniy1",
+      "fields": {
+        "name": "Hookah Hoses",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082716870",
+      "handle": "sub-category-uz0onzws",
+      "fields": {
+        "name": "Hookah Accessories & Parts",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082749638",
+      "handle": "sub-category-bs8bxzvc",
+      "fields": {
+        "name": "Charcoal",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082782406",
+      "handle": "sub-category-7yphkkzy",
+      "fields": {
+        "name": "Stash Jars",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082815174",
+      "handle": "sub-category-wsjwqq5d",
+      "fields": {
+        "name": "Storage Containers",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/252082847942",
+      "handle": "sub-category-wrpaw5gl",
+      "fields": {
+        "name": "Smell-Proof Bags",
+        "description": null,
+        "image": null,
+        "category": "gid://shopify/Metaobject/252082094278",
+        "relevant_filters": null
+      }
+    }
+  ],
+  "collections": [
+    {
+      "id": "gid://shopify/Collection/353064419526",
+      "handle": "hookahs",
+      "title": "Hookahs",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Hookahs"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Hookahs"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "1"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Hookahs",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "1"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064452294",
+      "handle": "hookah-bowls",
+      "title": "Hookah Bowls",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Hookah Bowls"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Hookahs"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "2"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Hookahs",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "2"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064485062",
+      "handle": "hookah-hoses",
+      "title": "Hookah Hoses",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Hookah Hoses"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Hookahs"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "3"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Hookahs",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "3"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064517830",
+      "handle": "hookah-accessories-parts",
+      "title": "Hookah Accessories & Parts",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Hookah Accessories & Parts"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Hookahs"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "4"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Hookahs",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "4"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064550598",
+      "handle": "charcoal",
+      "title": "Charcoal",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Charcoal"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Storage"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "4"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Storage",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "4"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064583366",
+      "handle": "stash-jars",
+      "title": "Stash Jars",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Stash Jars"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Storage"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "1"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Storage",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "1"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064616134",
+      "handle": "storage-containers",
+      "title": "Storage Containers",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Storage Containers"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Storage"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "2"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Storage",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "2"
+      }
+    },
+    {
+      "id": "gid://shopify/Collection/353064648902",
+      "handle": "smell-proof-bags",
+      "title": "Smell-Proof Bags",
+      "descriptionHtml": "",
+      "sortOrder": "MOST_RELEVANT",
+      "ruleSet": {
+        "appliedDisjunctively": false,
+        "rules": [
+          {
+            "column": "TYPE",
+            "relation": "EQUALS",
+            "condition": "Smell-Proof Bags"
+          }
+        ]
+      },
+      "productsCount": {
+        "count": 0
+      },
+      "resourcePublications": {
+        "nodes": [
+          {
+            "publication": {
+              "id": "gid://shopify/Publication/188574892230",
+              "name": "Online Store"
+            }
+          }
+        ]
+      },
+      "metafields": {
+        "nodes": [
+          {
+            "namespace": "custom",
+            "key": "menu_nav_key",
+            "type": "single_line_text_field",
+            "value": "cannabis-accessories"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_label",
+            "type": "single_line_text_field",
+            "value": "Storage"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_group_mode",
+            "type": "single_line_text_field",
+            "value": "subcategory"
+          },
+          {
+            "namespace": "custom",
+            "key": "menu_sort_order",
+            "type": "number_integer",
+            "value": "3"
+          }
+        ]
+      },
+      "menu": {
+        "menu_nav_key": "cannabis-accessories",
+        "menu_group_label": "Storage",
+        "menu_group_mode": "subcategory",
+        "menu_sort_order": "3"
+      }
+    }
+  ],
+  "brands": [],
+  "filterDefinitions": [
+    {
+      "id": "gid://shopify/Metaobject/255350243526",
+      "handle": "filter-definition-afulizre",
+      "fields": {
+        "label": "Size",
+        "key": "hookah_size",
+        "level": "product",
+        "choices": "[\"Small\",\"Medium\",\"Large\"]",
+        "native_field": null,
+        "required": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/255350276294",
+      "handle": "filter-definition-cpmtpgd4",
+      "fields": {
+        "label": "Material",
+        "key": "hookah_material",
+        "level": "product",
+        "choices": "[\"Glass\",\"Stainless Steel\",\"Brass\",\"Silicone\"]",
+        "native_field": null,
+        "required": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/255350309062",
+      "handle": "filter-definition-sgqmfvxh",
+      "fields": {
+        "label": "Hose Count",
+        "key": "hookah_hose_count",
+        "level": "product",
+        "choices": "[\"1\",\"2\",\"3\",\"4\"]",
+        "native_field": null,
+        "required": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/255350341830",
+      "handle": "filter-definition-rsoycvks",
+      "fields": {
+        "label": "Color",
+        "key": "hookah_color",
+        "level": "product",
+        "choices": "[\"Assorted\"]",
+        "native_field": null,
+        "required": null
+      }
+    },
+    {
+      "id": "gid://shopify/Metaobject/255350374598",
+      "handle": "filter-definition-q0nrldel",
+      "fields": {
+        "label": "Product Type",
+        "key": "hookah_product_type",
+        "level": "product",
+        "choices": "[\"Complete Set\",\"Pipe Only\",\"Accessory\"]",
+        "native_field": null,
+        "required": null
+      }
+    }
+  ],
+  "sharedFilterIds": [],
+  "products": []
+}
