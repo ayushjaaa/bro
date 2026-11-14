@@ -1,5 +1,6 @@
 import 'server-only';
 import { shopifyAdminRequest, shopifyAdminRequestAllowingPiiGaps } from './admin-client';
+import { parseAddressSnapshot, type SnapshotAddress } from './order-address-snapshot';
 
 const LIST_DRAFT_ORDERS_BY_CUSTOMER_QUERY = /* GraphQL */ `
   query ListDraftOrdersByCustomer($query: String!) {
@@ -56,6 +57,14 @@ const GET_DRAFT_ORDER_DETAIL_QUERY = /* GraphQL */ `
       order {
         statusPageUrl
       }
+      # Its own alias on purpose: statusPageUrl is blocked on this store's plan, and that error
+      # nulls the whole \`order\` object above -- this separate selection still returns the number.
+      completedOrder: order {
+        name
+      }
+      addressSnapshot: metafield(namespace: "$app", key: "order_addresses") {
+        value
+      }
       shippingAddress {
         address1
         address2
@@ -83,9 +92,43 @@ const GET_DRAFT_ORDER_DETAIL_QUERY = /* GraphQL */ `
               currencyCode
             }
           }
+          discountedTotalSet {
+            shopMoney {
+              amount
+            }
+          }
           variant {
             id
             availableForSale
+          }
+        }
+      }
+      subtotalPriceSet {
+        shopMoney {
+          amount
+        }
+      }
+      totalDiscountsSet {
+        shopMoney {
+          amount
+        }
+      }
+      totalShippingPriceSet {
+        shopMoney {
+          amount
+        }
+      }
+      totalTaxSet {
+        shopMoney {
+          amount
+        }
+      }
+      taxLines {
+        title
+        rate
+        priceSet {
+          shopMoney {
+            amount
           }
         }
       }
@@ -107,6 +150,9 @@ export interface CustomerOrderLineItem {
   quantity: number;
   image: string | null;
   unitAmount: string;
+  /** What this line actually costs after any line/order discount -- Shopify's own figure, so the
+   * invoice lines add up to the subtotal instead of re-multiplying the pre-discount unit price. */
+  lineAmount: string;
   currencyCode: string;
   /** Null for a custom line item with no product/variant attached (an admin can type an
    * arbitrary line into a Draft Order in Shopify) -- nothing to re-add to cart for those.
@@ -114,6 +160,27 @@ export interface CustomerOrderLineItem {
    * skips both cases and reports them back to the customer rather than silently failing. */
   variantId: string | null;
   availableForSale: boolean;
+}
+
+export interface CustomerOrderAddress {
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  province: string | null;
+  zip: string | null;
+  country: string | null;
+}
+
+function fromSnapshot(a: SnapshotAddress | null): CustomerOrderAddress | null {
+  if (!a) return null;
+  return {
+    address1: a.address1,
+    address2: a.address2 || null,
+    city: a.city,
+    province: a.provinceCode,
+    zip: a.zip,
+    country: a.countryCode === 'CA' ? 'Canada' : a.countryCode,
+  };
 }
 
 export interface CustomerOrderDetail extends CustomerOrderSummary {
@@ -133,14 +200,19 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
    *     CANCELLED/EXPIRED have no valid link to show at all.
    */
   invoiceUrl: string | null;
-  shippingAddress: {
-    address1: string | null;
-    address2: string | null;
-    city: string | null;
-    province: string | null;
-    zip: string | null;
-    country: string | null;
-  } | null;
+  /** The real Shopify order number (e.g. "#1044") once staff complete the draft; `name` stays the
+   * draft's own "#D131". Null until then. */
+  orderNumber: string | null;
+  shippingAddress: CustomerOrderAddress | null;
+  /** Only known for orders placed after the checkout address snapshot existed (see
+   * order-address-snapshot.ts) -- Shopify won't return it on this plan. */
+  billingAddress: CustomerOrderAddress | null;
+  /** All Shopify's own figures, so the invoice adds up exactly to `amount`. */
+  subtotal: string;
+  totalDiscounts: string;
+  totalShipping: string;
+  totalTax: string;
+  taxLines: Array<{ title: string; rate: number; amount: string }>;
   customerName: string | null;
   /** "<W|R>-<PROVINCE>-<YY>-<SEQ>" -- never a Shopify field, this app's own identifier, always
    * attached by the route (customer-order-detail/route.ts) from Supabase, not part of the
@@ -178,6 +250,7 @@ export async function getDraftOrderDetail(
   if (!order || order.customer?.id !== shopifyCustomerId) {
     return null;
   }
+  const snapshot = parseAddressSnapshot(order.addressSnapshot?.value);
 
   return {
     id: order.id,
@@ -195,7 +268,20 @@ export async function getDraftOrderDetail(
         : order.status === 'INVOICE_SENT'
           ? order.invoiceUrl
           : null,
-    shippingAddress: order.shippingAddress,
+    orderNumber: order.completedOrder?.name ?? null,
+    // The checkout-time copy when there is one; otherwise only the parts Shopify still returns
+    // (city/province/country) -- never filled in from a different address.
+    shippingAddress: fromSnapshot(snapshot?.shipping ?? null) ?? order.shippingAddress,
+    billingAddress: fromSnapshot(snapshot?.billing ?? null),
+    subtotal: order.subtotalPriceSet.shopMoney.amount,
+    totalDiscounts: order.totalDiscountsSet.shopMoney.amount,
+    totalShipping: order.totalShippingPriceSet.shopMoney.amount,
+    totalTax: order.totalTaxSet.shopMoney.amount,
+    taxLines: (order.taxLines as Array<{ title: string; rate: number; priceSet: { shopMoney: { amount: string } } }>).map((t) => ({
+      title: t.title,
+      rate: t.rate,
+      amount: t.priceSet.shopMoney.amount,
+    })),
     customerName: [order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(' ') || null,
     accountNumber: null, // always filled in by the route, from Supabase -- never a Shopify field
     lineItems: order.lineItems.nodes.map((li: any) => ({
@@ -204,6 +290,7 @@ export async function getDraftOrderDetail(
       quantity: li.quantity,
       image: li.image?.url ?? null,
       unitAmount: li.originalUnitPriceSet.shopMoney.amount,
+      lineAmount: li.discountedTotalSet.shopMoney.amount,
       currencyCode: li.originalUnitPriceSet.shopMoney.currencyCode,
       variantId: li.variant?.id ?? null,
       availableForSale: li.variant?.availableForSale ?? false,

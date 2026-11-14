@@ -60,22 +60,19 @@ export async function POST(request: NextRequest) {
     const contact = await getCustomerOrderContactInfo(body.customerId);
     order.accountNumber = contact.accountNumber;
 
-    // This store's Shopify plan blocks reading name/email/phone/precise-address back from the
-    // Admin API (see getDraftOrderDetail's own doc comment) -- getDraftOrderDetail already
-    // returns those specific fields as `null` rather than throwing. Backfill them from the same
-    // Supabase row (the same data, collected directly from this customer at registration) so the
-    // customer still sees their real name/contact/address, not a blank. city/province/country are
-    // NOT blocked by Shopify's restriction, so those stay as Shopify returned them -- only the
-    // specific blocked fields get overwritten here.
+    // This store's Shopify plan blocks reading name/email/phone back from the Admin API (see
+    // getDraftOrderDetail's own doc comment) -- getDraftOrderDetail returns those as `null` rather
+    // than throwing. Backfill them from the customer's own Supabase row so they still see their
+    // name/contact, not a blank.
+    //
+    // The shipping address is deliberately NOT backfilled from here: this row holds the
+    // REGISTRATION address, and an order can ship to any saved location -- mixing its street/postal
+    // code with the order's city/province printed addresses that don't exist. The order's own
+    // address comes from the checkout snapshot instead (order-address-snapshot.ts).
     order.customerName =
       order.customerName ?? ([contact.firstName, contact.lastName].filter(Boolean).join(' ') || null);
     order.email = order.email ?? contact.email;
     order.phone = order.phone ?? contact.phone;
-    if (order.shippingAddress) {
-      order.shippingAddress.address1 = order.shippingAddress.address1 ?? contact.shipLine1;
-      order.shippingAddress.address2 = order.shippingAddress.address2 ?? contact.shipLine2;
-      order.shippingAddress.zip = order.shippingAddress.zip ?? contact.shipPostalCode;
-    }
 
     return NextResponse.json({ order }, { status: 200 });
   } catch (err) {

@@ -29,6 +29,31 @@ Not worth doing until the catalog is genuinely approaching the scale where today
 would start costing noticeable latency (tens of thousands of products in one combination) --
 revisit if/when that becomes real.
 
+## Pending: leftovers from the glass and silicone import (2026-11-14)
+
+The client's glass export (263 products) is live, Dab Rigs sits inside Bongs in the menu and the
+sidebar, and the sections carry the client's SKU legend names (Beaker Bong, Dab Rig Bong...).
+Still open:
+
+1. **SKU format (decision pending with the client).** The 564 variant SKUs are still exactly as the
+   client sent them (`CA-BG-BK-0001 -GREEN-(CB2004)`): spaces and brackets inside, 13 base numbers
+   shared by 2-5 different products (CA-BG-BK-0004, CA-BG-OB-0004...), cut or misspelled variant
+   parts (SCOOBYDOOTEAMUPG, BUE), up to 41 characters. Proposed short format
+   `CA-BG-BK-0001-GN` with the supplier code in its own field; the options and trade-offs are to be
+   shown to the client before anything changes, together with an old -> new SKU list.
+2. **Sanity homepage card link.** Home -> Product Categories -> "Cannabis Accessories" still links
+   to `subcategory=straight-tube-bongs`. It works (proxy.ts 308s it to `straight-bong`), but should
+   be edited in Studio to `/products?category=cannabis&subcategory=straight-bong`. The CLI login
+   token is read-only, so this needs the Studio or an Editor token.
+3. **Silicone Water Pipes (20 products, `CA-PP-WP`).** The SKU legend files them under Pipes, the
+   client's sections sheet under Silicone Bong, where they are now. Revisit with the SKU decision.
+4. **Stock to confirm with the client.** 12 variants were imported with 970-1096 units as the file
+   said (e.g. JDL081 Zong, about 1000 per colour); likely typos.
+5. **Brand logos.** POTHEAD GLASS, FELIX GLASS, BEE GLASS, HYDR and FLAME were created without
+   logos; upload them from the admin panel.
+6. **Empty sections in the menu.** Water Pipes, Nectar Collectors, E-Rigs, Dab Rig Accessories,
+   Glass Pipe, Hand Pipes and Bubblers have no products yet but still show in the menu.
+
 ## Pending fix: `nav-menu` cache tag has the same bug the product page had
 
 Found during a codebase-wide audit (2026-09-05) for other instances of the "tag is set on a fetch

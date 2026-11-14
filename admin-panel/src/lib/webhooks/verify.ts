@@ -29,13 +29,22 @@ export class WebhookIdDedup {
   /** Returns true if this id was already seen (and not yet expired) -- caller should skip
    * processing. Also opportunistically sweeps expired entries and records a first-seen id. */
   isDuplicate(webhookId: string | null): boolean {
+    if (this.hasSeen(webhookId)) return true;
+    this.markSeen(webhookId);
+    return false;
+  }
+
+  /** Check only -- does NOT record the id. Pair with markSeen() once the work actually succeeded,
+   * so a delivery that failed (and was answered 5xx) is still processed when Shopify retries it. */
+  hasSeen(webhookId: string | null): boolean {
     const now = Date.now();
     for (const [id, expiresAt] of this.seen) {
       if (expiresAt <= now) this.seen.delete(id);
     }
-    if (!webhookId) return false;
-    if (this.seen.has(webhookId)) return true;
-    this.seen.set(webhookId, now + this.ttlMs);
-    return false;
+    return webhookId ? this.seen.has(webhookId) : false;
+  }
+
+  markSeen(webhookId: string | null): void {
+    if (webhookId) this.seen.set(webhookId, Date.now() + this.ttlMs);
   }
 }

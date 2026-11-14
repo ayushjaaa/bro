@@ -48,9 +48,6 @@ export interface CustomerOrderContactInfo {
   lastName: string | null;
   email: string | null;
   phone: string | null;
-  shipLine1: string | null;
-  shipLine2: string | null;
-  shipPostalCode: string | null;
   /** "<W|R>-<PROVINCE>-<YY>-<SEQ>" (014 migration), e.g. "W-ON-26-0142" -- assigned at approval,
    * never a Shopify field at all (purely this app's own identifier), so unlike the fields above
    * this is never a PII-restriction backfill, just data that only ever lived here. Included so
@@ -63,7 +60,8 @@ export interface CustomerOrderContactInfo {
 /**
  * Backfill source for the exact fields Shopify's Protected Customer Data plan restriction blocks
  * on a DraftOrder read (see isProtectedCustomerDataError in admin-client.core.ts): customer
- * name/email/phone and the precise street address/postal code. This app already collected all of
+ * name/email/phone. (Not the address -- this row's is the registration address, not the one an
+ * order shipped to; see order-address-snapshot.ts.) This app already collected all of
  * it directly from the customer at registration (008 migration) -- reading it back from our own
  * Supabase row is not a workaround-quality substitute, it's the same data, just sourced from where
  * we already have it instead of re-asking Shopify for something Shopify won't currently hand back.
@@ -78,15 +76,12 @@ export async function getCustomerOrderContactInfo(customerId: string): Promise<C
     lastName: null,
     email: null,
     phone: null,
-    shipLine1: null,
-    shipLine2: null,
-    shipPostalCode: null,
     accountNumber: null,
   };
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('customers')
-    .select('first_name, last_name, email, phone, ship_line1, ship_line2, ship_postal_code, account_number, status')
+    .select('first_name, last_name, email, phone, account_number, status')
     .eq('id', customerId)
     .maybeSingle();
   if (error || !data || data.status !== 'approved') return empty;
@@ -95,9 +90,6 @@ export async function getCustomerOrderContactInfo(customerId: string): Promise<C
     lastName: data.last_name ?? null,
     email: data.email ?? null,
     phone: data.phone ?? null,
-    shipLine1: data.ship_line1 ?? null,
-    shipLine2: data.ship_line2 ?? null,
-    shipPostalCode: data.ship_postal_code ?? null,
     accountNumber: data.account_number ?? null,
   };
 }

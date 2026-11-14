@@ -30,6 +30,7 @@
     "shopify:enable-storefront-taxonomy-access": "tsx --env-file=.env.local scripts/shopify/enable-storefront-taxonomy-access.ts",
     "shopify:register-orders-webhook": "tsx --env-file=.env.local scripts/shopify/register-orders-webhook.ts",
     "shopify:unregister-orders-webhook": "tsx --env-file=.env.local scripts/shopify/unregister-orders-webhook.ts",
+    "shopify:reconcile-order-status-log": "tsx --env-file=.env.local scripts/shopify/reconcile-order-status-log.ts",
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "test:security": "tsx --env-file=.env.local --test tests/security/*.test.ts",
     "e2e": "playwright test"

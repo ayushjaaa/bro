@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { verifyShopifyHmac, WebhookIdDedup } from '@/lib/webhooks/verify';
+import { draftStatusFromState, orderStatusFromState } from '@/lib/webhooks/order-status';
 
 // HMAC verification needs Node's crypto.timingSafeEqual, not available on the edge runtime.
 export const runtime = 'nodejs';
 
 const webhookDedup = new WebhookIdDedup();
-const VALID_TOPICS = ['draft_orders/create', 'draft_orders/update', 'orders/create', 'orders/updated'];
+const DRAFT_TOPICS = ['draft_orders/create', 'draft_orders/update', 'draft_orders/delete'];
+const ORDER_TOPICS = ['orders/create', 'orders/updated', 'orders/cancelled', 'orders/fulfilled', 'orders/partially_fulfilled'];
+const VALID_TOPICS = [...DRAFT_TOPICS, ...ORDER_TOPICS];
 
 function getServiceRoleClient() {
   return createServiceRoleClient(
@@ -19,29 +22,46 @@ type OrdersWebhookPayload = {
   id: number;
   customer?: { id: number } | null;
   status?: string; // draft orders: 'open' | 'invoice_sent' | 'completed'
-  financial_status?: string; // real orders: 'paid' | 'pending' | 'refunded' | ...
-  updated_at: string;
+  financial_status?: string | null; // real orders: 'paid' | 'pending' | 'refunded' | ...
+  fulfillment_status?: string | null; // real orders: 'fulfilled' | 'partial' | null
+  cancelled_at?: string | null;
+  updated_at?: string; // absent on draft_orders/delete, whose payload is just { id }
 };
 
+/** Throws on any database error, so the caller answers 5xx and Shopify redelivers. */
 async function logStatusChange(topic: string, payload: OrdersWebhookPayload) {
-  const customerId = payload.customer ? `gid://shopify/Customer/${payload.customer.id}` : null;
-  const isDraftOrder = topic.startsWith('draft_orders/');
-  const orderId = `gid://shopify/${isDraftOrder ? 'DraftOrder' : 'Order'}/${payload.id}`;
-  const newStatus =
-    topic === 'orders/create'
-      ? 'order_created'
-      : topic === 'orders/updated'
-        ? `order_${payload.financial_status ?? 'updated'}`
-        : (payload.status ?? 'unknown'); // draft_orders/create|update
-
   const supabase = getServiceRoleClient();
+  const isDraftOrder = DRAFT_TOPICS.includes(topic);
+  const orderId = `gid://shopify/${isDraftOrder ? 'DraftOrder' : 'Order'}/${payload.id}`;
+  const newStatus = isDraftOrder
+    ? draftStatusFromState(topic === 'draft_orders/delete' ? null : payload)
+    : orderStatusFromState({
+        cancelledAt: payload.cancelled_at,
+        financialStatus: payload.financial_status,
+        fulfillmentStatus: payload.fulfillment_status,
+      });
+
+  let customerId = payload.customer ? `gid://shopify/Customer/${payload.customer.id}` : null;
+  if (!customerId && topic === 'draft_orders/delete') {
+    // The delete payload carries no customer -- reuse the one already logged for this draft so the
+    // "deleted" row still shows up under that customer in the admin drawer.
+    const { data, error } = await supabase
+      .from('order_status_log')
+      .select('customer_id')
+      .eq('order_id', orderId)
+      .not('customer_id', 'is', null)
+      .limit(1);
+    if (error) throw error;
+    customerId = data?.[0]?.customer_id ?? null;
+  }
+
   const { error } = await supabase.rpc('log_order_status_change_if_new', {
     p_order_id: orderId,
     p_customer_id: customerId,
     p_new_status: newStatus,
-    p_changed_at: payload.updated_at,
+    p_changed_at: payload.updated_at ?? new Date().toISOString(),
   });
-  if (error) console.error('[orders-webhook] log failed:', error);
+  if (error) throw error;
 }
 
 export async function POST(request: NextRequest) {
@@ -65,20 +85,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, ignored: 'unexpected shop domain' }, { status: 200 });
     }
 
-    // 4. True-duplicate-delivery dedup (Shopify's own retries).
+    // 4. True-duplicate-delivery dedup (Shopify's own retries). Only checked here -- the id is
+    // recorded after the write succeeds, so a failed attempt is still processed on retry.
     const webhookId = request.headers.get('X-Shopify-Webhook-Id');
-    if (webhookDedup.isDuplicate(webhookId)) {
+    if (webhookDedup.hasSeen(webhookId)) {
       return NextResponse.json({ ok: true, ignored: 'duplicate delivery' }, { status: 200 });
     }
 
-    const payload = JSON.parse(rawBody) as OrdersWebhookPayload;
+    let payload: OrdersWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody) as OrdersWebhookPayload;
+    } catch {
+      // Signed by Shopify but not JSON -- a retry would carry the same bytes, so don't ask for one.
+      console.error('[orders-webhook] unparseable payload for topic', topic);
+      return NextResponse.json({ ok: true, ignored: 'unparseable payload' }, { status: 200 });
+    }
 
-    // Not awaited -- must never risk Shopify's 5s delivery timeout.
-    void logStatusChange(topic, payload);
+    // Awaited: on Vercel a function can be frozen once the response is sent, so un-awaited work
+    // may never run. One RPC is well inside Shopify's 5s delivery timeout.
+    await logStatusChange(topic, payload);
+    webhookDedup.markSeen(webhookId);
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    console.error('[orders-webhook] Unhandled error:', err);
-    return NextResponse.json({ ok: true, error: 'unhandled error, logged' }, { status: 200 });
+    // 5xx so Shopify redelivers (it retries with backoff for ~4h). Answering 200 here would
+    // drop the event for good.
+    console.error('[orders-webhook] processing failed:', err);
+    return NextResponse.json({ ok: false, error: 'processing failed, please retry' }, { status: 500 });
   }
 }

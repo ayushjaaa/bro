@@ -3,6 +3,7 @@ import { shopifyAdminRequest, assertNoUserErrors } from './admin-client';
 import { getApprovedCustomerForOrder } from '@/data/customer-order-identity';
 import { findRegionMismatches, normalizeProvince, REGION_RULE_ENABLED } from '@/lib/region-rules';
 import { describeShortfalls, findStockShortfalls, type VariantStock } from '@/lib/inventory-rules';
+import { addressSnapshotMetafield, type SnapshotAddress } from './order-address-snapshot';
 
 /**
  * Draft Order creation for the storefront's custom checkout (Part 1 of the checkout/dashboard
@@ -339,6 +340,15 @@ export async function createDraftOrder(
       countryCode: 'CA', // Same Canada-only reasoning as shippingAddress above.
     };
   }
+
+  // A readable copy of the addresses chosen at checkout, for the customer's invoice -- the
+  // fields above can't be read back on this store's Shopify plan (see order-address-snapshot.ts).
+  draftOrderInput.metafields = [
+    addressSnapshotMetafield({
+      shipping: (draftOrderInput.shippingAddress as SnapshotAddress | undefined) ?? null,
+      billing: (draftOrderInput.billingAddress as SnapshotAddress | undefined) ?? null,
+    }),
+  ];
 
   try {
     const data = await shopifyAdminRequest<any>(CREATE_DRAFT_ORDER_MUTATION, { input: draftOrderInput });

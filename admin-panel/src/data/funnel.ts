@@ -2,6 +2,7 @@ import 'server-only';
 import { createClient as createServiceRoleClient } from '@supabase/supabase-js';
 import { requireAdmin } from './admin-auth';
 import { fetchAllRows } from '@/lib/supabase/paginate';
+import { FINAL_DRAFT_STATUSES } from '@/lib/webhooks/order-status';
 
 function getServiceRoleClient() {
   return createServiceRoleClient(
@@ -121,7 +122,7 @@ export async function getFunnelStats(): Promise<FunnelStats> {
   for (const [orderId, { status, changedAt }] of latestStatusByOrder) {
     if (orderId.includes('/DraftOrder/')) {
       orderRequestSubmitted++;
-      if (status !== 'completed' && new Date(changedAt).getTime() < staleOrderCutoff) {
+      if (!FINAL_DRAFT_STATUSES.has(status) && new Date(changedAt).getTime() < staleOrderCutoff) {
         stuckOrderNotConfirmed.push({ orderId, changedAt });
       }
     } else if (orderId.includes('/Order/')) {
