@@ -1,1 +1,4 @@
 storefront/
+
+# Client product export files dropped in the project folder (client data, not code)
+Gemini_Distribution_Shopify_Export*.xlsx
