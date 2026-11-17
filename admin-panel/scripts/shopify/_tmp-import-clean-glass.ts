@@ -17,6 +17,11 @@ const INVENTORY_LOCATION_ID = 'gid://shopify/Location/84994621638';
 const SUBCATEGORY_IDS: Record<string, string> = {
   'Beaker Bongs': 'gid://shopify/Metaobject/252082159814',
   'Dab Rigs': 'gid://shopify/Metaobject/252082323654',
+  // Section names after the glass sections were renamed (SKU v2 import, 2026-11-17).
+  'Beaker Bong': 'gid://shopify/Metaobject/252082159814',
+  'Glass Bong': 'gid://shopify/Metaobject/317671899334',
+  'Silicone Bong': 'gid://shopify/Metaobject/317671932102',
+  'Oil Pipe Attachment': 'gid://shopify/Metaobject/323200680134',
 };
 
 type Variant = { name: string; sku: string; price: string; compareAt: string | null; qty: number; image: string | null };
