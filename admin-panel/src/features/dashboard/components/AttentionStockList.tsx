@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useLiveInventoryTable, type InventorySnapshotRow } from '../hooks/useLiveInventoryTable';
+import { LOW_STOCK_THRESHOLD, isLowStock, isOutOfStock } from '../lib/stock-levels';
 import type { AttentionItem } from './LiveDashboardStats';
 import { DashCard, DashCardHeader } from './DashCard';
 
-const LOW_STOCK_THRESHOLD = 10;
 
 /** Full-detail version of the Dashboard's "Needs Attention — Stock" widget -- every out-of-stock
  * and low-stock Flavour, grouped into its own section, not truncated to the widget's top 8. Same
@@ -19,11 +19,8 @@ export default function AttentionStockList({
 }) {
   const liveQuantities = useLiveInventoryTable(initialInventoryRows);
 
-  const outOfStock = attentionLookup.filter((a) => (liveQuantities.get(a.inventoryItemId) ?? 0) === 0);
-  const lowStock = attentionLookup.filter((a) => {
-    const q = liveQuantities.get(a.inventoryItemId) ?? 0;
-    return q > 0 && q < LOW_STOCK_THRESHOLD;
-  });
+  const outOfStock = attentionLookup.filter((a) => isOutOfStock(liveQuantities.get(a.inventoryItemId) ?? 0));
+  const lowStock = attentionLookup.filter((a) => isLowStock(liveQuantities.get(a.inventoryItemId) ?? 0));
 
   if (outOfStock.length === 0 && lowStock.length === 0) {
     return (

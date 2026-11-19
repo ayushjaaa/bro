@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useLiveInventoryTable, type InventorySnapshotRow } from '../hooks/useLiveInventoryTable';
+import { LOW_STOCK_THRESHOLD, isLowStock, isOutOfStock } from '../lib/stock-levels';
 import { DashCard } from './DashCard';
 import { BoxIcon, LayersIcon, CheckIcon, CaretIcon } from '@/components/icons';
 import type { AttentionItem } from './LiveDashboardStats';
 
-const LOW_STOCK_THRESHOLD = 10;
 
 /**
  * The mockup's 2x2 "category" stat-card grid, sitting beside Conversion Funnel in one grid
@@ -26,11 +26,8 @@ export default function CatalogStatCards({
   unpublished: { id: string; title: string; variantCount: number }[];
 }) {
   const liveQuantities = useLiveInventoryTable(initialInventoryRows);
-  const outOfStock = attentionLookup.filter((a) => (liveQuantities.get(a.inventoryItemId) ?? 0) === 0);
-  const lowStock = attentionLookup.filter((a) => {
-    const q = liveQuantities.get(a.inventoryItemId) ?? 0;
-    return q > 0 && q < LOW_STOCK_THRESHOLD;
-  });
+  const outOfStock = attentionLookup.filter((a) => isOutOfStock(liveQuantities.get(a.inventoryItemId) ?? 0));
+  const lowStock = attentionLookup.filter((a) => isLowStock(liveQuantities.get(a.inventoryItemId) ?? 0));
 
   return (
     <div className="grid grid-cols-2 gap-3 h-full">

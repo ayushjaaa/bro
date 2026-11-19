@@ -174,15 +174,38 @@ function toProductLineSummary(n: any): ProductLineSummary {
   };
 }
 
-/** Lists Product Lines, newest-updated first -- used where the FULL set is needed (dashboard
- * aggregate stats, resolving product titles for the cart page) rather than a single page of the
- * /products table. Still capped at a single `first: 100` page: fine for those aggregate/lookup
- * uses today, but NOT what backs the /products listing itself -- see `listProductLinesPage` for
- * that, which pages through the real Shopify cursor instead of silently truncating. */
+/** Every Product Line, newest-updated first -- for the places that need the FULL set (the
+ * Dashboard's catalog/stock stats and the /products/attention list), not a page of the /products
+ * table (that's `listProductLinesPage`).
+ *
+ * Walks every Shopify page. It used to fetch a single `first: 100` page, so once the catalog grew
+ * past 100 the Dashboard silently counted only the 100 most recently edited products (740 in the
+ * store when this changed) -- a product nobody had touched lately could go out of stock without
+ * the Out of Stock card moving. 250 per page is Shopify's max and stays well inside the query-cost
+ * budget for this query (measured: ~540 requested of 2000), so the whole catalog is ~3 calls.
+ * MAX_PAGES is only a runaway guard. */
+type ProductLinesQueryPage = {
+  products: { nodes: Parameters<typeof toProductLineSummary>[0][]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+};
+
+const ALL_PRODUCT_LINES_PAGE_SIZE = 250;
+const ALL_PRODUCT_LINES_MAX_PAGES = 40;
+
 export async function listProductLines(): Promise<ProductLineSummary[]> {
   await requireAdmin();
-  const data = await shopifyAdminRequest<any>(LIST_PRODUCT_LINES_QUERY, { limit: 100, after: null });
-  return data.products.nodes.map(toProductLineSummary);
+  const all: ProductLineSummary[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < ALL_PRODUCT_LINES_MAX_PAGES; page++) {
+    const data: ProductLinesQueryPage = await shopifyAdminRequest<ProductLinesQueryPage>(LIST_PRODUCT_LINES_QUERY, {
+      limit: ALL_PRODUCT_LINES_PAGE_SIZE,
+      after,
+    });
+    all.push(...data.products.nodes.map(toProductLineSummary));
+    if (!data.products.pageInfo.hasNextPage) return all;
+    after = data.products.pageInfo.endCursor;
+  }
+  console.error(`[listProductLines] stopped after ${ALL_PRODUCT_LINES_MAX_PAGES} pages -- catalog larger than expected`);
+  return all;
 }
 
 export type ProductLinesPage = {

@@ -18,7 +18,8 @@ export default function DashboardHero({
   initialInventoryRows: InventorySnapshotRow[];
 }) {
   const liveQuantities = useLiveInventoryTable(initialInventoryRows);
-  const totalStock = [...liveQuantities.values()].reduce((sum, q) => sum + q, 0);
+  // Oversold (negative) Flavours count as 0 -- they mean "none on hand", not stock to subtract.
+  const totalStock = [...liveQuantities.values()].reduce((sum, q) => sum + Math.max(0, q), 0);
 
   return (
     <div

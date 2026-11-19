@@ -22,6 +22,10 @@ export function useLiveInventoryTable(initialRows: InventorySnapshotRow[]) {
     () => new Map(initialRows.map((r) => [r.inventory_item_id, r.quantity]))
   );
   const initialRef = useRef(initialRows);
+  // Only Flavours in the page's own list are tracked. inventory_snapshot also holds rows for items
+  // the page never listed (other locations' items, leftovers), and adding those made Total Stock
+  // creep upward during a session.
+  const knownIdsRef = useRef(new Set(initialRows.map((r) => r.inventory_item_id)));
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -33,7 +37,7 @@ export function useLiveInventoryTable(initialRows: InventorySnapshotRow[]) {
         { event: '*', schema: 'public', table: 'inventory_snapshot' },
         (payload) => {
           const row = payload.new as InventorySnapshotRow | undefined;
-          if (!row) return;
+          if (!row || !knownIdsRef.current.has(row.inventory_item_id)) return;
           setRows((prev) => {
             const next = new Map(prev);
             next.set(row.inventory_item_id, row.quantity);
@@ -43,19 +47,26 @@ export function useLiveInventoryTable(initialRows: InventorySnapshotRow[]) {
       )
       .subscribe();
 
+    // Batched: the ids go in the request URL, and the full catalog (~1,500 Flavours) in one
+    // `.in()` is far past what the URL can carry -- that request just failed, silently.
+    const POLL_BATCH_SIZE = 150;
     async function pollOnce() {
       const ids = initialRef.current.map((r) => r.inventory_item_id);
-      if (ids.length === 0) return;
-      const { data } = await supabase
-        .from('inventory_snapshot')
-        .select('inventory_item_id, quantity')
-        .in('inventory_item_id', ids);
-      if (!data) return;
-      setRows((prev) => {
-        const next = new Map(prev);
-        for (const row of data) next.set(row.inventory_item_id, row.quantity);
-        return next;
-      });
+      for (let i = 0; i < ids.length; i += POLL_BATCH_SIZE) {
+        const { data, error } = await supabase
+          .from('inventory_snapshot')
+          .select('inventory_item_id, quantity')
+          .in('inventory_item_id', ids.slice(i, i + POLL_BATCH_SIZE));
+        if (error || !data) {
+          console.error('[useLiveInventoryTable] poll failed:', error);
+          continue;
+        }
+        setRows((prev) => {
+          const next = new Map(prev);
+          for (const row of data) next.set(row.inventory_item_id, row.quantity);
+          return next;
+        });
+      }
     }
     const intervalId = setInterval(pollOnce, 5 * 60 * 1000);
 

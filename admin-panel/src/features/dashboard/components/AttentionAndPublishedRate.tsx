@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useLiveInventoryTable, type InventorySnapshotRow } from '../hooks/useLiveInventoryTable';
+import { isLowStock, isOutOfStock } from '../lib/stock-levels';
 import { DashCard } from './DashCard';
 import { WarningIcon, PulseDotIcon, EmptyCircleIcon } from '@/components/icons';
 import type { AttentionItem } from './LiveDashboardStats';
 
-const LOW_STOCK_THRESHOLD = 10;
 
 type UnpublishedProduct = { id: string; title: string; variantCount: number };
 
@@ -31,11 +31,8 @@ export default function AttentionAndPublishedRate({
   unpublished: UnpublishedProduct[];
 }) {
   const liveQuantities = useLiveInventoryTable(initialInventoryRows);
-  const outOfStock = attentionLookup.filter((a) => (liveQuantities.get(a.inventoryItemId) ?? 0) === 0);
-  const lowStock = attentionLookup.filter((a) => {
-    const q = liveQuantities.get(a.inventoryItemId) ?? 0;
-    return q > 0 && q < LOW_STOCK_THRESHOLD;
-  });
+  const outOfStock = attentionLookup.filter((a) => isOutOfStock(liveQuantities.get(a.inventoryItemId) ?? 0));
+  const lowStock = attentionLookup.filter((a) => isLowStock(liveQuantities.get(a.inventoryItemId) ?? 0));
   const publishedRate = publishableCount === 0 ? 0 : Math.round((publishedCount / publishableCount) * 100);
   const rateTone = publishedRate >= 75 ? 'success' : publishedRate >= 40 ? 'warning' : 'danger';
   const rateToneClass = {
@@ -77,7 +74,7 @@ export default function AttentionAndPublishedRate({
               {[...outOfStock, ...lowStock].slice(0, 4).map((item) => {
                 const qty = liveQuantities.get(item.inventoryItemId) ?? 0;
                 const numericId = item.productId.split('/').pop();
-                const isOut = qty === 0;
+                const isOut = isOutOfStock(qty);
                 return (
                   <li key={item.inventoryItemId} className="border-b border-dash-divider last:border-0">
                     <Link
