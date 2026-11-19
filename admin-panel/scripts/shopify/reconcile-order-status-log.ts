@@ -77,7 +77,7 @@ async function main() {
   const supabase = createServiceRoleClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
   // Latest logged status per order id (rows come newest-first, so the first one seen wins).
-  const latest = new Map<string, { status: string; customerId: string | null }>();
+  const latest = new Map<string, { status: string; customerId: string | null; changedAt: string }>();
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase
       .from('order_status_log')
@@ -86,7 +86,9 @@ async function main() {
       .range(from, from + 999);
     if (error) throw error;
     for (const row of data) {
-      if (!latest.has(row.order_id)) latest.set(row.order_id, { status: row.new_status, customerId: row.customer_id });
+      if (!latest.has(row.order_id)) {
+        latest.set(row.order_id, { status: row.new_status, customerId: row.customer_id, changedAt: row.changed_at });
+      }
     }
     if (data.length < 1000) break;
   }
@@ -97,8 +99,15 @@ async function main() {
 
   const planned: Planned[] = [];
   const plan = (orderId: string, label: string, customerId: string | null, status: string, changedAt: string) => {
-    const was = latest.get(orderId)?.status ?? null;
-    if (was !== status) planned.push({ orderId, label, customerId, status, changedAt, was });
+    const logged = latest.get(orderId);
+    const was = logged?.status ?? null;
+    if (was === status) return;
+    // The repaired row must sort AFTER what's already logged, or "latest status" stays ambiguous:
+    // the old webhook stamped rows with the order's updated_at, so a legacy row can carry the very
+    // same timestamp as Shopify's current state (live case: #1043 logged "paid" at the instant it
+    // was already fulfilled).
+    const after = logged ? new Date(new Date(logged.changedAt).getTime() + 1).toISOString() : changedAt;
+    planned.push({ orderId, label, customerId, status, changedAt: Date.parse(changedAt) > Date.parse(after) ? changedAt : after, was });
   };
 
   for (const d of drafts) plan(d.id, d.name, d.customer?.id ?? null, draftStatusFromState(d), d.updatedAt);
